@@ -51,11 +51,17 @@ fit_contrasts <- function(expr, info, form, contrasts, model, min_group_n = 3) {
   if (anyNA(expr)) expr <- t(apply(expr, 1, \(x) { x[is.na(x)] <- median(x, na.rm = TRUE); x }))
 
   if (has_random(form)) {
-    L <- suppressWarnings(variancePartition::makeContrastsDream(form, info, contrasts = contrasts))
-    fit <- suppressMessages(suppressWarnings(
-      variancePartition::dream(expr, form, info, L, BPPARAM = bpparam_cores(), quiet = TRUE)))
+    # A contrast that is a single model coefficient (e.g. "weeks", "ones") is read directly from the
+    # fit; only real contrasts (e.g. "condA - condB") go into the contrast matrix L. Newer
+    # variancePartition versions reject an L built for a one-term model.
+    is_coef <- contrasts %in% colnames(X)
+    args <- list(exprObj = expr, formula = form, data = info, BPPARAM = bpparam_cores(), quiet = TRUE)
+    if (any(!is_coef))
+      args$L <- suppressWarnings(variancePartition::makeContrastsDream(form, info, contrasts = contrasts[!is_coef]))
+    fit <- suppressMessages(suppressWarnings(do.call(variancePartition::dream, args)))
     fit <- variancePartition::eBayes(fit)
-    top <- \(ct) variancePartition::topTable(fit, coef = ct, number = Inf, sort.by = "none")
+    coef_of <- setNames(ifelse(is_coef, contrasts, names(contrasts)), names(contrasts))
+    top <- \(ct) variancePartition::topTable(fit, coef = coef_of[[ct]], number = Inf, sort.by = "none")
   } else {
     design <- model.matrix(form, info)
     colnames(design) <- make.names(colnames(design))   # e.g. "platePlate 3" -> "platePlate.3"
