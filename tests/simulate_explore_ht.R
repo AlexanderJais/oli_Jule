@@ -108,6 +108,11 @@ npx <- pmax(npx, nc_lvl[col(npx)] - 0.5)     # floor near background, like real 
 
 # ---- long parquet in Explore HT format ------------------------------------------------
 dar_id <- "SIM_DAR_1"
+# Olink data model: ExtNPX = log2(Count / extension-control count); PC-normalised NPX = ExtNPX minus
+# the median ExtNPX of the plate controls (per plate and assay). Count-based LODs depend on this.
+blocks <- sort(unique(assays$Block))
+ext_count <- expand_grid(i = seq_len(nrow(samples)), Block = blocks) |>
+  mutate(ExtCount = as.integer(round(5000 * 2^rnorm(n(), 0, 0.1))))
 long <- expand_grid(i = seq_len(nrow(samples)), a = seq_len(n_assays)) |>
   mutate(
     SampleID = samples$SampleID[i], SampleType = samples$SampleType[i],
@@ -115,21 +120,28 @@ long <- expand_grid(i = seq_len(nrow(samples)), a = seq_len(n_assays)) |>
     DataAnalysisRefID = dar_id,
     OlinkID = assays$OlinkID[a], UniProt = assays$UniProt[a], Assay = assays$Assay[a],
     AssayType = "assay", Panel = "Explore_HT", Block = assays$Block[a],
-    NPX = npx[cbind(i, a)],
-    Count = as.integer(round(pmax(0, 2^(NPX - nc_lvl[a]) * 60 + rnorm(n(), 0, 10)))),
-    ExtNPX = NPX - 1, Normalization = "Plate control", PCNormalizedNPX = NPX,
-    AssayQC = "PASS", SampleQC = "PASS", ExploreVersion = "SIM"
-  ) |> select(-i, -a)
+    ExtNPX = npx[cbind(i, a)] - 4
+  ) |>
+  left_join(ext_count, by = c("i", "Block")) |>
+  group_by(PlateID, OlinkID) |>
+  mutate(PCNormalizedNPX = ExtNPX - median(ExtNPX[SampleType == "PLATE_CONTROL"])) |>
+  ungroup() |>
+  mutate(NPX = PCNormalizedNPX, Count = as.integer(round(ExtCount * 2^ExtNPX)),
+         Normalization = "Plate control", AssayQC = "PASS", SampleQC = "PASS", ExploreVersion = "SIM") |>
+  select(-a)
 
-# internal control assays (removed by the pipeline)
-ctrl_assays <- expand_grid(SampleID = samples$SampleID, ct = c("ext_ctrl", "inc_ctrl", "amp_ctrl")) |>
-  left_join(long |> distinct(SampleID, SampleType, WellID, PlateID), by = "SampleID") |>
-  mutate(DataAnalysisRefID = dar_id, OlinkID = paste0("OID9", match(ct, c("ext_ctrl", "inc_ctrl", "amp_ctrl")), "000"),
-         UniProt = NA_character_, Assay = paste0(ct, "_1"), AssayType = ct, Panel = "Explore_HT", Block = "1",
-         NPX = rnorm(n(), 0, 0.2), Count = 5000L, ExtNPX = NPX, Normalization = "Plate control",
-         PCNormalizedNPX = NPX, AssayQC = "PASS", SampleQC = "PASS", ExploreVersion = "SIM") |>
+# internal control assays, one set per block (removed by the pipeline); ext_ctrl carries ExtCount
+ctrl_assays <- expand_grid(i = seq_len(nrow(samples)), Block = blocks, ct = c("ext_ctrl", "inc_ctrl", "amp_ctrl")) |>
+  left_join(ext_count, by = c("i", "Block")) |>
+  mutate(SampleID = samples$SampleID[i], SampleType = samples$SampleType[i], WellID = samples$well[i],
+         PlateID = str_replace(samples$plate[i], "Plate ", "Plate"), DataAnalysisRefID = dar_id,
+         OlinkID = sprintf("OID9%d%03d", match(ct, c("ext_ctrl", "inc_ctrl", "amp_ctrl")), as.integer(Block)),
+         UniProt = NA_character_, Assay = paste0(ct, "_", Block), AssayType = ct, Panel = "Explore_HT",
+         ExtNPX = if_else(ct == "ext_ctrl", 0, rnorm(n(), 0, 0.2)), NPX = ExtNPX, PCNormalizedNPX = ExtNPX,
+         Count = if_else(ct == "ext_ctrl", ExtCount, 5000L), Normalization = "Plate control",
+         AssayQC = "PASS", SampleQC = "PASS", ExploreVersion = "SIM") |>
   select(-ct)
-long <- bind_rows(long, ctrl_assays)
+long <- bind_rows(long, ctrl_assays) |> select(-i, -ExtCount)
 
 # a few QC flags to exercise the QC code
 bad <- meta$SampleID[meta$matrix == "ISF"][c(3, 40)]
@@ -145,9 +157,14 @@ tbl$metadata <- list(FileVersion = "NA", ProjectName = "SIM", SampleMatrix = "NA
 arrow::write_parquet(tbl, file.path(sim_dir, "npx", "sim_explore_ht.parquet"))
 
 # Olink-style fixed LOD file
+# same layout as Olink's file; every 5th assay uses a count-based LOD (LODCount on the
+# extension-count scale, converted per sample by OlinkAnalyze)
 lod <- assays |>
-  transmute(OlinkID, DataAnalysisRefID = dar_id, LODNPX = nc_lvl + 0.9, LODCount = 150L,
-            LODMethod = "lod_npx", Panel = "Explore_HT", Version = "6.0.0")
+  transmute(OlinkID, AssayType = "assay", UniProt, Assay, Panel = "Explore_HT", Block,
+            DataAnalysisRefID = dar_id, BimodalDistribution = FALSE,
+            LODNPX = nc_lvl + 0.9 - base,
+            LODCount = as.integer(pmax(150, round(5000 * 2^(nc_lvl + 0.9 - 4)))),
+            LODMethod = if_else(idx %% 5 == 0, "lod_count", "lod_npx"), Version = "10.2.0")
 write.table(lod, file.path(sim_dir, "fixed_lod.csv"), sep = ";", row.names = FALSE, quote = FALSE)
 
 write_csv(assays |> mutate(isf_offset = isf_off) |> select(OlinkID, Assay, role, bmi_slope, isf_offset),

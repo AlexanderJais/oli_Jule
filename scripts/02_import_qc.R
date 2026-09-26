@@ -30,9 +30,10 @@ save_csv(id_check, cfg, "qc", "sample_id_mismatches.csv")
 if (nrow(id_check)) msg("WARNING: %d sample ID mismatches - see qc/sample_id_mismatches.csv", nrow(id_check))
 
 # ---- LOD ---------------------------------------------------------------------------------
-lod <- compute_lod(d, cfg$paths$fixed_lod, cfg$qc$lod_method)
+d <- add_lod(d, cfg$paths$fixed_lod, cfg$qc$lod_method)
+lod <- lod_summary(d)
 save_csv(lod, cfg, "qc", "lod.csv")
-msg("LOD source: %s", paste(names(table(lod$LOD_source)), table(lod$LOD_source), collapse = ", "))
+msg("LOD source (assays): %s", paste(names(table(lod$LOD_source)), table(lod$LOD_source), collapse = ", "))
 
 # ---- control samples ----------------------------------------------------------------------
 cv <- control_cv(d, vcol)
@@ -44,7 +45,6 @@ msg("Sample controls: median inter-plate CV %.1f%%, intra-plate CV %.1f%%",
 s <- d |>
   filter(SampleType == "SAMPLE", AssayType == "assay") |>
   inner_join(meta, by = "SampleID") |>
-  left_join(lod |> select(OlinkID, DataAnalysisRefID, LOD), by = c("OlinkID", "DataAnalysisRefID")) |>
   mutate(value = .data[[vcol]],
          below_lod = !is.na(LOD) & value < LOD,
          det_group = detect_group(matrix, group, state))

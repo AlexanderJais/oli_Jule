@@ -79,10 +79,10 @@ BH FDR is applied within each contrast.
 ## Design decisions
 
 - **`PCNormalizedNPX` is analysed, not intensity-normalised NPX.** Plate 1 is ISF only, plate 2 is mixed, and plates 3–4 are serum. Intensity normalisation assumes randomised samples of one matrix and would distort plate 2. Step 02 reports the `Normalization` column of the delivered file.
-- **LOD:** OlinkAnalyze's negative-control LOD requires ≥ 10 negative controls, and this run has 8 (2 per plate).
-  - Preferred: Olink's fixed LOD file (`paths$fixed_lod`).
-  - Fallback: the same formula (median + max(0.2, 3 SD)) on the 8 negative controls pooled.
-  - `qc/lod.csv` records which source was used for each assay.
+- **LOD** is computed per row with OlinkAnalyze's own routine (`olink_lod`), so count-based assays (`LODMethod = lod_count`, about 18 % in the fixed LOD file v10.2.0) get their sample-specific LOD.
+  - Preferred: Olink's fixed LOD file (`paths$fixed_lod`), matched on `DataAnalysisRefID`.
+  - Fallback for rows without a match: the Olink negative-control method on the 8 negative controls. OlinkAnalyze normally requires ≥ 10, so this LOD is less precise; in simulation it was off by up to ±0.6 NPX.
+  - `qc/lod.csv` gives the LOD source and the per-sample LOD range for each assay.
 - **Relapse in ISF is exploratory.** All four ISF relapsers are on plate 1, and plate 2 holds only non-relapsers.
 - **Metadata issues are flagged, not fixed**, in `metadata/data_flags.csv`. As of manifest v3 this covers the RELAD / RELAD2 label conflicts, 5 low-volume ISF samples, and LEIP_35 without clinical data.
 - **Age and sex** are currently only available for LEIP, so the serum models are not adjusted for them.

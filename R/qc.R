@@ -14,34 +14,70 @@ import_npx <- function(npx_dir) {
   d
 }
 
-#' LOD per assay. Uses Olink's fixed LOD file when available; otherwise the Olink
-#' negative-control formula (median + max(0.2, 3 SD) of PC-normalised NPX) on all
-#' negative controls pooled - OlinkAnalyze itself requires >= 10 NCs, this study has 8.
-compute_lod <- function(d, fixed_lod_path = NULL, method = "auto") {
-  nc <- d |>
-    filter(SampleType == "NEGATIVE_CONTROL", AssayType == "assay", SampleQC != "FAIL") |>
-    group_by(OlinkID, DataAnalysisRefID) |>
-    summarise(n_nc = n_distinct(SampleID),
-              LOD_NC = median(PCNormalizedNPX, na.rm = TRUE) + max(0.2, 3 * sd(PCNormalizedNPX, na.rm = TRUE)),
-              .groups = "drop")
+#' Add a per-row LOD (PC-normalised NPX scale) to the full NPX data.
+#' Uses OlinkAnalyze's own calculation, which is sample-specific for count-based assays
+#' (LODMethod = lod_count: log2(LODCount / extension-control count) - plate-control median).
+#'   1. Olink fixed LOD file (paths$fixed_lod), matched on DataAnalysisRefID
+#'   2. rows without a fixed LOD: the Olink negative-control method on the pooled negative
+#'      controls. OlinkAnalyze requires >= 10 NCs for this; this study has 8, so the internal
+#'      routine is called with the lower minimum (less precise - reported as such).
+add_lod <- function(d, fixed_lod_path = NULL, method = "auto") {
+  d <- d |> mutate(.row = row_number(), LOD = NA_real_, LOD_source = NA_character_)
+  use_fixed <- method %in% c("auto", "FixedLOD") && !is.null(fixed_lod_path) && file.exists(fixed_lod_path)
+  if (method == "FixedLOD" && !use_fixed) stop("lod_method = FixedLOD but no fixed LOD file at ", fixed_lod_path)
 
-  fixed <- NULL
-  if (method %in% c("auto", "FixedLOD") && !is.null(fixed_lod_path) && file.exists(fixed_lod_path)) {
+  if (use_fixed) {
     lf <- utils::read.table(fixed_lod_path, sep = ";", header = TRUE)
-    fixed <- lf |> transmute(OlinkID, DataAnalysisRefID, LOD_fixed = LODNPX)
-    if ("Version" %in% names(lf)) msg("Fixed LOD file version: %s", paste(unique(lf$Version), collapse = ", "))
-  } else if (method == "FixedLOD") {
-    stop("lod_method = FixedLOD but no fixed LOD file at ", fixed_lod_path)
+    msg("Fixed LOD file: version %s, %d DataAnalysisRefIDs", paste(unique(lf$Version), collapse = ", "),
+        n_distinct(lf$DataAnalysisRefID))
+    dar <- unique(d$DataAnalysisRefID)
+    miss <- setdiff(dar, lf$DataAnalysisRefID)
+    if (length(miss)) msg("WARNING: DataAnalysisRefID(s) %s not in the fixed LOD file - NC-based LOD used for them",
+                          paste(miss, collapse = ", "))
+    if (length(setdiff(dar, miss))) {
+      fx <- suppressMessages(OlinkAnalyze::olink_lod(d |> select(-LOD, -LOD_source), lod_file_path = fixed_lod_path,
+                                                     lod_method = "FixedLOD"))
+      fx <- fx |> as_tibble() |> select(.row, LOD_fixed = PCNormalizedLOD)
+      d <- d |> left_join(fx, by = ".row") |>
+        mutate(LOD_source = if_else(!is.na(LOD_fixed), "Olink fixed LOD", LOD_source), LOD = LOD_fixed) |>
+        select(-LOD_fixed)
+    }
   }
 
-  lod <- nc
-  if (!is.null(fixed)) lod <- full_join(lod, fixed, by = c("OlinkID", "DataAnalysisRefID"))
-  else lod$LOD_fixed <- NA_real_
-  lod |>
-    mutate(LOD = coalesce(LOD_fixed, LOD_NC),
-           LOD_source = case_when(!is.na(LOD_fixed) ~ "Olink fixed LOD",
-                                  !is.na(LOD_NC) ~ sprintf("negative controls (n=%d)", n_nc),
-                                  TRUE ~ "none"))
+  need_nc <- is.na(d$LOD) & d$AssayType == "assay"
+  if (any(need_nc)) {
+    ns <- asNamespace("OlinkAnalyze")
+    n_nc <- n_distinct(d$SampleID[d$SampleType == "NEGATIVE_CONTROL" & d$SampleQC != "FAIL"])
+    nc <- tryCatch({
+      lod_data <- get("olink_nc_lod", ns)(d, min_num_nc = 2L)
+      get("pc_norm_count", ns)(d |> select(-LOD, -LOD_source), lod_data) |>
+        as_tibble() |> select(.row, LOD_nc = PCNormalizedLOD)
+    }, error = \(e) {
+      msg("OlinkAnalyze NC routine failed (%s); using median + max(0.2, 3 SD) of NC NPX", conditionMessage(e))
+      d |> filter(SampleType == "NEGATIVE_CONTROL", AssayType == "assay", SampleQC != "FAIL") |>
+        group_by(OlinkID, DataAnalysisRefID) |>
+        summarise(LOD_nc = median(PCNormalizedNPX, na.rm = TRUE) + max(0.2, 3 * sd(PCNormalizedNPX, na.rm = TRUE)),
+                  .groups = "drop") |>
+        right_join(d |> select(.row, OlinkID, DataAnalysisRefID), by = c("OlinkID", "DataAnalysisRefID")) |>
+        select(.row, LOD_nc)
+    })
+    d <- d |> left_join(nc, by = ".row") |>
+      mutate(fill = is.na(LOD) & !is.na(LOD_nc),
+             LOD = if_else(fill, LOD_nc, LOD),
+             LOD_source = if_else(fill, sprintf("negative controls (n=%d)", n_nc), LOD_source)) |>
+      select(-LOD_nc, -fill)
+  }
+  d |> select(-.row)
+}
+
+#' One row per assay: LOD summary across samples (count-based LODs vary by sample).
+lod_summary <- function(d) {
+  d |> filter(AssayType == "assay", SampleType == "SAMPLE") |>
+    group_by(OlinkID, Assay, DataAnalysisRefID) |>
+    summarise(LOD_source = paste(unique(na.omit(LOD_source)), collapse = "; "),
+              LOD_median = median(LOD, na.rm = TRUE), LOD_min = min(LOD, na.rm = TRUE),
+              LOD_max = max(LOD, na.rm = TRUE), .groups = "drop") |>
+    mutate(across(starts_with("LOD_m"), \(x) if_else(is.finite(x), x, NA_real_)))
 }
 
 #' Per-sample QC summary with the Olink outlier rule (median / IQR beyond mean +/- k SD, per matrix).
