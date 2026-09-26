@@ -5,6 +5,12 @@
 # lme4 >= 1.1-36 moved nobars() to the reformulas package
 nobars <- function(f) if (requireNamespace("reformulas", quietly = TRUE)) reformulas::nobars(f) else lme4::nobars(f)
 
+# grouping variable of the (single) random intercept, e.g. "SubjectID" in (1 | SubjectID)
+random_group <- function(form) {
+  fb <- if (requireNamespace("reformulas", quietly = TRUE)) reformulas::findbars(form) else lme4::findbars(form)
+  deparse(fb[[1]][[3]])
+}
+
 has_random <- function(form) any(grepl("|", deparse(form), fixed = TRUE))
 
 #' Fit one model and return tidy results for the requested contrasts.
@@ -50,7 +56,8 @@ fit_contrasts <- function(expr, info, form, contrasts, model, min_group_n = 3) {
   expr <- expr[rowMeans(is.na(expr)) <= 0.2, , drop = FALSE]
   if (anyNA(expr)) expr <- t(apply(expr, 1, \(x) { x[is.na(x)] <- median(x, na.rm = TRUE); x }))
 
-  if (has_random(form)) {
+  if (has_random(form) && ncol(X) > 1) {
+    method <- "dream (limma + mixed model)"
     # A contrast that is a single model coefficient (e.g. "weeks", "ones") is read directly from the
     # fit; only real contrasts (e.g. "condA - condB") go into the contrast matrix L. Newer
     # variancePartition versions reject an L built for a one-term model.
@@ -63,11 +70,23 @@ fit_contrasts <- function(expr, info, form, contrasts, model, min_group_n = 3) {
     coef_of <- setNames(ifelse(is_coef, contrasts, names(contrasts)), names(contrasts))
     top <- \(ct) variancePartition::topTable(fit, coef = coef_of[[ct]], number = Inf, sort.by = "none")
   } else {
-    design <- model.matrix(form, info)
+    # limma. With a random subject effect but only one fixed term (e.g. ~ 0 + ones + (1|SubjectID)),
+    # dream fails in newer variancePartition versions; limma's duplicateCorrelation is the
+    # standard equivalent for repeated measures per subject.
+    design <- X
     colnames(design) <- make.names(colnames(design))   # e.g. "platePlate 3" -> "platePlate.3"
     cm <- limma::makeContrasts(contrasts = contrasts, levels = design)
     colnames(cm) <- names(contrasts)
-    fit <- limma::eBayes(limma::contrasts.fit(limma::lmFit(expr, design), cm))
+    if (has_random(form)) {
+      block <- info[[random_group(form)]]
+      corfit <- limma::duplicateCorrelation(expr, design, block = block)
+      lf <- limma::lmFit(expr, design, block = block, correlation = corfit$consensus.correlation)
+      method <- sprintf("limma + duplicateCorrelation (r = %.2f)", corfit$consensus.correlation)
+    } else {
+      lf <- limma::lmFit(expr, design)
+      method <- "limma"
+    }
+    fit <- limma::eBayes(limma::contrasts.fit(lf, cm))
     top <- \(ct) limma::topTable(fit, coef = ct, number = Inf, sort.by = "none")
   }
 
@@ -76,7 +95,7 @@ fit_contrasts <- function(expr, info, form, contrasts, model, min_group_n = 3) {
     tibble(model = model, contrast = ct, OlinkID = rownames(tt), logFC = tt$logFC,
            AveExpr = tt$AveExpr, t = tt$t, P.Value = tt$P.Value, adj.P.Val = tt$adj.P.Val,
            n_samples = ncol(expr), n_subjects = n_distinct(info$SubjectID),
-           formula = paste(deparse(form), collapse = ""))
+           formula = paste(deparse(form), collapse = ""), method = method)
   }) |> bind_rows()
 }
 
@@ -88,9 +107,18 @@ annotate_results <- function(res, assay_map, fdr) {
     mutate(significant = adj.P.Val < fdr)
 }
 
-volcano <- function(res, title) {
+volcano <- function(res, title, fdr = 0.05) {
   top <- res |> group_by(contrast) |> slice_min(P.Value, n = 8, with_ties = FALSE)
+  # FDR cutoff per panel on the p-value scale: the largest p still significant, or - if nothing
+  # is - the Benjamini-Hochberg bound for the first hit (fdr / number of proteins)
+  cut <- res |> group_by(contrast) |>
+    summarise(p_cut = if (any(adj.P.Val < fdr, na.rm = TRUE)) max(P.Value[adj.P.Val < fdr], na.rm = TRUE) else fdr / n(),
+              any_sig = any(adj.P.Val < fdr, na.rm = TRUE), .groups = "drop") |>
+    mutate(label = sprintf("FDR %g%%%s: p < %.2g", 100 * fdr, if_else(any_sig, "", " (no hit)"), p_cut))
   ggplot(res, aes(logFC, -log10(P.Value), colour = significant)) +
+    geom_hline(data = cut, aes(yintercept = -log10(p_cut)), linetype = 2, colour = "grey30") +
+    geom_text(data = cut, aes(x = -Inf, y = -log10(p_cut), label = label), hjust = -0.05, vjust = -0.5,
+              size = 2.6, colour = "grey30", inherit.aes = FALSE) +
     geom_point(size = 0.8, alpha = 0.7) +
     geom_text(data = top, aes(label = Assay), size = 2.6, vjust = -0.6, colour = "black", check_overlap = TRUE) +
     scale_colour_manual(values = c(`FALSE` = "grey60", `TRUE` = "firebrick")) +
@@ -117,7 +145,7 @@ run_model_specs <- function(specs, expr, info, cfg, prefix, assay_map) {
   print(as.data.frame(summ))
   for (mdl in unique(res$model)) {
     r <- res |> filter(model == mdl)
-    save_plot(volcano(r, paste(prefix, mdl)), cfg, "models", "volcano", paste0(prefix, "_", mdl, ".png"),
+    save_plot(volcano(r, paste(prefix, mdl), cfg$stats$fdr), cfg, "models", "volcano", paste0(prefix, "_", mdl, ".png"),
               width = 4 + 3.5 * min(3, n_distinct(r$contrast)), height = 4 + 3.5 * (n_distinct(r$contrast) > 3))
   }
   invisible(res)
