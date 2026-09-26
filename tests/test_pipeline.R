@@ -1,11 +1,17 @@
 # End-to-end test on simulated data: simulate -> run all steps -> check that the built-in
 # effects are found and that false positives stay rare.
 #   Rscript tests/test_pipeline.R
+if (!file.exists("R/utils.R"))
+  stop("Working directory must be the project folder (the one containing R/ and scripts/). ",
+       "In RStudio open oli_Jule.Rproj, or run setwd(\"path/to/oli_Jule\") first. Current: ", getwd())
 source("R/utils.R")
+rscript <- file.path(R.home("bin"), "Rscript")
+for (f in c("data/manifest.xlsx", "data/LEIP_clinical_parameters_n35.xlsx"))
+  if (!file.exists(f)) stop(f, " is missing - the simulation uses the real manifest and LEIP file from data/.")
 
-stopifnot(system2("Rscript", "tests/simulate_explore_ht.R") == 0)
+stopifnot(system2(rscript, "tests/simulate_explore_ht.R") == 0)
 Sys.setenv(OLINK_CONFIG = "data_sim/config_sim.yml")
-stopifnot(system2("Rscript", "run_all.R") == 0)
+stopifnot(system2(rscript, "run_all.R") == 0)
 
 out   <- "output_sim"
 truth <- read_csv("data_sim/truth.csv", show_col_types = FALSE)

@@ -19,6 +19,8 @@ ISF and serum are analysed separately. They are only combined for the ISF–seru
 
 ## Quick start
 
+Open `oli_Jule.Rproj` in RStudio (or `setwd()` to this folder): all paths are relative to the project folder.
+
 ```bash
 Rscript install_packages.R        # once
 # put the data files in data/ (see below), then
