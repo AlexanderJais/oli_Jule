@@ -1,4 +1,4 @@
-# 15 - Serum vs dISF, visit by visit: overlap and the additional information dISF provides
+# 14 - Serum vs dISF, visit by visit: overlap and the additional information dISF provides
 # The same question is asked in both matrices (MicroAD, matched visits):
 #   AD vs healthy          dISF lesion site vs healthy skin  |  dISF non-lesional vs healthy skin
 #                          serum AD vs healthy (MicroAD volunteers; one sample per person per visit)

@@ -130,3 +130,24 @@ visit_specs <- function(info, min_subjects = 5) {
                   NL_vs_HC = "site_condNL - site_condHC")))
   list(info = info, specs = specs)
 }
+
+#' All pre-specified single-protein tests (steps 12 and 14): the models of steps 04/05 plus the
+#' xL - NL relapse model, for one value per sample (a protein or a score).
+#' @param isf_info,serum_info isf_design()/serum_design() output joined with a `value` column
+prespecified_tests <- function(isf_info, serum_info, min_group_n = 3) {
+  run_specs <- \(specs, info) map(specs, \(sp) {
+    test_single(info |> filter(SampleID %in% sp$samples), sp$formula, sp$contrasts, sp$name, min_group_n)
+  }) |> bind_rows()
+  tests <- bind_rows(
+    run_specs(isf_specs(isf_info), isf_info) |> mutate(matrix = "dISF"),
+    run_specs(serum_specs(serum_info), serum_info) |> mutate(matrix = "serum"))
+  pairs <- isf_delta_pairs(isf_info)
+  if (nrow(pairs) >= 4) {
+    dl <- pairs |>
+      mutate(value = isf_info$value[match(AD_xL, isf_info$SampleID)] - isf_info$value[match(AD_NL, isf_info$SampleID)])
+    tests <- bind_rows(tests, test_single(dl, ~ 0 + relapse2 + weeks + (1 | SubjectID),
+                                          c(relapse_vs_non = "relapse2relapse - relapse2non_relapse"),
+                                          "relapse_delta_xL_minus_NL", min_group_n) |> mutate(matrix = "dISF"))
+  }
+  tests
+}

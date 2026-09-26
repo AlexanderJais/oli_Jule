@@ -77,6 +77,20 @@ all their tables. Open that one first.
 Key numbers and findings for each aim, all comparisons in one table, the most important figures,
 and the methods and caveats. **Read this first.**
 
+### `key_questions/` – answers to the key questions (step 15)
+| Question | How it is answered | Where |
+|---|---|---|
+| Q1 Are mast cell markers elevated in AD, or only in relapse vs non-relapse? | Each marker (KITLG, CPA4, FCER1A, TPSAB1, MS4A2, TPSD1) and a combined **mast cell score**: AD vs healthy (dISF lesional, non-lesional, serum) and relapse vs non-relapse (dISF, serum MicroAD, RELAD/RELAD2) | `Q1_mast_cell_markers.png`, sheet `Q1_*` |
+| Q2 Is CD137 (TNFRSF9) or CD137L (TNFSF9) a marker for mast cells in AD? | Correlation with the mast cell score and each marker in AD dISF, within patients over visits and across samples | `Q2_cd137_vs_mast_score.png`, sheet `Q2_correlations` |
+| Q3 Do CD137 / CD137L correlate with relapse? | All relapse tests, plus the trend in the weeks before relapse | sheet `Q3_relapse` |
+| Q4 Marker or predictor of relapse? | *Marker* = changes with lesion activity (lesional vs cleared). *Predictor* = values **before** the relapse separate relapsers from non-relapsers (AUC with 95 % CI) | `Q4_relapse_prediction_auc.png`, sheets `Q4_*` |
+| Q5 Is dISF superior to serum? | Measurable proteins; significant proteins in dISF vs serum for the same question (step 14); key-protein effects; relapse AUC in dISF vs serum for the same patients | sheets `Q5_*` |
+
+`answers.csv` holds one line per answer: the verdict and the numbers behind it. The same answers
+are on the first pages of the executive summary. With 4 relapsing patients a relapse "hit" is
+called **possible (exploratory)**; only groups of ≥ 10 (RELAD/RELAD2) can give a firm "predicts
+relapse". Marker lists are set in `config.yml` under `key_questions`.
+
 ### `metadata/` – the samples (step 01)
 | File | Content |
 |---|---|
@@ -151,7 +165,7 @@ within the same patient over the visits; `r_between` = between patients.
 | `relative_enrichment.csv` | Proteins relatively **enriched in skin fluid** compared with blood, i.e. candidates for local production in the skin |
 | `disease_signal_concordance.*` | Do disease differences seen in dISF also appear in serum? |
 
-### `serum_vs_disf/` – overlap and what dISF adds, per visit (step 15)
+### `serum_vs_disf/` – overlap and what dISF adds, per visit (step 14)
 The same question is asked in dISF and in serum: **AD vs healthy** and **relapse vs
 non-relapse**, the latter using only visits before the relapse. It is done at each visit and for
 all visits together, for the lesion site and the non-lesional site.
@@ -269,7 +283,8 @@ Model names: `states_all_visits` = all visits together; `baseline_V1` = V1 only;
 | 11 | `11_trajectories.R` | Disease course (aim 3) |
 | 12 | `12_focus_proteins.R` | Focus proteins (CD137 …) |
 | 13 | `13_visit_course.R` | Per visit and time course |
-| 15 | `15_serum_vs_disf.R` | Serum vs dISF overlap per visit |
+| 14 | `14_serum_vs_disf.R` | Serum vs dISF overlap per visit |
+| 15 | `15_key_questions.R` | Answers to the key questions (mast cells, CD137, relapse, dISF vs serum) |
 | 16 | `16_summary_report.R` | Executive summary PDF |
 | 17 | `17_export_data.R` | CSV export of the data |
 

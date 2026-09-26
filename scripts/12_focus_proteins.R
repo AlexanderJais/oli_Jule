@@ -55,20 +55,7 @@ for (fp in focus) {
   # ---- 2. pre-specified tests -----------------------------------------------------------------------
   isf_info   <- isf_design(meta) |> inner_join(val, by = "SampleID")
   serum_info <- serum_design(meta) |> inner_join(val, by = "SampleID")
-  run_specs <- \(specs, info) map(specs, \(sp) {
-    test_single(info |> filter(SampleID %in% sp$samples), sp$formula, sp$contrasts, sp$name, cfg$stats$min_group_n)
-  }) |> bind_rows()
-  tests <- bind_rows(
-    run_specs(isf_specs(isf_info), isf_info) |> mutate(matrix = "dISF"),
-    run_specs(serum_specs(serum_info), serum_info) |> mutate(matrix = "serum"))
-  pairs <- isf_delta_pairs(isf_info)
-  if (nrow(pairs) >= 4) {
-    dl <- pairs |>
-      mutate(value = isf_info$value[match(AD_xL, isf_info$SampleID)] - isf_info$value[match(AD_NL, isf_info$SampleID)])
-    tests <- bind_rows(tests, test_single(dl, ~ 0 + relapse2 + weeks + (1 | SubjectID),
-                                          c(relapse_vs_non = "relapse2relapse - relapse2non_relapse"),
-                                          "relapse_delta_xL_minus_NL", cfg$stats$min_group_n) |> mutate(matrix = "dISF"))
-  }
+  tests <- prespecified_tests(isf_info, serum_info, cfg$stats$min_group_n)
   # proteome-wide FDR for the same contrasts, where the protein was in steps 04/05
   pw <- map(c("ISF_results.csv", "Serum_results.csv", "ISF_relapse_delta_results.csv"), \(f) {
     p <- file.path(cfg$paths$output, "models", f)

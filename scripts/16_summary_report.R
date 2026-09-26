@@ -37,6 +37,9 @@ enr     <- out_csv(cfg, "matrix_comparison", "relative_enrichment.csv")
 conc_s  <- out_csv(cfg, "matrix_comparison", "disease_signal_concordance_summary.csv")
 traj_s  <- out_csv(cfg, "trajectories", "trajectory_summary.csv")
 fov     <- out_csv(cfg, "focus", "focus_overview.csv")
+kq_ans  <- out_csv(cfg, "key_questions", "answers.csv")
+kq_q1   <- out_csv(cfg, "key_questions", "Q1_tests.csv")
+kq_auc  <- out_csv(cfg, "key_questions", "Q4_auc.csv")
 ov15    <- out_csv(cfg, "serum_vs_disf", "overlap_summary.csv")
 
 n_sig <- \(r, mdl, ct) if (is.null(r)) NA else sum(r$significant[r$model == mdl & r$contrast == ct], na.rm = TRUE)
@@ -74,6 +77,42 @@ section("Overview", {
       sprintf("Proteome-wide results use the Benjamini-Hochberg false discovery rate (FDR < %g) within each comparison. Effects are differences in PC-normalised NPX (log2 scale). Focus proteins (e.g. CD137) are pre-specified and judged by their own p-value. Relapse analyses are exploratory (4 relapsers in MicroAD).", fdr),
       paste("Generated", format(Sys.time(), "%Y-%m-%d %H:%M"), "from", normalizePath(cfg$paths$output))),
     subtitle = "dermal interstitial fluid (dISF) and serum - automatically generated from the pipeline results")
+})
+
+# ---- 1b. key questions (step 15) ------------------------------------------------------------------------------------
+section("Key questions", {
+  if (is.null(kq_ans)) stop("step 15 results not found")
+  items <- character()
+  for (q in unique(kq_ans$question)) {
+    a <- kq_ans |> filter(question == q)
+    items <- c(items, paste("##", q), sprintf("%s: %s.", a$item, if_else(str_detect(a$verdict, "^dISF"), a$verdict,
+                                                        paste0(str_to_upper(substr(a$verdict, 1, 1)), substring(a$verdict, 2)))))
+  }
+  page_text("Key questions - answers", c(items,
+    "## Note", "Single pre-specified tests (p < 0.05, not corrected across questions). Relapse results are exploratory: 4 relapsing vs 6 non-relapsing patients in MicroAD; RELAD/RELAD2 serum provides larger groups. Evidence for every answer: next pages and key_questions/key_questions.xlsx."),
+    subtitle = "automatically derived from the tests; please interpret with the evidence tables", size = 9.5)
+  page_table("Key questions - evidence", kq_ans |> transmute(question = str_extract(question, "^Q[0-9]"), item, verdict = str_trunc(verdict, 60)),
+             rows_per_page = 30, note = "Full evidence text: key_questions/answers.csv")
+  if (!is.null(kq_q1)) {
+    ents <- unique(kq_q1$entity)
+    p <- ggplot(kq_q1, aes(label, factor(entity, levels = rev(ents)), fill = estimate)) + geom_tile() +
+      geom_text(aes(label = case_when(p < 0.001 ~ "***", p < 0.01 ~ "**", p < 0.05 ~ "*", TRUE ~ "")), size = 4) +
+      scale_fill_gradient2(low = "steelblue", high = "firebrick") + facet_grid(~type, scales = "free_x", space = "free_x") +
+      labs(title = "Q1  Mast cell markers: elevated in AD, or associated with relapse?",
+           subtitle = "effect (log2 / score units); * p < 0.05, ** < 0.01, *** < 0.001", x = NULL, y = NULL) +
+      theme(axis.text.x = element_text(angle = 30, hjust = 1))
+    page_plot(p)
+  }
+  if (!is.null(kq_auc)) {
+    p <- ggplot(kq_auc |> filter(!is.na(AUC)), aes(AUC, predictor, colour = if_else(str_detect(predictor, "^dISF"), "dISF", "serum"))) +
+      geom_vline(xintercept = 0.5, linetype = 2, colour = "grey50") +
+      geom_pointrange(aes(xmin = ci_low, xmax = ci_high)) + facet_wrap(~entity) + coord_cartesian(xlim = c(0, 1)) +
+      scale_colour_manual(values = c(dISF = "firebrick", serum = "steelblue")) +
+      labs(title = "Q4/Q5  Do values BEFORE the relapse separate relapsers from non-relapsers? (dISF vs serum)",
+           subtitle = "AUC with 95% bootstrap CI; 0.5 = no separation; MicroAD n = 4 vs 6 patients (CI unreliable), RELAD/RELAD2 larger",
+           x = "AUC", y = NULL, colour = NULL)
+    page_plot(p)
+  }
 })
 
 # ---- 2. key findings ---------------------------------------------------------------------------------------------
@@ -228,9 +267,9 @@ section("Serum", {
                                                                                   logFC_AD_vs_Biobank, adj.P.Val_AD_vs_Biobank))
 })
 
-# ---- 9. serum vs dISF per visit (step 15) ---------------------------------------------------------------------------
+# ---- 9. serum vs dISF per visit (step 14) ---------------------------------------------------------------------------
 section("Serum vs dISF", {
-  if (is.null(ov15)) stop("step 15 results not found")
+  if (is.null(ov15)) stop("step 14 results not found")
   cat_cols <- c(`both, same direction` = "purple3", `both, opposite direction` = "orange3", `dISF only` = "firebrick",
                 `dISF only - not measurable in serum` = "darkred", `serum only` = "steelblue")
   for (tr in c("nominal", "FDR")) {
