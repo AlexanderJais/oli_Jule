@@ -1,12 +1,24 @@
 # Import and quality control of Olink Explore HT NPX data.
 
+#' Matrix named in an NPX file name ("ISF" / "Serum"), NA if neither.
+file_matrix <- function(f) {
+  f <- toupper(basename(f))
+  case_when(str_detect(f, "ISF") ~ "ISF", str_detect(f, "SERUM") ~ "Serum", TRUE ~ NA_character_)
+}
+
 #' Read all parquet files in a folder with OlinkAnalyze and bind them.
+#' Olink may deliver one file per matrix (e.g. O-MicroAD_ISF_NPX_*.parquet, O-MicroAD_Serum_NPX_*.parquet).
+#' Control wells of a mixed plate then appear in both files; they are kept per file (LOD is
+#' computed within each file) and de-duplicated only where controls are pooled.
 import_npx <- function(npx_dir) {
   files <- list.files(npx_dir, pattern = "\\.parquet$", full.names = TRUE)
   if (!length(files)) stop("No .parquet files found in ", npx_dir)
   msg("Reading %d NPX file(s): %s", length(files), paste(basename(files), collapse = ", "))
-  d <- map(files, \(f) OlinkAnalyze::read_npx(f) |> as_tibble() |> mutate(source_file = basename(f))) |>
+  d <- map(files, \(f) OlinkAnalyze::read_npx(f) |> as_tibble() |>
+             mutate(source_file = basename(f), file_matrix = file_matrix(f))) |>
     bind_rows()
+  dup <- d |> filter(SampleType == "SAMPLE") |> distinct(SampleID, source_file) |> count(SampleID) |> filter(n > 1)
+  if (nrow(dup)) stop("Sample(s) present in more than one NPX file: ", paste(head(dup$SampleID, 10), collapse = ", "))
   req <- c("SampleID", "SampleType", "PlateID", "OlinkID", "Assay", "AssayType", "NPX",
            "PCNormalizedNPX", "Normalization", "SampleQC", "AssayQC", "DataAnalysisRefID")
   miss <- setdiff(req, names(d))

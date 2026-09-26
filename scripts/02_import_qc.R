@@ -13,9 +13,9 @@ clear_outputs(cfg, "qc"); clear_outputs(cfg, "data")
 d <- import_npx(cfg$paths$npx_dir)
 
 # ---- normalisation check -------------------------------------------------------------
-norm <- count(d |> filter(SampleType == "SAMPLE"), Normalization)
+norm <- count(d |> filter(SampleType == "SAMPLE"), source_file, Normalization)
 save_csv(norm, cfg, "qc", "normalization.csv")
-msg("Normalization in file: %s", paste(norm$Normalization, norm$n, collapse = ", "))
+msg("Normalization: %s", paste(norm$source_file, norm$Normalization, norm$n, collapse = "; "))
 if (any(norm$Normalization == "Intensity") && vcol == "NPX")
   warning("Data are intensity normalised and npx_column = NPX. With matrix-separated plates ",
           "PCNormalizedNPX is recommended (see config.yml).")
@@ -30,14 +30,26 @@ id_check <- bind_rows(
 save_csv(id_check, cfg, "qc", "sample_id_mismatches.csv")
 if (nrow(id_check)) msg("WARNING: %d sample ID mismatches - see qc/sample_id_mismatches.csv", nrow(id_check))
 
+# samples in the ISF file must be ISF in the manifest, and serum likewise
+mx <- d |> filter(SampleType == "SAMPLE", !is.na(file_matrix)) |> distinct(SampleID, source_file, file_matrix) |>
+  inner_join(meta |> select(SampleID, matrix), by = "SampleID") |> filter(file_matrix != matrix)
+save_csv(mx, cfg, "qc", "matrix_mismatches.csv")
+if (nrow(mx)) stop(nrow(mx), " sample(s) are in the NPX file of the other matrix - see qc/matrix_mismatches.csv")
+print(count(d |> filter(SampleType == "SAMPLE") |> distinct(SampleID, source_file), source_file, name = "samples"))
+
 # ---- LOD ---------------------------------------------------------------------------------
-d <- add_lod(d, cfg$paths$fixed_lod, cfg$qc$lod_method, value_col = vcol)
+# per file: each delivery carries its own controls (plate 2 controls are in both files)
+d <- d |> group_split(source_file) |>
+  map(\(x) add_lod(x, cfg$paths$fixed_lod, cfg$qc$lod_method, value_col = vcol)) |>
+  bind_rows()
 lod <- lod_summary(d)
 save_csv(lod, cfg, "qc", "lod.csv")
 msg("LOD source (assays): %s", paste(names(table(lod$LOD_source)), table(lod$LOD_source), collapse = ", "))
 
 # ---- control samples ----------------------------------------------------------------------
-cv <- control_cv(d, vcol)
+# controls shared by two files are counted once
+ctrl_once <- d |> filter(SampleType != "SAMPLE") |> distinct(SampleID, PlateID, WellID, OlinkID, .keep_all = TRUE)
+cv <- control_cv(ctrl_once, vcol)
 save_csv(cv, cfg, "qc", "sample_control_cv.csv")
 msg("Sample controls: median inter-plate CV %.1f%%, intra-plate CV %.1f%%",
     100 * median(cv$inter_cv, na.rm = TRUE), 100 * median(cv$intra_cv, na.rm = TRUE))

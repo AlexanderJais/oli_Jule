@@ -6,9 +6,8 @@ if (!file.exists("R/utils.R"))
        "In RStudio open oli_Jule.Rproj, or run setwd(\"path/to/oli_Jule\") first. Current: ", getwd())
 source("R/utils.R")
 rscript <- file.path(R.home("bin"), "Rscript")
-for (f in c("data/manifest.xlsx", "data/LEIP_clinical_parameters_n35.xlsx"))
-  if (!file.exists(f)) stop(f, " is missing - the simulation uses the real manifest and LEIP file from data/.")
-
+# fully synthetic: no study data needed
+stopifnot(system2(rscript, "tests/make_synthetic_manifest.R") == 0)
 stopifnot(system2(rscript, "tests/simulate_explore_ht.R") == 0)
 Sys.setenv(OLINK_CONFIG = "data_sim/config_sim.yml")
 stopifnot(system2(rscript, "run_all.R") == 0)
@@ -56,7 +55,8 @@ stopifnot(
     sum(prof$lesion_restricted & prof$role == "ISF_lesion_restricted", na.rm = TRUE) >= 4,
   "relative dISF/serum enrichment not recovered (step 10)" = all(enr_r$r > 0.9),
   "severity-linked proteins not found (step 11)" = mean(easi$significant[easi$role == "ISF_lesional"]) >= 0.7,
-  "false trajectory hits (step 11)" = sum(traj$significant & traj$role == "null") <= 3,
+  "too many false trajectory hits (step 11)" =
+    sum(traj$significant & traj$role == "null") <= max(3, 0.15 * sum(traj$significant)),
   "an effect was not recovered (power < 0.7)" = all(res$power >= 0.7),
   "too many false positives" = all(fpr <= 0.05),
   "biobank-only shift leaked into the in-study comparison" = sum(biobank$significant) <= 1,

@@ -34,7 +34,7 @@ To run a single step, use `Rscript scripts/0X_....R`. Each step reads what the p
 | file | what | where it is set |
 |---|---|---|
 | `data/manifest.xlsx` | Olink sample submission sheet; the `manifest` sheet is the master | `paths$manifest` |
-| `data/npx/*.parquet` | Olink NPX file(s); several files (e.g. one per matrix) are combined | `paths$npx_dir` |
+| `data/npx/*.parquet` | Olink NPX files, here `O-MicroAD_ISF_NPX_2026-09-24.parquet` and `O-MicroAD_Serum_NPX_2026-09-24.parquet`; all files in the folder are read, and the file name must contain ISF or Serum | `paths$npx_dir` |
 | `data/LEIP_clinical_parameters_n35.xlsx` | LEIP clinical data, sheet `Key_parameters` (optional) | `paths$leip_clinical` |
 | `data/severity.xlsx` | optional: `SubjectID`, `Visit` (V1–V6), plus numeric scores (e.g. SCORAD, EASI, itch NRS). Step 11 then models each protein against each score | `paths$severity` |
 | `data/Explore_HT_Fixed_LOD.csv` | Olink fixed LOD file for Explore HT, version ≥ 6.0.0, from olink.com (recommended) | `paths$fixed_lod` |
@@ -95,6 +95,6 @@ BH FDR is applied within each contrast.
 Rscript tests/test_pipeline.R
 ```
 
-This simulates an Explore HT parquet with the real sample layout and known effects, runs all
+This needs no study data. It builds a synthetic manifest with the same layout and design, simulates the two Olink NPX files (ISF, serum) with known effects, runs all
 steps with `data_sim/config_sim.yml` (output in `output_sim/`), and checks that the effects are
 recovered and false positives stay rare.

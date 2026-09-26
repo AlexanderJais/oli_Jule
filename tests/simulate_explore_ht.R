@@ -1,7 +1,7 @@
 # Simulate an Olink Explore HT parquet file for the O-MicroAD sample layout.
 #
-# Uses the real manifest (sample IDs, plates, wells, control wells) so the whole pipeline
-# can be run end to end before the real data arrive. Known effects are built in and
+# Uses the synthetic manifest from tests/make_synthetic_manifest.R (same layout and design as
+# the real one, no study data) so the whole pipeline can be run end to end without real data. Known effects are built in and
 # written to data_sim/truth.csv, so tests/test_pipeline.R can check they are recovered.
 #
 # Run from the repository root:  Rscript tests/simulate_explore_ht.R
@@ -10,7 +10,11 @@ source("R/utils.R")
 source("R/metadata.R")
 set.seed(20260926)
 
-cfg  <- load_config("config.yml")       # real manifest + LEIP file
+# synthetic manifest + LEIP file (tests/make_synthetic_manifest.R) - no study data needed
+cfg  <- load_config("config.yml")
+cfg$paths$manifest <- "data_sim/manifest.xlsx"
+cfg$paths$leip_clinical <- "data_sim/LEIP_clinical.xlsx"
+if (!file.exists(cfg$paths$manifest)) stop("Run tests/make_synthetic_manifest.R first.")
 sim_dir <- "data_sim"
 dir.create(file.path(sim_dir, "npx"), recursive = TRUE, showWarnings = FALSE)
 
@@ -151,10 +155,19 @@ long$PCNormalizedNPX[long$SampleID == bad[1]] <- long$NPX[long$SampleID == bad[1
 long$SampleQC[long$SampleID == bad[2]] <- "WARN"
 long$AssayQC[long$OlinkID == assays$OlinkID[200] & long$PlateID == "Plate2"] <- "WARN"
 
-tbl <- arrow::arrow_table(long)
-tbl$metadata <- list(FileVersion = "NA", ProjectName = "SIM", SampleMatrix = "NA",
-                     DataFileType = "NPX File", Product = "ExploreHT")
-arrow::write_parquet(tbl, file.path(sim_dir, "npx", "sim_explore_ht.parquet"))
+# one file per matrix, like the Olink delivery: each file has its samples plus all control wells
+# of the plates they sit on (so the mixed plate's controls appear in both files)
+unlink(list.files(file.path(sim_dir, "npx"), full.names = TRUE))
+smx <- meta |> select(SampleID, matrix)
+for (mx in c("ISF", "Serum")) {
+  plates_mx <- str_replace(unique(meta$plate[meta$matrix == mx]), "Plate ", "Plate")
+  part <- long |> left_join(smx, by = "SampleID") |>
+    filter(matrix %in% mx | (SampleType != "SAMPLE" & PlateID %in% plates_mx)) |> select(-matrix)
+  tbl <- arrow::arrow_table(part)
+  tbl$metadata <- list(FileVersion = "NA", ProjectName = "O-MicroAD", SampleMatrix = mx,
+                       DataFileType = "NPX File", Product = "ExploreHT")
+  arrow::write_parquet(tbl, file.path(sim_dir, "npx", sprintf("O-MicroAD_%s_NPX_SIM.parquet", mx)))
+}
 
 # Olink-style fixed LOD file
 # same layout as Olink's file; every 5th assay uses a count-based LOD (LODCount on the
