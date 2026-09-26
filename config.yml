@@ -6,6 +6,7 @@ paths:
   npx_dir: data/npx                                     # folder with the Olink *.parquet file(s)
   leip_clinical: data/LEIP_clinical_parameters_n35.xlsx # optional; sheet "Key_parameters"
   fixed_lod: data/Explore_HT_Fixed_LOD.csv              # optional; Olink fixed LOD file (";"-separated, version >= 6.0.0)
+  severity: data/severity.xlsx                          # optional; columns SubjectID, Visit (V1..V6) + numeric scores (e.g. SCORAD, EASI, NRS)
   output: output
 
 # Which NPX column to analyse. PCNormalizedNPX is required here: plate 1 is ISF only,
@@ -24,6 +25,7 @@ qc:
 stats:
   fdr: 0.05
   min_group_n: 3              # skip a contrast if a group has fewer samples than this
+  min_rel_log2: 1             # step 10: minimum relative dISF/serum difference (log2) to call a protein enriched
   cores: 4                    # parallel workers for the mixed models (1 = serial)
 
 enrichment:

@@ -51,7 +51,7 @@ fit_contrasts <- function(expr, info, form, contrasts, model, min_group_n = 3) {
   if (anyNA(expr)) expr <- t(apply(expr, 1, \(x) { x[is.na(x)] <- median(x, na.rm = TRUE); x }))
 
   if (has_random(form)) {
-    L <- variancePartition::makeContrastsDream(form, info, contrasts = contrasts)
+    L <- suppressWarnings(variancePartition::makeContrastsDream(form, info, contrasts = contrasts))
     fit <- suppressMessages(suppressWarnings(
       variancePartition::dream(expr, form, info, L, BPPARAM = bpparam_cores(), quiet = TRUE)))
     fit <- variancePartition::eBayes(fit)

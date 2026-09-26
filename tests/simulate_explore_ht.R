@@ -38,6 +38,7 @@ role <- case_when(
   eff(61, 75)   ~ "Serum_AD_vs_HC",
   eff(76, 85)   ~ "Serum_relapse",       # RELAD/RELAD2 relapse
   eff(86, 95)   ~ "Biobank_shift",       # LEIP pre-analytical shift
+  eff(96, 100)  ~ "ISF_lesion_restricted", # below LOD in ISF except in lesional skin
   eff(n_assays - 19, n_assays) ~ "ISF_undetected",
   TRUE ~ "null"
 )
@@ -48,6 +49,8 @@ assays$bmi_slope <- if_else(eff(46, 50), 0.12, 0)
 base   <- rnorm(n_assays, 6, 1.5)          # serum level
 isf_off <- rnorm(n_assays, -1.2, 0.8)      # ISF relative to serum
 isf_off[assays$role == "ISF_undetected"] <- -6
+isf_off[assays$role == "ISF_lesion_restricted"] <- -6.5
+isf_off[eff(101, 110)] <- 2        # clearly enriched in ISF relative to serum
 nc_lvl <- base - 5.5                       # negative control background
 
 # ---- samples and controls ------------------------------------------------------------
@@ -82,7 +85,8 @@ for (i in seq_len(nrow(samples))) {
   x <- x + u_subj[[s$matrix]][s$SubjectID, ] + plate_off[s$plate, ]
   if (isf && s$group == "AD") {
     x <- x + 0.8 * (assays$role == "ISF_AD_vs_HC")
-    if (identical(s$state, "lesional"))    x <- x + 1.5 * (assays$role == "ISF_lesional")
+    if (identical(s$state, "lesional"))    x <- x + 1.5 * (assays$role == "ISF_lesional") +
+                                              5 * (assays$role == "ISF_lesion_restricted")
     if (identical(s$state, "ex-lesional")) {
       x <- x + 0.6 * (assays$role == "ISF_lesional")
       if (identical(s$relapse, "relapse")) x <- x + 1.0 * (assays$role == "ISF_relapse")
@@ -146,10 +150,17 @@ lod <- assays |>
             LODMethod = "lod_npx", Panel = "Explore_HT", Version = "6.0.0")
 write.table(lod, file.path(sim_dir, "fixed_lod.csv"), sep = ";", row.names = FALSE, quote = FALSE)
 
-write_csv(assays |> select(OlinkID, Assay, role, bmi_slope), file.path(sim_dir, "truth.csv"))
+write_csv(assays |> mutate(isf_offset = isf_off) |> select(OlinkID, Assay, role, bmi_slope, isf_offset),
+          file.path(sim_dir, "truth.csv"))
+
+# clinical severity per AD visit: high when the tracked lesion is active
+sev <- meta |> filter(cohort == "MicroAD", group == "AD", matrix == "ISF", site == "L") |>
+  transmute(SubjectID, Visit = visit, EASI = round(pmax(0, if_else(state == "lesional", 12, 3) + rnorm(n(), 0, 2)), 1))
+write_csv(sev, file.path(sim_dir, "severity.csv"))
 
 yaml::write_yaml(list(
   paths = list(manifest = cfg$paths$manifest, npx_dir = file.path(sim_dir, "npx"),
+               severity = file.path(sim_dir, "severity.csv"),
                leip_clinical = cfg$paths$leip_clinical, fixed_lod = file.path(sim_dir, "fixed_lod.csv"),
                output = "output_sim"),
   npx_column = cfg$npx_column, qc = cfg$qc, stats = cfg$stats, enrichment = cfg$enrichment

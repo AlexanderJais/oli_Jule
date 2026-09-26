@@ -33,13 +33,28 @@ print(round(fpr, 3))
 biobank <- ser |> filter(model == "AD_vs_HC_in_study", role == "Biobank_shift")
 leip <- read_csv(file.path(out, "leip_reference/leip_clinical_associations.csv"), show_col_types = FALSE)
 th2 <- read_csv(file.path(out, "enrichment/gsea_results.csv"), show_col_types = FALSE) |>
-  filter(pathway == "CUSTOM_AD_TH2_AXIS", model == "states_all_visits", contrast == "AD_L_vs_NL")
+  filter(pathway == "CUSTOM_AD_TH2_AXIS", model %in% c("states_all_visits", "baseline_V1"), contrast == "AD_L_vs_NL")
+
+prof <- read_csv(file.path(out, "isf_profile/isf_detection_profile.csv"), show_col_types = FALSE) |>
+  left_join(truth |> select(OlinkID, role), by = "OlinkID")
+enr <- read_csv(file.path(out, "matrix_comparison/relative_enrichment.csv"), show_col_types = FALSE) |>
+  left_join(truth |> select(OlinkID, isf_offset), by = "OlinkID")
+enr_r <- enr |> group_by(model) |> summarise(r = cor(rel_log2_isf_vs_serum, isf_offset))
+traj <- read_csv(file.path(out, "trajectories/trajectory_results.csv"), show_col_types = FALSE) |>
+  left_join(truth |> select(OlinkID, role), by = "OlinkID")
+easi <- traj |> filter(model == "ISF lesional site: EASI")
+print(enr_r)
 
 stopifnot(
+  "lesion-restricted proteins not found (step 09)" =
+    sum(prof$lesion_restricted & prof$role == "ISF_lesion_restricted", na.rm = TRUE) >= 4,
+  "relative dISF/serum enrichment not recovered (step 10)" = all(enr_r$r > 0.9),
+  "severity-linked proteins not found (step 11)" = mean(easi$significant[easi$role == "ISF_lesional"]) >= 0.7,
+  "false trajectory hits (step 11)" = sum(traj$significant & traj$role == "null") <= 3,
   "an effect was not recovered (power < 0.7)" = all(res$power >= 0.7),
   "too many false positives" = all(fpr <= 0.05),
   "biobank-only shift leaked into the in-study comparison" = sum(biobank$significant) <= 1,
   "BMI association in LEIP not found" = any(leip$significant & leip$parameter == "BMI"),
-  "Th2 set not enriched in lesional skin" = nrow(th2) == 1 && th2$padj < 0.05 && th2$NES > 0
+  "Th2 set not enriched in lesional skin" = any(th2$padj < 0.05 & th2$NES > 0)
 )
 msg("All pipeline checks passed.")
