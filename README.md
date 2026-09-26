@@ -1,111 +1,289 @@
-# O-MicroAD – Olink Explore HT analysis
+# O-MicroAD – Olink proteomics of skin fluid and blood
 
-R pipeline for the Olink Explore HT run of O-MicroAD: dermal interstitial fluid (dISF) and serum
-from the MicroAD study (atopic dermatitis patients followed over up to 6 visits, healthy volunteers,
-CPUO), plus serum from RELAD / RELAD2 and LEIP biobank controls.
+This repository contains the R scripts that analyse the **Olink Explore HT** data of the O-MicroAD
+study: about 5,400 proteins measured in **dermal interstitial fluid (dISF)** and in **serum** of
+patients with atopic dermatitis (AD) and control persons.
 
-## Study aims and where they are answered
+This page tells you what the analysis does, how to run it, and **where to find which result**.
+Technical details (models, design decisions) are in [`docs/TECHNICAL.md`](docs/TECHNICAL.md).
 
-| aim | steps | key outputs |
+> **Start here:** after a run, open **`output/Executive_summary.pdf`**. It summarises all
+> results on about 20 pages and tells you which folder holds the details.
+
+---
+
+## 1. The study in short
+
+| | dISF (skin fluid) | Serum (blood) |
 |---|---|---|
-| 1. Profile the dISF proteome of mild-to-moderate AD | 09, 04, 07 | `isf_profile/isf_profile.xlsx` (what is detectable, by skin state, pathways), `models/ISF_*` (lesional / ex-lesional / non-lesional / healthy) |
-| 2. Compare the dISF and blood proteome | 10, 06, 08 | `matrix_comparison/matrix_comparison.xlsx` (detected where, relatively enriched in dISF, skin vs blood disease signals), `isf_serum/*` (correlation), `leip_reference/*` |
-| 3. Track changes across the disease course | 11, 04 (time models) | `trajectories/trajectory_results.csv`, per-patient plots in `trajectories/plots/` |
+| **MicroAD** – AD patients followed over up to 6 visits (V1–V6) | 2 skin sites per visit: the tracked **lesion site** and a **non-lesional** site | 1 sample per visit |
+| MicroAD – healthy volunteers (1 visit) | healthy skin | ✔ |
+| MicroAD – CPUO patients (chronic pruritus, 1 visit) | lesional + non-lesional | ✔ |
+| **RELAD / RELAD2** – AD patients with / without later relapse, healthy controls (1 sample each) | – | ✔ |
+| **LEIP** – biobank serum, population reference (1 sample each) | – | ✔ |
 
-| Per visit / time course (lesion site vs healthy skin at V1–V6; proteins regulated at all visits) | 13 | `visit_course/visit_course.xlsx`, `visit_course/time_course_*.png`, `models/volcano/ISF_by_visit_V*.png` |
-| Serum vs dISF per visit: overlap and what dISF adds (lesion site / non-lesional; AD vs healthy; relapse vs non-relapse) | 15 | `serum_vs_disf/` (Venn diagrams, coloured volcano plots, protein lists) |
-| **Executive summary of everything** | 16 | `Executive_summary.pdf` |
-| **Data export: all proteins, all samples (CSV); RELAD2 separately** | 17 | `export/` |
-| Focus proteins: CD137 (TNFRSF9), TNFSF9, KITLG, CPA4, FCER1A, TPSAB1, MS4A2, TPSD1, PNOC, POSTN | 12 | `focus/focus_overview.xlsx`, `focus/focus_overview_heatmap.png`, one folder per protein |
+**What happens at the lesion site over time:** at V1 the lesion is active (*lesional*). After
+treatment it clears (*ex-lesional*). In some patients it comes back (**relapse**, lesional again);
+in others it doesn't (*non-relapse*).
 
-Secondary: relapse (04, 05, 11; exploratory) and RELAD/RELAD2 serum relapse (05).
+**Study aims**
+1. Profile the dISF proteome of mild-to-moderate AD.
+2. Compare the dISF proteome with blood (serum).
+3. Follow the changes over the disease course (visits, clearing, relapse).
 
-ISF and serum are analysed separately. They are only combined for the ISF–serum correlation
-(step 06) and the LEIP population check (step 08).
+---
 
-## Quick start
+## 2. Words you will meet
 
-Open `oli_Jule.Rproj` in RStudio (or `setwd()` to this folder): all paths are relative to the project folder.
+| Word | Meaning |
+|---|---|
+| **NPX** | Olink's protein value, on a log2 scale: +1 NPX = twice as much protein. Only compare NPX **within one protein**; NPX values of different proteins are not comparable. |
+| **PCNormalizedNPX** | NPX adjusted to the plate controls on each plate. This is the value the analysis uses. |
+| **LOD** | Limit of detection. Values below it are mostly noise. |
+| **Detected** | The protein is above LOD in ≥ 50 % of the samples of at least one group. Only detected proteins go into the statistics. |
+| **L / lesion site** | The skin site followed over time: lesional at V1 and at relapse, ex-lesional in between |
+| **NL** | Non-lesional (clinically normal-looking) skin of the same AD patient |
+| **xL** | Ex-lesional: the lesion site after it has cleared |
+| **HC** | Healthy controls |
+| **logFC / estimate** | The difference between two groups in NPX (log2). +1 = twice as high in the first group. |
+| **p-value** | How surprising the difference would be by chance, for **one** protein |
+| **FDR (adj.P.Val)** | The p-value corrected for testing ~5,400 proteins at once. **Significant = FDR < 0.05.** With few samples (e.g. one visit) the FDR is strict, so few proteins pass. |
+| **Volcano plot** | x axis = difference (logFC), y axis = −log10 p. Top left and top right = strongest changes. The dashed line is the FDR cutoff of that panel. |
+| **Nominal / p < 0.05** | Significant without correction for many proteins. Only for exploring and generating hypotheses. |
 
-```bash
-Rscript install_packages.R        # once
-# put the data files in data/ (see below), then
-Rscript run_all.R                 # runs all steps; results in output/, summary in output/Executive_summary.pdf
-```
+---
 
-To run a single step, use `Rscript scripts/0X_....R`. Each step reads what the previous one saved.
+## 3. How to run it
 
-## Data (never committed – `data/` and `output/` are git-ignored)
+1. Open **`oli_Jule.Rproj`** in RStudio. This sets the working folder correctly.
+2. Put the data files into the `data/` folder, as described in [`data/README.md`](data/README.md): manifest, the two Olink NPX files, the LEIP clinical data and the Olink LOD file. **Data files are never uploaded to GitHub.**
+3. The first time only, run `source("install_packages.R")`.
+4. Run `source("run_all.R")`. The full run takes about 15–45 minutes, and results appear in `output/`.
+5. To restart from a later step, e.g. after changing something in step 12, run: `start_at <- 12; source("run_all.R")`.
 
-| file | what | where it is set |
+The first lines of the run show whether all input files were found (`[ok]` / `[MISSING]`).
+
+To check that R and the packages work, run `source("tests/test_pipeline.R")`. It uses invented
+data only, takes about 5 minutes, and must end with "All pipeline checks passed".
+
+---
+
+## 4. What is where – the `output/` folder
+
+Each script writes into its own folder. Most folders contain an **`.xlsx` file** that collects
+all their tables. Open that one first.
+
+### `Executive_summary.pdf` – the overview (step 16)
+Key numbers and findings for each aim, all comparisons in one table, the most important figures,
+and the methods and caveats. **Read this first.**
+
+### `metadata/` – the samples (step 01)
+| File | Content |
+|---|---|
+| `sample_metadata.csv` | One row per sample: patient, visit, skin site, skin state, group, relapse, plate, volume … |
+| `data_flags.csv` | Inconsistencies found in the manifest, e.g. contradicting relapse labels or low sample volume. They are **flagged, not corrected**. |
+
+### `qc/` – quality control (step 02)
+| File | Content |
+|---|---|
+| `sample_qc.csv`, `sample_qc_median_iqr.png` | Olink QC per sample and outliers (flagged, not removed) |
+| `assay_detection.csv`, `assay_detection.png` | For each protein and matrix: share of samples above LOD, and whether it is analysed (`keep`) |
+| `lod.csv` | LOD per protein and where it comes from (Olink fixed LOD file) |
+| `pca_by_plate.png` | Do the plates differ? The points should not separate by plate. |
+| `sample_control_cv.csv` | Reproducibility of the sample controls (CV) |
+| `assays_without_values.csv` | Proteins Olink excluded (no values) |
+| `sample_id_mismatches.csv`, `matrix_mismatches.csv` | Should be empty. Otherwise sample IDs in the Olink files and the manifest don't match. |
+
+### `explore/` – first look at the data (step 03)
+PCA plots of each matrix, coloured by skin state, group, visit, plate or cohort. The
+`variance_partition_*` files show how much of the variation comes from the person, the skin state,
+the plate or the cohort.
+
+### `models/` – the main group comparisons (steps 04, 05, 13)
+| File | Content |
+|---|---|
+| `ISF_results.csv` | dISF: every protein × every comparison (see the list of comparison names below) |
+| `ISF_by_visit_results.csv` | dISF comparisons **separately for each visit** V1–V6 |
+| `ISF_relapse_delta_results.csv` | Relapse test on the difference ex-lesional minus non-lesional skin |
+| `Serum_results.csv` | Serum: every protein × every comparison |
+| `Serum_AD_vs_controls_agreement.csv` | Serum proteins that differ in AD **against both** control groups (in-study healthy and LEIP) |
+| `*_summary.csv` | Number of significant proteins per comparison (quick overview) |
+| `volcano/*.png` | One volcano plot per model, one panel per comparison |
+
+**How to read a results table:** `Assay` = protein, `contrast` = comparison, `logFC` = difference
+(log2), `P.Value` = p-value, `adj.P.Val` = FDR, `significant` = TRUE if FDR < 0.05. Filter for
+`significant == TRUE` and sort by `P.Value`.
+
+### `visit_course/` – visit by visit and the time course (step 13)
+| File | Content |
+|---|---|
+| `significant_per_visit.png` | Number of significant proteins at each visit |
+| `lesion_site_state_per_visit.csv` | How many lesion sites are lesional vs ex-lesional at each visit |
+| `consistency_across_visits.csv` | For each protein: at how many visits it is significant, and in which direction |
+| `time_course_effects_*.png` | Proteins regulated **at all visits**: difference vs healthy skin at each visit (with 95 % CI) |
+| `time_course_heatmap_*.png` | The same as a heatmap |
+| `time_course_levels.png` | NPX levels over the visits: lesion site, non-lesional skin, and healthy skin (grey band) |
+| `visit_course.xlsx` | All of the above as tables |
+
+Volcano plots for each visit: `models/volcano/ISF_by_visit_V1.png` … `V6.png`.
+
+### `enrichment/` – pathways (step 07)
+`gsea_results.csv`: for every comparison, which biological pathways (Hallmark, Reactome, GO,
+Th2 set) are shifted. `NES > 0` = pathway higher in the first group of the comparison;
+significant if `padj < 0.05`.
+
+### `isf_profile/` – what is in skin fluid? (step 09, aim 1)
+| File | Content |
+|---|---|
+| `isf_detection_profile.csv` | For each protein: how often it is detected in dISF, per skin state. `lesion_restricted` = detectable only in lesional AD skin. |
+| `isf_detected_pathways.csv` | Which pathways the detectable dISF proteome covers |
+| `top_variable_heatmap.png` | The 50 dISF proteins that vary most between samples |
+
+### `isf_serum/` – do skin fluid and blood go together? (step 06)
+`isf_serum_correlation.csv`: for each protein, the correlation of dISF with serum. `r_within` =
+within the same patient over the visits; `r_between` = between patients.
+`top_correlations.png` shows the strongest ones.
+
+### `matrix_comparison/` – dISF vs serum proteome (step 10, aim 2)
+| File | Content |
+|---|---|
+| `detection_by_matrix.csv` | Measurable in dISF only, serum only, both, or neither |
+| `relative_enrichment.csv` | Proteins relatively **enriched in skin fluid** compared with blood, i.e. candidates for local production in the skin |
+| `disease_signal_concordance.*` | Do disease differences seen in dISF also appear in serum? |
+
+### `serum_vs_disf/` – overlap and what dISF adds, per visit (step 15)
+The same question is asked in dISF and in serum: **AD vs healthy** and **relapse vs
+non-relapse**, the latter using only visits before the relapse. It is done at each visit and for
+all visits together, for the lesion site and the non-lesional site.
+
+| File | Content |
+|---|---|
+| `venn_*_nominal.png`, `venn_*_FDR.png` | Venn diagrams: significant in dISF / in serum / in both |
+| `overlap_bars_*.png` | The same as bars per visit. Red = information only dISF provides. |
+| `volcano_dISF_coloured_*.png` | dISF volcano plots, coloured by whether serum shows the same |
+| `effects_dISF_vs_serum_*.png` | Effect in dISF vs effect in serum for each protein |
+| `overlap_summary.csv`, `overlap_protein_lists.csv`, `serum_vs_disf.xlsx` | Numbers and the protein names in each category |
+
+`FDR` files use strict significance. `nominal` files use p < 0.05, which is exploratory but shows
+more, since the groups per visit are small.
+
+### `trajectories/` – disease course and relapse (step 11, aim 3)
+Does the remaining lesional signal fade after clearing? Does it rise before a relapse? Results
+are in `trajectory_results.csv`, and `plots/` holds one figure per protein showing each patient
+over time (red = lesion site, blue = non-lesional, yellow = serum, dashed line = relapse). If a
+severity file (SCORAD/EASI) is present, the proteins that follow the severity are listed too.
+
+### `leip_reference/` – the population reference (step 08)
+For the proteins where skin fluid and blood are correlated: the normal range in the LEIP
+population, where AD patients fall in it, and whether the protein depends on age, sex, BMI, CRP,
+lipids … in healthy people. `leip_reference.xlsx` collects all of it.
+
+### `focus/` – the pre-specified proteins (step 12)
+CD137 (TNFRSF9), CD137L (TNFSF9), KITLG, CPA4, FCER1A, TPSAB1, MS4A2, TPSD1, PNOC and POSTN.
+The list is set in `config.yml` under `focus_proteins`.
+
+| File | Content |
+|---|---|
+| `focus_overview_heatmap.png` | All focus proteins × main comparisons at a glance (stars = p-value) |
+| `focus_skin_states.png` | All focus proteins in dISF by skin state |
+| `focus_overview.xlsx` | The numbers behind it |
+| `<protein>/<protein>_report.xlsx` | Everything about one protein: detection, all tests, correlation with serum, LEIP, sample values |
+| `<protein>/*.png` | Skin states, V1 lesional vs non-lesional per patient, serum groups, course per patient, dISF vs serum |
+
+For these proteins the **p-value** of the single test is the main result, because they were
+chosen in advance. The FDR is shown alongside.
+
+### `export/` – the data as CSV (step 17)
+| File | Content |
+|---|---|
+| `ISF_NPX_wide.csv`, `Serum_NPX_wide.csv` | The Olink result: one row per sample, one column per protein (NPX as delivered) |
+| `*_PCNormalizedNPX_wide.csv` | The same with the values used in the analysis |
+| `samples.csv`, `proteins.csv` | Sample information and protein information (UniProt, LOD, detection) |
+| `NPX_long.csv.gz` | Everything in one long table, including LOD and QC flags |
+| `RELAD2/` | The RELAD2 samples only |
+
+Tip: if Excel shows everything in one column, set `sep: ";"` under `export:` in `config.yml`
+and rerun step 17 (`start_at <- 17; source("run_all.R")`).
+
+### `data/` (inside `output/`)
+Intermediate files used by the scripts (`.rds`). You don't need to open them.
+
+---
+
+## 5. Comparison names used in the tables
+
+| Name | Meaning (first group vs second group) |
+|---|---|
+| `AD_L_vs_NL` | AD lesional skin vs non-lesional skin of the same patients |
+| `AD_xL_vs_NL` | Ex-lesional (cleared) skin vs non-lesional skin: what remains after clearing |
+| `AD_L_vs_xL` | Lesional vs ex-lesional: what goes away with clearing |
+| `AD_L_vs_HC`, `AD_NL_vs_HC` | AD lesional / non-lesional skin vs healthy skin |
+| `CPUO_L_vs_NL`, `AD_L_vs_CPUO_L` | Pruritus (CPUO) lesional vs non-lesional; AD lesional vs CPUO lesional |
+| `per_week_xL`, `per_week_NL` | Change per week in ex-lesional / non-lesional skin |
+| `relapse_vs_non` | Patients who relapse vs who don't |
+| `Lsite_vs_HC`, `Lsite_vs_NL`, `NL_vs_HC` (per visit) | At one visit: lesion site vs healthy / vs non-lesional; non-lesional vs healthy |
+| `AD_vs_HC` (serum) | AD patients vs healthy controls of the same studies |
+| `AD_vs_Biobank`, `HC_vs_Biobank` | vs LEIP biobank serum (the latter checks for biobank handling effects) |
+| `active_vs_cleared` (serum) | Serum at visits with an active lesion vs after clearing |
+
+Model names: `states_all_visits` = all visits together; `baseline_V1` = V1 only;
+`V1`…`V6` = one visit; `*_relapse*` = relapse analyses.
+
+---
+
+## 6. Please keep in mind
+
+- **Relapse results are exploratory.** There are only 4 relapsing patients in MicroAD.
+- **Few samples per visit** (6–11 patients) make the FDR strict. "Not significant" does **not** mean "no difference".
+- **NPX is relative:** compare a protein between groups, never protein A with protein B.
+- **LEIP biobank serum** was collected and stored differently. Trust AD-vs-LEIP differences only if they also appear against the in-study healthy controls.
+- **Metadata issues** (see `metadata/data_flags.csv`) are flagged, not fixed.
+
+---
+
+## 7. What is in the repository
+
+| Folder / file | Content |
+|---|---|
+| `run_all.R` | Runs everything in order |
+| `config.yml` | All settings: file paths, thresholds, focus proteins, CSV separator |
+| `scripts/01_…` to `scripts/17_…` | One script per analysis step. The number is also the step in `start_at`. |
+| `R/` | Shared functions used by the scripts |
+| `data/` | Your input files (not uploaded to GitHub) – see `data/README.md` |
+| `output/` | All results (not uploaded to GitHub) |
+| `tests/` | Test with invented data |
+| `docs/TECHNICAL.md` | Statistical methods and design decisions |
+
+| Step | Script | What it does |
 |---|---|---|
-| `data/manifest.xlsx` | Olink sample submission sheet; the `manifest` sheet is the master | `paths$manifest` |
-| `data/npx/*.parquet` | Olink NPX files, here `O-MicroAD_ISF_NPX_2026-09-24.parquet` and `O-MicroAD_Serum_NPX_2026-09-24.parquet`; all files in the folder are read, and the file name must contain ISF or Serum | `paths$npx_dir` |
-| `data/LEIP_clinical_parameters_n35.xlsx` | LEIP clinical data, sheet `Key_parameters` (optional) | `paths$leip_clinical` |
-| `data/severity.xlsx` | optional: `SubjectID`, `Visit` (V1–V6), plus numeric scores (e.g. SCORAD, EASI, itch NRS). Step 11 then models each protein against each score | `paths$severity` |
-| `data/Explore_HT_Fixed_LOD.csv` | Olink fixed LOD file for Explore HT, version ≥ 6.0.0, from olink.com (recommended) | `paths$fixed_lod` |
+| 01 | `01_metadata.R` | Read and check the manifest |
+| 02 | `02_import_qc.R` | Read the Olink files, LOD, quality control |
+| 03 | `03_explore.R` | PCA, sources of variation |
+| 04 | `04_isf_models.R` | dISF comparisons |
+| 05 | `05_serum_models.R` | Serum comparisons |
+| 06 | `06_isf_vs_serum.R` | dISF–serum correlation |
+| 07 | `07_enrichment.R` | Pathways |
+| 08 | `08_leip_reference.R` | LEIP population reference |
+| 09 | `09_isf_profile.R` | dISF proteome profile (aim 1) |
+| 10 | `10_matrix_comparison.R` | dISF vs serum proteome (aim 2) |
+| 11 | `11_trajectories.R` | Disease course (aim 3) |
+| 12 | `12_focus_proteins.R` | Focus proteins (CD137 …) |
+| 13 | `13_visit_course.R` | Per visit and time course |
+| 15 | `15_serum_vs_disf.R` | Serum vs dISF overlap per visit |
+| 16 | `16_summary_report.R` | Executive summary PDF |
+| 17 | `17_export_data.R` | CSV export of the data |
 
-All settings (thresholds, FDR, number of cores) are in `config.yml`.
+---
 
-## Steps
+## 8. Something went wrong?
 
-| script | does | main output |
-|---|---|---|
-| `01_metadata.R` | Cleans the manifest: harmonised groups (AD / HC / CPUO / Biobank), skin site and state, visit and days since V1, relapse visit and visits before relapse, sample volume, and LEIP clinical data. Checks IDs against the plate layout, and flags inconsistencies without dropping anything. | `metadata/sample_metadata.csv`, `metadata/data_flags.csv` |
-| `02_import_qc.R` | Reads the parquet, checks sample IDs and normalisation, and works out LOD. Sample QC uses Olink flags plus a median/IQR outlier check. Keeps an assay in a matrix if it is detected in ≥ 50 % of at least one group, and reports control CVs and low-volume samples. | `qc/*`, `data/npx_clean.rds`, `data/npx_wide.rds` |
-| `03_explore.R` | Per matrix: PCA coloured by state, group, visit, plate and cohort; variance partitioning. | `explore/*` |
-| `04_isf_models.R` | ISF models per protein (see below). | `models/ISF_*` |
-| `05_serum_models.R` | Serum models per protein (see below). | `models/Serum_*` |
-| `06_isf_vs_serum.R` | On matched MicroAD visits: within-subject (repeated-measures) and between-subject correlation of ISF and serum, separately for the lesional and non-lesional site. | `isf_serum/*` |
-| `07_enrichment.R` | GSEA (fgsea) for every contrast: MSigDB Hallmark, Reactome, GO:BP, plus a custom AD/Th2 set. | `enrichment/*` |
-| `09_isf_profile.R` | **Aim 1.** Descriptive dISF profile: detection class per protein (overall and by skin state), proteins detectable only in lesional skin, pathway over-representation of the detectable proteome, heatmap of the most variable proteins. NPX is protein-specific, so there is no ranking of levels between proteins. | `isf_profile/*` |
-| `10_matrix_comparison.R` | **Aim 2.** Detected in dISF only / serum only / both. Relative dISF/serum enrichment: paired, centred log2 ratio, FDR plus ≥ 2-fold (`stats$min_rel_log2`). Concordance of disease effects in skin vs blood. Whether serum tracks the lesional-minus-non-lesional skin difference visit by visit. | `matrix_comparison/*` |
-| `11_trajectories.R` | **Aim 3.** Residual lesional signal (ex-lesional minus non-lesional) vs weeks since clearance, and vs weeks to relapse (relapsers; exploratory). Serum vs weeks to relapse. Optional severity models, and per-patient trajectory plots of the top proteins (dISF lesional site, non-lesional site, serum; relapse marked). | `trajectories/*` |
-| `12_focus_proteins.R` | **Dedicated analysis of pre-specified proteins** (`focus_proteins` in `config.yml`; default CD137 = TNFRSF9). Runs even if the protein fails the detection filter. Reports detection per matrix and group, and the same models as steps 04/05 plus the xL − NL relapse model for this protein alone (lmerTest / lm). The unadjusted p-value is the primary test, with the proteome-wide FDR shown alongside. Also ISF–serum correlation, severity (if available), LEIP clinical associations, every pipeline result for the protein, and figures. | `focus/<protein>/*` |
-| `13_visit_course.R` | dISF per visit (V1–V6, visits with ≥ `stats$visit_min_subjects` patients): tracked lesion site vs healthy skin, vs non-lesional skin, and non-lesional vs healthy. Same model as step 04, with a volcano plot per visit. Proteins regulated at **all** visits in the same direction are listed at FDR < 0.05 at every visit (strict) and at p < 0.05 at every visit (nominal), with time-course plots of effects and NPX levels. | `visit_course/*`, `models/ISF_by_visit_*` |
-| `15_serum_vs_disf.R` | The same question in dISF and serum, per visit and pooled: AD vs healthy (dISF lesion site or non-lesional skin vs healthy skin; MicroAD serum AD vs healthy) and relapse vs non-relapse (only visits before the relapse). Significant sets (FDR, and p < 0.05 as exploratory) are split into both (same / opposite direction), dISF only, dISF only because the protein isn't measurable in serum, and serum only. Output: Venn diagrams, stacked bars per visit, dISF volcano plots coloured by what serum shows, and dISF vs serum effect plots. | `serum_vs_disf/*` |
-| `17_export_data.R` | CSV export of the Olink data: `samples.csv` (metadata + QC), `proteins.csv` (annotation, LOD, detection), wide tables per matrix (samples × proteins) as delivered (`NPX`) and as analysed (`PCNormalizedNPX`), a long table (`NPX_long.csv.gz`) with LOD and QC flags, and `export/RELAD2/` with the RELAD2 samples only. Values below LOD are kept as measured. For German Excel set `export: sep: ";"` in `config.yml`. | `export/*` |
-| `16_summary_report.R` | Executive summary PDF: data and QC, automatically extracted key findings per aim, all comparisons, visit course, volcano plots, pathways, dISF vs serum, serum, focus proteins, methods and caveats. Each section is skipped with a note if its step did not run. | `Executive_summary.pdf` |
-| `08_leip_reference.R` | For the proteins significant in step 06: LEIP normal range, where AD patients fall in it, clinical associations in LEIP, detectability, and LEIP vs in-study controls. | `leip_reference/*` (incl. `.xlsx`) |
+| Message | Fix |
+|---|---|
+| `cannot open file 'R/utils.R'` / "Working directory must be the project folder" | Open `oli_Jule.Rproj`, or use `setwd()` to go to the repository folder |
+| `[MISSING] manifest` / `NPX parquet files` | Check the file names and places in `data/README.md` |
+| `LOD source: negative controls` | The Olink fixed LOD file was not found. Put it in `data/`; its name must contain "Fixed LOD". |
+| A step fails | Read the last lines of the message, fix the problem, and restart from that step with `start_at <- N; source("run_all.R")` |
+| Package error | Run `source("install_packages.R")` again |
 
-### Models
-
-The models are limma/dream (variancePartition) with empirical Bayes moderation. Subject is a random
-effect wherever a person contributes several samples. NPX differences are on the log2 scale, and
-BH FDR is applied within each contrast.
-
-**ISF (04)**, all models adjusted for plate:
-- `states_all_visits`: lesional, ex-lesional and non-lesional AD skin vs each other and vs healthy skin; CPUO lesional vs non-lesional.
-- `baseline_V1`: the same comparisons at V1 only.
-- `time_ex_lesional`, `time_non_lesional`: change per week in AD skin.
-- `relapse_ex_lesional`, exploratory: cleared skin of relapsers vs non-relapsers.
-- `relapse_delta_xL_minus_NL`, exploratory: the same question on the within-visit ex-lesional minus non-lesional difference. Plate and systemic day-to-day variation cancel out.
-
-**Serum (05):**
-- AD vs controls, fitted twice: against the in-study healthy controls (adjusted for cohort and plate) and against LEIP biobank controls (adjusted for plate).
-  - `Serum_AD_vs_controls_agreement.csv` marks proteins that agree in both comparisons.
-  - `HC_vs_Biobank` shows proteins affected by the biobank source.
-- `MicroAD_active_vs_cleared`: serum when the tracked lesion is active vs cleared.
-- `MicroAD_relapse`: relapsers vs non-relapsers at cleared visits.
-- `RELAD_relapse`: RELAD and RELAD2, adjusted for cohort and plate, plus a sensitivity analysis without the samples with conflicting relapse labels.
-
-## Design decisions
-
-- **`PCNormalizedNPX` is analysed, not intensity-normalised NPX.** Plate 1 is ISF only, plate 2 is mixed, and plates 3–4 are serum. Intensity normalisation assumes randomised samples of one matrix and would distort plate 2. Step 02 reports the `Normalization` column of the delivered file.
-- **LOD** is computed per row with OlinkAnalyze's own routine (`olink_lod`), so count-based assays (`LODMethod = lod_count`, about 18 % in the fixed LOD file v10.2.0) get their sample-specific LOD.
-  - Preferred: Olink's fixed LOD file (`paths$fixed_lod`), matched on `DataAnalysisRefID`.
-  - Fallback for rows without a match: the Olink negative-control method on the 8 negative controls. OlinkAnalyze normally requires ≥ 10, so this LOD is less precise; in simulation it was off by up to ±0.6 NPX.
-  - `qc/lod.csv` gives the LOD source and the per-sample LOD range for each assay.
-- **Relapse in ISF is exploratory.** All four ISF relapsers are on plate 1, and plate 2 holds only non-relapsers.
-- **Metadata issues are flagged, not fixed**, in `metadata/data_flags.csv`. As of manifest v3 this covers the RELAD / RELAD2 label conflicts, 5 low-volume ISF samples, and LEIP_35 without clinical data.
-- **Age and sex** are currently only available for LEIP, so the serum models are not adjusted for them.
-
-## Testing without real data
-
-```bash
-Rscript tests/test_pipeline.R
-```
-
-This needs no study data. It builds a synthetic manifest with the same layout and design, simulates the two Olink NPX files (ISF, serum) with known effects, runs all
-steps with `data_sim/config_sim.yml` (output in `output_sim/`), and checks that the effects are
-recovered and false positives stay rare.
+When asking for help, send the error message and the names of files, columns or samples,
+**not the data itself**.
