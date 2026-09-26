@@ -8,6 +8,7 @@ source("R/qc.R")
 cfg  <- load_config()
 meta <- read_step(cfg, "metadata", "sample_metadata.rds", step = "scripts/01_metadata.R")
 vcol <- cfg$npx_column
+clear_outputs(cfg, "qc"); clear_outputs(cfg, "data")
 
 d <- import_npx(cfg$paths$npx_dir)
 
@@ -30,7 +31,7 @@ save_csv(id_check, cfg, "qc", "sample_id_mismatches.csv")
 if (nrow(id_check)) msg("WARNING: %d sample ID mismatches - see qc/sample_id_mismatches.csv", nrow(id_check))
 
 # ---- LOD ---------------------------------------------------------------------------------
-d <- add_lod(d, cfg$paths$fixed_lod, cfg$qc$lod_method)
+d <- add_lod(d, cfg$paths$fixed_lod, cfg$qc$lod_method, value_col = vcol)
 lod <- lod_summary(d)
 save_csv(lod, cfg, "qc", "lod.csv")
 msg("LOD source (assays): %s", paste(names(table(lod$LOD_source)), table(lod$LOD_source), collapse = ", "))
@@ -46,7 +47,7 @@ s <- d |>
   filter(SampleType == "SAMPLE", AssayType == "assay") |>
   inner_join(meta, by = "SampleID") |>
   mutate(value = .data[[vcol]],
-         below_lod = !is.na(LOD) & value < LOD,
+         below_lod = if_else(is.na(LOD), NA, value < LOD),   # unknown when no LOD
          det_group = detect_group(matrix, group, state))
 
 if (cfg$qc$drop_assay_qc_warn) s <- s |> mutate(value = if_else(AssayQC == "WARN", NA_real_, value))
@@ -67,7 +68,7 @@ s <- s |> filter(!SampleID %in% drop)
 # ---- assay detection filter (per matrix) -----------------------------------------------------
 det <- assay_detection(s, cfg$qc$min_detect_frac)
 save_csv(det, cfg, "qc", "assay_detection.csv")
-print(det |> group_by(matrix) |> summarise(assays = n(), kept = sum(keep)))
+print(det |> group_by(matrix) |> summarise(assays = n(), kept = sum(keep), without_LOD = sum(!lod_available)))
 
 aqc <- s |> filter(AssayQC != "PASS") |> distinct(OlinkID, Assay, PlateID, AssayQC)
 save_csv(aqc, cfg, "qc", "assay_qc_flags.csv")

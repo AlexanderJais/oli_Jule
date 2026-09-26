@@ -36,6 +36,15 @@ bpparam_cores <- function() {
 
 msg <- function(...) message(format(Sys.time(), "%H:%M:%S"), "  ", sprintf(...))
 
+#' Remove results of an earlier run so a skipped model cannot leave stale files behind.
+clear_outputs <- function(cfg, subdir, pattern = ".*") {
+  d <- file.path(cfg$paths$output, subdir)
+  if (!dir.exists(d)) return(invisible(0))
+  f <- list.files(d, pattern = pattern, full.names = TRUE, recursive = TRUE)
+  unlink(f)
+  invisible(length(f))
+}
+
 #' Write a data frame as CSV and return it invisibly.
 save_csv <- function(df, cfg, ...) {
   p <- out_path(cfg, ...)

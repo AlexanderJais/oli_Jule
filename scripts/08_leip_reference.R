@@ -8,6 +8,7 @@
 
 source("R/utils.R")
 cfg   <- load_config()
+clear_outputs(cfg, "leip_reference")
 meta  <- read_step(cfg, "metadata", "sample_metadata.rds", step = "scripts/01_metadata.R")
 clean <- read_step(cfg, "data", "npx_clean.rds", step = "scripts/02_import_qc.R")
 sig   <- read_csv(file.path(cfg$paths$output, "isf_serum", "significant_proteins.csv"), show_col_types = FALSE)
@@ -20,9 +21,10 @@ if (!nrow(leip)) stop("No LEIP samples in the cleaned serum data.")
 # 1 + 3: reference ranges and detectability -----------------------------------------------------
 ref <- leip |>
   group_by(OlinkID, Assay) |>
-  summarise(n_leip = n(), leip_mean = mean(value), leip_sd = sd(value), leip_median = median(value),
-            leip_p05 = quantile(value, 0.05), leip_p95 = quantile(value, 0.95),
-            leip_frac_detected = mean(!below_lod), .groups = "drop")
+  summarise(n_leip = sum(!is.na(value)), leip_mean = mean(value, na.rm = TRUE), leip_sd = sd(value, na.rm = TRUE),
+            leip_median = median(value, na.rm = TRUE),
+            leip_p05 = quantile(value, 0.05, na.rm = TRUE), leip_p95 = quantile(value, 0.95, na.rm = TRUE),
+            leip_frac_detected = mean(!below_lod, na.rm = TRUE), .groups = "drop")
 
 pos <- serum |>
   filter(group %in% c("AD", "HC"), cohort != "LEIP") |>
@@ -33,14 +35,15 @@ save_csv(pos |> select(SampleID, SubjectID, cohort, group, visit, lesion_state, 
                        above_p95, below_p05), cfg, "leip_reference", "samples_vs_leip.csv")
 pos_sum <- pos |>
   group_by(OlinkID, Assay, group) |>
-  summarise(n = n(), median_z = median(z), pct_above_p95 = 100 * mean(above_p95), pct_below_p05 = 100 * mean(below_p05),
+  summarise(n = sum(!is.na(z)), median_z = median(z, na.rm = TRUE), pct_above_p95 = 100 * mean(above_p95, na.rm = TRUE),
+            pct_below_p05 = 100 * mean(below_p05, na.rm = TRUE),
             .groups = "drop") |>
   pivot_wider(names_from = group, values_from = c(n, median_z, pct_above_p95, pct_below_p05))
 
 # 4: LEIP vs in-study healthy controls ---------------------------------------------------------------
 hc <- serum |> filter(group == "HC")
 src <- map(unique(serum$OlinkID), \(a) {
-  x <- hc$value[hc$OlinkID == a]; y <- leip$value[leip$OlinkID == a]
+  x <- na.omit(hc$value[hc$OlinkID == a]); y <- na.omit(leip$value[leip$OlinkID == a])
   if (length(x) < 3 || length(y) < 3) return(NULL)
   tibble(OlinkID = a, hc_minus_leip = median(x) - median(y),
          p_source = suppressWarnings(wilcox.test(x, y, exact = FALSE))$p.value)
@@ -59,7 +62,7 @@ if (length(params)) {
                                .groups = "drop")) |> bind_rows()
   assoc_sex <- if ("sex" %in% names(leip)) leip |> filter(!is.na(sex)) |> group_by(OlinkID, Assay) |>
     summarise(parameter = "sex (M - F)", n = n(),
-              rho = median(value[sex == "M"]) - median(value[sex == "F"]),
+              rho = median(value[sex == "M"], na.rm = TRUE) - median(value[sex == "F"], na.rm = TRUE),
               p = suppressWarnings(wilcox.test(value[sex == "M"], value[sex == "F"], exact = FALSE))$p.value,
               .groups = "drop") else NULL
   assoc <- bind_rows(assoc_num, assoc_sex) |>

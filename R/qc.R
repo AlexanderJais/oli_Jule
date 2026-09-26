@@ -21,7 +21,9 @@ import_npx <- function(npx_dir) {
 #'   2. rows without a fixed LOD: the Olink negative-control method on the pooled negative
 #'      controls. OlinkAnalyze requires >= 10 NCs for this; this study has 8, so the internal
 #'      routine is called with the lower minimum (less precise - reported as such).
-add_lod <- function(d, fixed_lod_path = NULL, method = "auto") {
+#' The LOD is returned on the scale of `value_col`: PC-normalised, or - for intensity-normalised
+#' NPX - shifted by the plate median of the samples, as OlinkAnalyze does.
+add_lod <- function(d, fixed_lod_path = NULL, method = "auto", value_col = "PCNormalizedNPX") {
   d <- d |> mutate(.row = row_number(), LOD = NA_real_, LOD_source = NA_character_)
   use_fixed <- method %in% c("auto", "FixedLOD") && !is.null(fixed_lod_path) && file.exists(fixed_lod_path)
   if (method == "FixedLOD" && !use_fixed) stop("lod_method = FixedLOD but no fixed LOD file at ", fixed_lod_path)
@@ -67,6 +69,15 @@ add_lod <- function(d, fixed_lod_path = NULL, method = "auto") {
              LOD_source = if_else(fill, sprintf("negative controls (n=%d)", n_nc), LOD_source)) |>
       select(-LOD_nc, -fill)
   }
+  if (value_col == "NPX" && any(d$Normalization == "Intensity", na.rm = TRUE)) {
+    pm <- d |> filter(SampleType == "SAMPLE", AssayType == "assay") |>
+      group_by(OlinkID, PlateID) |>
+      summarise(plate_median = median(PCNormalizedNPX, na.rm = TRUE), .groups = "drop")
+    d <- d |> left_join(pm, by = c("OlinkID", "PlateID")) |>
+      mutate(LOD = if_else(Normalization == "Intensity", LOD - plate_median, LOD)) |>
+      select(-plate_median)
+    msg("LOD converted to the intensity-normalised NPX scale (npx_column = NPX)")
+  }
   d |> select(-.row)
 }
 
@@ -110,9 +121,13 @@ assay_detection <- function(s, min_frac = 0.5) {
     summarise(frac_detected_all = mean(!below_lod, na.rm = TRUE), .groups = "drop")
   by_group |>
     group_by(matrix, OlinkID, Assay) |>
-    summarise(max_group_frac = max(frac_detected), best_group = det_group[which.max(frac_detected)], .groups = "drop") |>
+    summarise(max_group_frac = suppressWarnings(max(frac_detected, na.rm = TRUE)),
+              best_group = if (all(is.nan(frac_detected))) NA_character_ else det_group[which.max(frac_detected)],
+              .groups = "drop") |>
     left_join(overall, by = c("matrix", "OlinkID", "Assay")) |>
-    mutate(keep = max_group_frac >= min_frac)
+    # assays without any LOD cannot be judged: kept, and marked lod_available = FALSE
+    mutate(lod_available = is.finite(max_group_frac),
+           keep = !lod_available | max_group_frac >= min_frac)
 }
 
 #' CV of the sample controls (linear scale), across all plates and within plates.

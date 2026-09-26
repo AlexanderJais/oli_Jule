@@ -14,6 +14,7 @@ meta <- read_step(cfg, "metadata", "sample_metadata.rds", step = "scripts/01_met
 wide <- read_step(cfg, "data", "npx_wide.rds", step = "scripts/02_import_qc.R")
 clean <- read_step(cfg, "data", "npx_clean.rds", step = "scripts/02_import_qc.R")
 assay_map <- clean |> distinct(OlinkID, Assay)
+clear_outputs(cfg, "isf_serum")
 
 shared <- intersect(rownames(wide$ISF), rownames(wide$Serum))
 msg("%d proteins pass QC in both matrices", length(shared))

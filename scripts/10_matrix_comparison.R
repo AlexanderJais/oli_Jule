@@ -14,6 +14,7 @@
 source("R/utils.R")
 source("R/models.R")
 cfg   <- load_config()
+clear_outputs(cfg, "matrix_comparison")
 meta  <- read_step(cfg, "metadata", "sample_metadata.rds", step = "scripts/01_metadata.R")
 clean <- read_step(cfg, "data", "npx_clean.rds", step = "scripts/02_import_qc.R")
 wide  <- read_step(cfg, "data", "npx_wide.rds", step = "scripts/02_import_qc.R")
@@ -59,7 +60,10 @@ if (length(both) >= 10 && nrow(pairs) >= 4) {
     pp <- pairs |> filter(site == st)
     fit_contrasts(delta, pp, ~ 0 + ones + (1 | SubjectID), c(isf_vs_serum = "ones"),
                   paste("relative enrichment,", st), cfg$stats$min_group_n)
-  }) |> bind_rows() |>
+  }) |> bind_rows()
+}
+if (!is.null(enrich) && nrow(enrich)) {
+  enrich <- enrich |>
     annotate_results(assay_map, cfg$stats$fdr) |>
     rename(rel_log2_isf_vs_serum = logFC) |>
     mutate(direction = case_when(significant & rel_log2_isf_vs_serum >= min_rel ~ "enriched in dISF",
@@ -75,7 +79,10 @@ if (length(both) >= 10 && nrow(pairs) >= 4) {
     scale_colour_manual(values = c(`enriched in dISF` = "firebrick", `enriched in serum` = "steelblue", `not different` = "grey60")) +
     labs(title = "Relative dISF / serum level (centred log2 ratio, detected in both)", x = "protein rank", y = "relative log2 ratio")
   save_plot(p, cfg, "matrix_comparison", "relative_enrichment.png", width = 11, height = 5)
-} else msg("Too few proteins detected in both matrices or too few matched pairs - enrichment skipped.")
+} else {
+  enrich <- NULL
+  msg("Too few proteins detected in both matrices or too few matched pairs - enrichment skipped.")
+}
 
 # ---- c) disease signals: skin vs blood -----------------------------------------------------------------
 isf_res   <- file.path(cfg$paths$output, "models", "ISF_results.csv")
@@ -102,7 +109,8 @@ if (file.exists(isf_res) && file.exists(serum_res)) {
                                   isf_fdr < cfg$stats$fdr & serum_fdr < cfg$stats$fdr ~ "both, opposite",
                                   isf_fdr < cfg$stats$fdr ~ "dISF only",
                                   serum_fdr < cfg$stats$fdr ~ "serum only", TRUE ~ "neither"))
-  }) |> bind_rows() |> left_join(assay_map, by = "OlinkID") |> relocate(comparison, Assay, .after = OlinkID)
+  }) |> bind_rows()
+  if (nrow(conc)) conc <- conc |> left_join(assay_map, by = "OlinkID") |> relocate(comparison, Assay, .after = OlinkID)
   if (nrow(conc)) {
     save_csv(conc, cfg, "matrix_comparison", "disease_signal_concordance.csv")
     cs <- conc |> group_by(comparison) |>
@@ -137,14 +145,17 @@ if (nrow(lp) >= 8 && length(shared)) {
     r <- suppressWarnings(rmcorr::rmcorr(participant = subj, measure1 = x, measure2 = y,
                                          dataset = data.frame(subj = factor(lp$SubjectID[ok]), x = x[ok], y = y[ok])))
     tibble(OlinkID = a, n_visits = sum(ok), r_within = r$r, p = r$p)
-  }) |> bind_rows() |> mutate(fdr = p.adjust(p, "BH")) |> left_join(assay_map, by = "OlinkID") |> arrange(p)
-  save_csv(vt, cfg, "matrix_comparison", "lesion_signal_vs_serum_by_visit.csv")
-  msg("%d proteins: serum level tracks the lesional-minus-non-lesional skin difference within patients (FDR < %.2f)",
-      sum(vt$fdr < cfg$stats$fdr), cfg$stats$fdr)
+  }) |> bind_rows()
+  if (nrow(vt)) vt <- vt |> mutate(fdr = p.adjust(p, "BH")) |> left_join(assay_map, by = "OlinkID") |> arrange(p)
+  if (nrow(vt)) {
+    save_csv(vt, cfg, "matrix_comparison", "lesion_signal_vs_serum_by_visit.csv")
+    msg("%d proteins: serum level tracks the lesional-minus-non-lesional skin difference within patients (FDR < %.2f)",
+        sum(vt$fdr < cfg$stats$fdr), cfg$stats$fdr)
+  } else vt <- NULL
 }
 
 writexl::write_xlsx(Filter(Negate(is.null), list(
   detection = det, relative_enrichment = enrich,
-  disease_concordance = if (exists("conc")) conc else NULL,
+  disease_concordance = if (exists("conc") && nrow(conc)) conc else NULL,
   lesion_signal_vs_serum = if (exists("vt")) vt else NULL)),
   out_path(cfg, "matrix_comparison", "matrix_comparison.xlsx"))

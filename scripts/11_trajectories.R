@@ -11,6 +11,7 @@
 source("R/utils.R")
 source("R/models.R")
 cfg   <- load_config()
+clear_outputs(cfg, "trajectories")
 meta  <- read_step(cfg, "metadata", "sample_metadata.rds", step = "scripts/01_metadata.R")
 clean <- read_step(cfg, "data", "npx_clean.rds", step = "scripts/02_import_qc.R")
 wide  <- read_step(cfg, "data", "npx_wide.rds", step = "scripts/02_import_qc.R")
@@ -22,7 +23,7 @@ ad <- meta |> filter(cohort == "MicroAD", group == "AD")
 anchors <- ad |>
   filter(matrix == "ISF", site == "L") |>
   group_by(SubjectID) |>
-  summarise(clear_date = suppressWarnings(min(date[state == "ex-lesional"])),
+  summarise(clear_date = suppressWarnings(min(date[state %in% "ex-lesional"], na.rm = TRUE)),
             relapse_date = if (any(!is.na(relapse_visit))) min(date[visit_num == relapse_visit[1]]) else as.Date(NA),
             .groups = "drop") |>
   mutate(clear_date = if_else(is.finite(clear_date), clear_date, as.Date(NA)))
@@ -33,10 +34,10 @@ ad <- ad |> left_join(anchors, by = "SubjectID") |>
 # ex-lesional minus non-lesional per visit (removes plate and day-to-day systemic variation)
 isf_pairs <- ad |>
   filter(matrix == "ISF", SampleID %in% colnames(wide$ISF)) |>
-  select(SubjectID, visit, site, state, SampleID, weeks_since_clear, weeks_to_relapse, relapse) |>
-  pivot_wider(id_cols = c(SubjectID, visit, weeks_since_clear, weeks_to_relapse, relapse),
-              names_from = site, values_from = c(SampleID, state)) |>
-  filter(!is.na(SampleID_L), !is.na(SampleID_NL), state_L == "ex-lesional") |>
+  select(SubjectID, visit, site, state, SampleID) |>
+  pivot_wider(id_cols = c(SubjectID, visit), names_from = site, values_from = c(SampleID, state)) |>
+  filter(!is.na(SampleID_L), !is.na(SampleID_NL), state_L %in% "ex-lesional") |>
+  left_join(ad |> select(SampleID_L = SampleID, weeks_since_clear, weeks_to_relapse, relapse), by = "SampleID_L") |>
   mutate(SampleID = paste(SubjectID, visit, sep = "_"))
 delta <- wide$ISF[, isf_pairs$SampleID_L, drop = FALSE] - wide$ISF[, isf_pairs$SampleID_NL, drop = FALSE]
 colnames(delta) <- isf_pairs$SampleID

@@ -7,6 +7,7 @@ source("R/qc.R")
 cfg  <- load_config()
 meta <- read_step(cfg, "metadata", "sample_metadata.rds", step = "scripts/01_metadata.R")
 wide <- read_step(cfg, "data", "npx_wide.rds", step = "scripts/02_import_qc.R")
+clear_outputs(cfg, "explore")
 
 for (mx in names(wide)) {
   m <- wide[[mx]]

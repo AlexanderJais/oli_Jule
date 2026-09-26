@@ -10,6 +10,7 @@ wide <- read_step(cfg, "data", "npx_wide.rds", step = "scripts/02_import_qc.R")
 clean <- read_step(cfg, "data", "npx_clean.rds", step = "scripts/02_import_qc.R")
 assay_map <- clean |> distinct(OlinkID, Assay)
 expr <- wide$ISF
+clear_outputs(cfg, "models", "^ISF_")
 
 info <- meta |>
   filter(matrix == "ISF", SampleID %in% colnames(expr)) |>
@@ -57,11 +58,15 @@ res <- run_model_specs(specs, expr, info, cfg, "ISF", assay_map)
 
 # Relapse on the within-visit difference ex-lesional minus non-lesional (same subject, visit, plate:
 # removes plate and systemic day-to-day variation).
+# Pivot on subject + visit only, so a pair is kept even if its two samples differ in plate or date;
+# covariates are taken from the ex-lesional sample.
 pairs <- info |>
-  filter(group == "AD", !is.na(relapse2), cond %in% c("AD_xL", "AD_NL")) |>
-  select(SubjectID, visit, cond, SampleID, relapse2, plate, weeks) |>
-  pivot_wider(names_from = cond, values_from = SampleID) |>
+  filter(group == "AD", cond %in% c("AD_xL", "AD_NL")) |>
+  select(SubjectID, visit, cond, SampleID) |>
+  pivot_wider(id_cols = c(SubjectID, visit), names_from = cond, values_from = SampleID) |>
   filter(!is.na(AD_xL), !is.na(AD_NL)) |>
+  left_join(info |> select(AD_xL = SampleID, relapse2, weeks), by = "AD_xL") |>
+  filter(!is.na(relapse2)) |>
   mutate(SampleID = paste(SubjectID, visit, sep = "_"))
 if (nrow(pairs) >= 4) {
   delta <- expr[, pairs$AD_xL, drop = FALSE] - expr[, pairs$AD_NL, drop = FALSE]

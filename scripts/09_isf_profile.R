@@ -7,6 +7,7 @@
 
 source("R/utils.R")
 cfg   <- load_config()
+clear_outputs(cfg, "isf_profile")
 clean <- read_step(cfg, "data", "npx_clean.rds", step = "scripts/02_import_qc.R")
 wide  <- read_step(cfg, "data", "npx_wide.rds", step = "scripts/02_import_qc.R")
 min_f <- cfg$qc$min_detect_frac

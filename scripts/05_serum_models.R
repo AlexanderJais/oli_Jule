@@ -13,6 +13,7 @@ wide <- read_step(cfg, "data", "npx_wide.rds", step = "scripts/02_import_qc.R")
 clean <- read_step(cfg, "data", "npx_clean.rds", step = "scripts/02_import_qc.R")
 assay_map <- clean |> distinct(OlinkID, Assay)
 expr <- wide$Serum
+clear_outputs(cfg, "models", "^Serum_")
 
 info <- meta |>
   filter(matrix == "Serum", SampleID %in% colnames(expr)) |>
@@ -59,7 +60,7 @@ specs <- list(
 res <- run_model_specs(specs, expr, info, cfg, "Serum", assay_map)
 
 # agreement of the two AD-vs-control comparisons
-if (nrow(res)) {
+if (nrow(res) && all(c("AD_vs_HC", "AD_vs_Biobank") %in% res$contrast)) {
   agree <- res |>
     filter(contrast %in% c("AD_vs_HC", "AD_vs_Biobank")) |>
     select(OlinkID, Assay, contrast, logFC, adj.P.Val, significant) |>
@@ -69,4 +70,4 @@ if (nrow(res)) {
   save_csv(agree, cfg, "models", "Serum_AD_vs_controls_agreement.csv")
   msg("AD vs controls: %d proteins significant against both control groups (same direction)",
       sum(agree$agree_both_controls, na.rm = TRUE))
-}
+} else msg("AD vs controls agreement skipped: AD_vs_HC and/or AD_vs_Biobank not estimated.")

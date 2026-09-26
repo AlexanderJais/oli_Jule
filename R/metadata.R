@@ -5,7 +5,9 @@ excel_date <- function(x) {
   num <- suppressWarnings(as.numeric(x))
   out <- as.Date(num, origin = "1899-12-30")
   txt <- is.na(num) & !is.na(x)
-  out[txt] <- as.Date(x[txt], tryFormats = c("%Y-%m-%d", "%d.%m.%Y"), optional = TRUE)
+  # each text date is tried against each format separately (mixed formats in one column)
+  out[txt] <- dplyr::coalesce(as.Date(x[txt], format = "%Y-%m-%d"), as.Date(x[txt], format = "%d.%m.%Y"),
+                              as.Date(x[txt], format = "%d/%m/%Y"))
   out
 }
 
@@ -112,8 +114,8 @@ build_metadata <- function(manifest_path, leip_path = NULL) {
   relapse_visits <- l_site |>
     group_by(SubjectID) |>
     summarise(
-      first_cleared = suppressWarnings(min(visit_num[state == "ex-lesional"])),
-      relapse_visit = suppressWarnings(min(visit_num[state == "lesional" & visit_num > first_cleared])),
+      first_cleared = suppressWarnings(min(visit_num[state %in% "ex-lesional"], na.rm = TRUE)),
+      relapse_visit = suppressWarnings(min(visit_num[state %in% "lesional" & visit_num > first_cleared], na.rm = TRUE)),
       .groups = "drop") |>
     mutate(relapse_visit = as.integer(if_else(is.finite(relapse_visit), relapse_visit, NA_real_))) |>
     select(SubjectID, relapse_visit)
@@ -180,6 +182,7 @@ flag_metadata <- function(meta, low_volume = list(ISF = 20, Serum = 40)) {
   add(meta$SampleID[!is.na(meta$volume_ul) & meta$volume_ul < lv[meta$matrix]], "low sample volume")
   if ("age" %in% names(meta)) add(meta$SampleID[meta$cohort == "LEIP" & is.na(meta$age)], "LEIP sample without clinical data")
 
+  if (!length(f)) return(tibble(SampleID = character(), issue = character()))
   bind_rows(f) |> distinct()
 }
 

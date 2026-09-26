@@ -4,6 +4,7 @@
 
 source("R/utils.R")
 cfg <- load_config()
+clear_outputs(cfg, "enrichment")
 
 files <- list.files(file.path(cfg$paths$output, "models"), pattern = "_results\\.csv$", full.names = TRUE)
 if (!length(files)) stop("No model results found - run scripts 04 and 05 first.")
