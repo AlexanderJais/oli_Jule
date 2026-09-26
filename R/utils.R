@@ -23,9 +23,9 @@ load_config <- function(path = Sys.getenv("OLINK_CONFIG", "config.yml")) {
 # If a configured file is missing, look for it in the same folder under its usual name,
 # so the original file names from Olink / the lab can be used without renaming.
 data_file_patterns <- list(
-  manifest      = "(manifest|SampleSubmissionSheet).*\\.xlsx$",
+  manifest      = "(manifest|Sample[ _-]?Submission[ _-]?Sheet).*\\.xlsx$",
   leip_clinical = "LEIP.*clinical.*\\.xlsx$",
-  fixed_lod     = "Fixed_LOD.*\\.csv$",
+  fixed_lod     = "Fixed[ _-]?LOD.*\\.csv$",        # e.g. "Explore HT_Fixed LOD.csv", "Explore_HT_Fixed_LOD.csv"
   severity      = "(severity|SCORAD|EASI).*\\.(xlsx|csv)$"
 )
 
