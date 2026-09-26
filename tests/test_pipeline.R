@@ -56,7 +56,10 @@ vc <- read_csv(file.path(out, "visit_course/consistency_across_visits.csv"), sho
   left_join(truth |> select(OlinkID, role), by = "OlinkID") |> filter(contrast == "Lsite_vs_HC")
 ov15 <- read_csv(file.path(out, "serum_vs_disf/overlap_summary.csv"), show_col_types = FALSE)
 fov  <- read_csv(file.path(out, "focus/focus_overview.csv"), show_col_types = FALSE)
+ex_rl <- read_csv(file.path(out, "export/RELAD2/RELAD2_Serum_NPX_wide.csv"), show_col_types = FALSE)
 stopifnot(
+  "export missing or incomplete (step 17)" = nrow(ex_rl) == 76 && all(ex_rl$cohort == "RELAD2") &&
+    file.exists(file.path(out, "export/ISF_NPX_wide.csv")) && file.exists(file.path(out, "export/proteins.csv")),
   "serum vs dISF overlap missing (step 15)" = nrow(ov15) > 0 && any(ov15$visit == "all visits") &&
     file.exists(file.path(out, "serum_vs_disf/venn_AD_vs_healthy_nominal.png")),
   "focus overview missing a simulated focus protein (step 12)" =

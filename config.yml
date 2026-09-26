@@ -33,6 +33,10 @@ stats:
 # OlinkID or UniProt. CD137 / 4-1BB = TNFRSF9; its ligand 4-1BBL = TNFSF9 can be added.
 focus_proteins: ["TNFRSF9", "TNFSF9", "KITLG", "CPA4", "FCER1A", "TPSAB1", "MS4A2", "TPSD1", "PNOC", "POSTN"]
 
+export:                       # step 17: CSV export of the Olink data
+  sep: ","                    # use ";" for German Excel (then the decimal mark is ",")
+  long_format: true           # also write one long table (all samples x proteins, gzip-compressed)
+
 enrichment:
   collections: ["H", "C2:CP:REACTOME", "C5:GO:BP"]
   min_size: 10

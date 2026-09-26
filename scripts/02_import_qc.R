@@ -62,6 +62,11 @@ s <- d |>
          below_lod = if_else(is.na(LOD), NA, value < LOD),   # unknown when no LOD
          det_group = detect_group(matrix, group, state))
 
+# all study samples and proteins with LOD, before any filtering (used by the data export, step 17)
+saveRDS(s |> select(SampleID, OlinkID, Assay, UniProt, any_of(c("Panel", "Block")), PlateID, WellID, DataAnalysisRefID,
+                    source_file, NPX, PCNormalizedNPX, Normalization, LOD, below_lod, SampleQC, AssayQC),
+        out_path(cfg, "data", "npx_all_samples.rds"))
+
 if (cfg$qc$drop_assay_qc_warn) s <- s |> mutate(value = if_else(AssayQC == "WARN", NA_real_, value))
 
 sq <- sample_qc(s, cfg$qc$outlier_sd) |>
