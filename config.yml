@@ -1,0 +1,32 @@
+# O-MicroAD Olink Explore HT analysis - settings
+# Paths are relative to the repository root.
+
+paths:
+  manifest: data/manifest.xlsx                          # Olink sample submission sheet (sheet "manifest" is the master)
+  npx_dir: data/npx                                     # folder with the Olink *.parquet file(s)
+  leip_clinical: data/LEIP_clinical_parameters_n35.xlsx # optional; sheet "Key_parameters"
+  fixed_lod: data/Explore_HT_Fixed_LOD.csv              # optional; Olink fixed LOD file (";"-separated, version >= 6.0.0)
+  output: output
+
+# Which NPX column to analyse. PCNormalizedNPX is required here: plate 1 is ISF only,
+# plate 2 mixed and plates 3-4 serum, so intensity normalisation would be distorted.
+npx_column: PCNormalizedNPX
+
+qc:
+  lod_method: auto            # auto = Olink fixed LOD file if present, else NC-based LOD from the 8 negative controls
+  drop_sample_qc_warn: false  # keep samples with SampleQC = WARN (they are flagged)
+  drop_assay_qc_warn: false   # keep assay/plate results with AssayQC = WARN (they are flagged)
+  min_detect_frac: 0.5        # keep an assay in a matrix if >= 50% of samples are above LOD in at least one group
+  outlier_sd: 3               # sample outlier: median or IQR beyond mean +/- 3 SD (Olink QC plot rule)
+  drop_outliers: false        # flag only; set true after reviewing the QC plots
+  low_volume_ul: {ISF: 20, Serum: 40}
+
+stats:
+  fdr: 0.05
+  min_group_n: 3              # skip a contrast if a group has fewer samples than this
+  cores: 4                    # parallel workers for the mixed models (1 = serial)
+
+enrichment:
+  collections: ["H", "C2:CP:REACTOME", "C5:GO:BP"]
+  min_size: 10
+  max_size: 500

@@ -1,0 +1,11 @@
+# participant data and results never go into git
+data/
+output/
+*.xlsx
+*.parquet
+*.rds
+.Rhistory
+.RData
+.Rproj.user/
+data_sim/
+output_sim/
