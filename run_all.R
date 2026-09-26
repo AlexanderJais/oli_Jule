@@ -8,7 +8,8 @@ rscript <- file.path(R.home("bin"), "Rscript")   # works on Windows/RStudio with
 steps <- c("scripts/01_metadata.R", "scripts/02_import_qc.R", "scripts/03_explore.R",
            "scripts/04_isf_models.R", "scripts/05_serum_models.R", "scripts/06_isf_vs_serum.R",
            "scripts/07_enrichment.R", "scripts/08_leip_reference.R", "scripts/09_isf_profile.R",
-           "scripts/10_matrix_comparison.R", "scripts/11_trajectories.R")
+           "scripts/10_matrix_comparison.R", "scripts/11_trajectories.R",
+           "scripts/12_focus_proteins.R")
 for (s in steps) {
   message("\n==== ", s, " ====")
   status <- system2(rscript, s)

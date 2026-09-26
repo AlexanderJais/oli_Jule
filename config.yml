@@ -28,6 +28,10 @@ stats:
   min_rel_log2: 1             # step 10: minimum relative dISF/serum difference (log2) to call a protein enriched
   cores: 4                    # parallel workers for the mixed models (1 = serial)
 
+# Pre-specified proteins for the dedicated analysis (step 12). Olink assay name (gene symbol),
+# OlinkID or UniProt. CD137 / 4-1BB = TNFRSF9; its ligand 4-1BBL = TNFSF9 can be added.
+focus_proteins: ["TNFRSF9"]
+
 enrichment:
   collections: ["H", "C2:CP:REACTOME", "C5:GO:BP"]
   min_size: 10

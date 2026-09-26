@@ -49,6 +49,8 @@ traj <- read_csv(file.path(out, "trajectories/trajectory_results.csv"), show_col
   left_join(truth |> select(OlinkID, role), by = "OlinkID")
 easi <- traj |> filter(model == "ISF lesional site: EASI")
 print(enr_r)
+cd137 <- readxl::read_excel(file.path(out, "focus/TNFRSF9/TNFRSF9_report.xlsx"), sheet = "prespecified_tests")
+cd137_LvNL <- cd137 |> filter(model == "states_all_visits", contrast == "AD_L_vs_NL")
 
 stopifnot(
   "lesion-restricted proteins not found (step 09)" =
@@ -57,6 +59,8 @@ stopifnot(
   "severity-linked proteins not found (step 11)" = mean(easi$significant[easi$role == "ISF_lesional"]) >= 0.7,
   "too many false trajectory hits (step 11)" =
     sum(traj$significant & traj$role == "null") <= max(3, 0.15 * sum(traj$significant)),
+  "CD137 (TNFRSF9) lesional effect not found in the dedicated analysis (step 12)" =
+    nrow(cd137_LvNL) == 1 && cd137_LvNL$p < 0.05 && cd137_LvNL$estimate > 0,
   "an effect was not recovered (power < 0.7)" = all(res$power >= 0.7),
   "too many false positives" = all(fpr <= 0.05),
   "biobank-only shift leaked into the in-study comparison" = sum(biobank$significant) <= 1,

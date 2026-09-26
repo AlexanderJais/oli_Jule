@@ -116,3 +116,51 @@ run_model_specs <- function(specs, expr, info, cfg, prefix, assay_map) {
   }
   invisible(res)
 }
+
+#' Pre-specified test for ONE protein (focus proteins, step 12): same formula and contrasts as the
+#' proteome-wide models, fitted with lmerTest (Satterthwaite df) or lm, without empirical Bayes
+#' moderation. Returns one row per contrast; p is the unadjusted single-protein p-value.
+#' @param df one row per sample with columns `value` and the model variables
+test_single <- function(df, form, contrasts, model, min_group_n = 3) {
+  df <- as.data.frame(df)
+  vars <- c("value", all.vars(form))
+  df <- df[stats::complete.cases(df[, intersect(vars, names(df)), drop = FALSE]), , drop = FALSE]
+  for (v in all.vars(form)) if (is.character(df[[v]])) df[[v]] <- factor(df[[v]])
+  df <- droplevels(df)
+  fixed_terms <- attr(terms(nobars(form)), "term.labels")
+  single <- fixed_terms[vapply(fixed_terms, \(v) v %in% names(df) && is.factor(df[[v]]) && nlevels(df[[v]]) < 2, logical(1))]
+  if (length(single)) form <- update(form, as.formula(paste("~ . -", paste(single, collapse = " - "))))
+  if (nrow(df) < 4) return(NULL)
+  X <- model.matrix(nobars(form), df)
+  full <- as.formula(paste("value", paste(deparse(form), collapse = "")))
+  random <- has_random(form) && n_distinct(df$SubjectID) < nrow(df)
+  fit <- tryCatch(
+    if (random) suppressMessages(lmerTest::lmer(full, data = df)) else lm(nobars(full), data = df),
+    error = \(e) NULL)
+  if (is.null(fit)) return(NULL)
+  b <- if (random) lme4::fixef(fit) else coef(fit)
+  n_obs <- nrow(df); n_subj <- n_distinct(df$SubjectID)
+  map(names(contrasts), \(nm) {
+    ct <- contrasts[[nm]]
+    cols <- all.vars(parse(text = ct)[[1]])
+    if (!all(cols %in% names(b)) || any(is.na(b[cols])) || any(colSums(X[, cols, drop = FALSE] != 0) < min_group_n))
+      return(NULL)
+    # contrast vector: evaluate the (linear) contrast expression with unit vectors
+    L <- vapply(names(b), \(cl) eval(parse(text = ct), envir = as.list(setNames(as.numeric(names(b) == cl), names(b)))),
+                numeric(1))
+    L[is.na(b)] <- 0
+    if (random) {
+      r <- lmerTest::contest1D(fit, L)
+      est <- r$Estimate; se <- r$`Std. Error`; dfree <- r$df; p <- r$`Pr(>|t|)`
+    } else {
+      bb <- b; bb[is.na(bb)] <- 0
+      V <- vcov(fit); V[is.na(V)] <- 0
+      est <- sum(L * bb); se <- sqrt(drop(t(L) %*% V %*% L)); dfree <- df.residual(fit)
+      p <- 2 * pt(-abs(est / se), dfree)
+    }
+    tibble(model = model, contrast = nm, estimate = est, se = se, df_resid = dfree, t = est / se, p = p,
+           ci_low = est - qt(0.975, dfree) * se, ci_high = est + qt(0.975, dfree) * se,
+           n_samples = n_obs, n_subjects = n_subj,
+           method = if (random) "lmer (Satterthwaite)" else "lm")
+  }) |> bind_rows()
+}

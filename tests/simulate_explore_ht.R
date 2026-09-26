@@ -28,7 +28,7 @@ ht <- readRDS(system.file("extdata", "OlinkID_HT_mapping.rds", package = "OlinkA
 # put well-known AD / Th2 proteins first so enrichment of the lesional signal is meaningful
 th2 <- c("CCL17", "CCL22", "CCL18", "IL13", "IL4", "POSTN", "CCL26", "IL5", "TSLP", "IL31",
          "CCL11", "CCL13", "CCL24", "IL4R", "IL13RA2", "MMP12", "PI3", "SERPINB4", "S100A7", "S100A8",
-         "S100A9", "IL19", "IL22", "IL36G", "CXCL10")
+         "S100A9", "IL19", "IL22", "IL36G", "TNFRSF9")   # TNFRSF9 = CD137 (focus protein)
 ht <- bind_rows(ht |> filter(Gene %in% th2), ht |> filter(!Gene %in% th2) |> slice_sample(prop = 1))
 assays <- ht |> slice_head(n = n_assays) |>
   transmute(OlinkID, UniProt, Assay = Gene, Block = as.character(Block), idx = row_number())
@@ -193,7 +193,8 @@ yaml::write_yaml(list(
                severity = file.path(sim_dir, "severity.csv"),
                leip_clinical = cfg$paths$leip_clinical, fixed_lod = file.path(sim_dir, "fixed_lod.csv"),
                output = "output_sim"),
-  npx_column = cfg$npx_column, qc = cfg$qc, stats = cfg$stats, enrichment = cfg$enrichment
+  npx_column = cfg$npx_column, qc = cfg$qc, stats = cfg$stats, enrichment = cfg$enrichment,
+  focus_proteins = cfg$focus_proteins
 ), file.path(sim_dir, "config_sim.yml"))
 
 msg("Simulated %d samples/controls x %d assays -> %s", nrow(samples), n_assays, sim_dir)
