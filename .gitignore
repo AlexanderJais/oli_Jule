@@ -1,5 +1,9 @@
 # participant data and results never go into git
-data/
+data/*
+!data/README.md
+!data/npx/
+data/npx/*
+!data/npx/.gitkeep
 output/
 *.xlsx
 *.parquet
