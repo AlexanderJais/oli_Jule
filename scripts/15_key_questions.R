@@ -18,7 +18,7 @@ meta  <- read_step(cfg, "metadata", "sample_metadata.rds", step = "scripts/01_me
 clean <- read_step(cfg, "data", "npx_clean.rds", step = "scripts/02_import_qc.R")
 clear_outputs(cfg, "key_questions")
 kq    <- cfg$key_questions %||% list()
-mast  <- unlist(kq$mast_cell_markers %||% c("KITLG", "CPA4", "FCER1A", "TPSAB1", "MS4A2", "TPSD1"))
+mast  <- unlist(kq$mast_cell_markers %||% c("KITLG", "CPA4", "FCER1A", "TPSAB1", "MS4A2", "TPSD1", "CPA3", "CMA1", "KIT", "HDC"))
 kprot <- unlist(kq$proteins %||% c("TNFRSF9", "TNFSF9"))
 B     <- kq$bootstrap %||% 2000
 mgn   <- cfg$stats$min_group_n
@@ -37,6 +37,7 @@ mast_oid <- setNames(vapply(mast, find_oid, ""), mast)
 kp_oid   <- setNames(vapply(kprot, find_oid, ""), kprot)
 msg("Mast cell markers found: %s; not in data: %s", paste(names(mast_oid)[!is.na(mast_oid)], collapse = ", "),
     if (any(is.na(mast_oid))) paste(names(mast_oid)[is.na(mast_oid)], collapse = ", ") else "-")
+mast_missing <- names(mast_oid)[is.na(mast_oid)]
 mast_oid <- mast_oid[!is.na(mast_oid)]; kp_oid <- kp_oid[!is.na(kp_oid)]
 if (!length(kp_oid)) stop("None of the key proteins (", paste(kprot, collapse = ", "), ") is in the data.")
 
@@ -215,6 +216,8 @@ Q <- c(Q1 = "Q1 Are mast cell markers elevated in AD, or only in relapse vs non-
        Q3 = "Q3 Do TNFRSF9 / TNFSF9 correlate with AD relapse?",
        Q4 = "Q4 Are TNFRSF9 / TNFSF9 a marker or predictor of AD relapse?",
        Q5 = "Q5 Is dISF superior to serum?")
+add(Q[["Q1"]], "markers used", sprintf("mast cell score from %d markers: %s", length(mast_oid), paste(names(mast_oid), collapse = ", ")),
+    if (length(mast_missing)) paste("not measured in this dataset:", paste(mast_missing, collapse = ", ")) else "all listed markers measured")
 for (i in seq_len(nrow(q1_verdict))) {
   r <- q1_verdict[i, ]; d <- q1 |> filter(entity == r$entity)
   add(Q[["Q1"]], r$entity, r$answer,

@@ -29,7 +29,7 @@ ht <- readRDS(system.file("extdata", "OlinkID_HT_mapping.rds", package = "OlinkA
 th2 <- c("CCL17", "CCL22", "CCL18", "IL13", "IL4", "POSTN", "CCL26", "IL5", "TSLP", "IL31",
          "CCL11", "CCL13", "CCL24", "IL4R", "IL13RA2", "MMP12", "PI3", "SERPINB4", "S100A7", "S100A8",
          "S100A9", "IL19", "IL22", "IL36G", "TNFRSF9")   # TNFRSF9 = CD137 (focus protein)
-focus_sim <- c("TNFSF9", "KITLG", "CPA4", "FCER1A", "TPSAB1", "TPSD1")   # other focus proteins (step 12)
+focus_sim <- c("TNFSF9", "KITLG", "CPA4", "FCER1A", "TPSAB1", "TPSD1", "KIT")   # other focus proteins (step 12)
 ht <- bind_rows(ht |> filter(Gene %in% th2), ht |> filter(Gene %in% focus_sim),
                 ht |> filter(!Gene %in% c(th2, focus_sim)) |> slice_sample(prop = 1))
 assays <- ht |> slice_head(n = n_assays) |>

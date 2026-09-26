@@ -39,7 +39,7 @@ export:                       # step 17: CSV export of the Olink data
 
 # Key questions (step 14)
 key_questions:
-  mast_cell_markers: ["KITLG", "CPA4", "FCER1A", "TPSAB1", "MS4A2", "TPSD1"]   # combined into a mast cell score
+  mast_cell_markers: ["KITLG", "CPA4", "FCER1A", "TPSAB1", "MS4A2", "TPSD1", "CPA3", "CMA1", "KIT", "HDC"]   # combined into a mast cell score
   proteins: ["TNFRSF9", "TNFSF9"]                                             # CD137 and its ligand
   bootstrap: 2000                                                             # resamples for AUC confidence intervals
 

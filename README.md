@@ -80,7 +80,7 @@ and the methods and caveats. **Read this first.**
 ### `key_questions/` – answers to the key questions (step 15)
 | Question | How it is answered | Where |
 |---|---|---|
-| Q1 Are mast cell markers elevated in AD, or only in relapse vs non-relapse? | Each marker (KITLG, CPA4, FCER1A, TPSAB1, MS4A2, TPSD1) and a combined **mast cell score**: AD vs healthy (dISF lesional, non-lesional, serum) and relapse vs non-relapse (dISF, serum MicroAD, RELAD/RELAD2) | `Q1_mast_cell_markers.png`, sheet `Q1_*` |
+| Q1 Are mast cell markers elevated in AD, or only in relapse vs non-relapse? | Each marker (KITLG, CPA4, FCER1A, TPSAB1, MS4A2, TPSD1, CPA3, CMA1, KIT, HDC – those measured on the panel) and a combined **mast cell score**: AD vs healthy (dISF lesional, non-lesional, serum) and relapse vs non-relapse (dISF, serum MicroAD, RELAD/RELAD2) | `Q1_mast_cell_markers.png`, sheet `Q1_*` |
 | Q2 Is CD137 (TNFRSF9) or CD137L (TNFSF9) a marker for mast cells in AD? | Correlation with the mast cell score and each marker in AD dISF, within patients over visits and across samples | `Q2_cd137_vs_mast_score.png`, sheet `Q2_correlations` |
 | Q3 Do CD137 / CD137L correlate with relapse? | All relapse tests, plus the trend in the weeks before relapse | sheet `Q3_relapse` |
 | Q4 Marker or predictor of relapse? | *Marker* = changes with lesion activity (lesional vs cleared). *Predictor* = values **before** the relapse separate relapsers from non-relapsers (AUC with 95 % CI) | `Q4_relapse_prediction_auc.png`, sheets `Q4_*` |
