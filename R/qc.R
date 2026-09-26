@@ -16,7 +16,9 @@ import_npx <- function(npx_dir) {
   msg("Reading %d NPX file(s): %s", length(files), paste(basename(files), collapse = ", "))
   d <- map(files, \(f) OlinkAnalyze::read_npx(f) |> as_tibble() |>
              mutate(source_file = basename(f), file_matrix = file_matrix(f))) |>
-    bind_rows()
+    bind_rows() |>
+    # Olink reuses control names on every plate (PC1..PC5, SC1.., NC1..): make them unique per plate
+    mutate(SampleID = if_else(SampleType == "SAMPLE", SampleID, paste(SampleID, PlateID, sep = "@")))
   dup <- d |> filter(SampleType == "SAMPLE") |> distinct(SampleID, source_file) |> count(SampleID) |> filter(n > 1)
   if (nrow(dup)) stop("Sample(s) present in more than one NPX file: ", paste(head(dup$SampleID, 10), collapse = ", "))
   req <- c("SampleID", "SampleType", "PlateID", "OlinkID", "Assay", "AssayType", "NPX",
@@ -39,6 +41,7 @@ add_lod <- function(d, fixed_lod_path = NULL, method = "auto", value_col = "PCNo
   d <- d |> mutate(.row = row_number(), LOD = NA_real_, LOD_source = NA_character_)
   use_fixed <- method %in% c("auto", "FixedLOD") && !is.null(fixed_lod_path) && file.exists(fixed_lod_path)
   if (method == "FixedLOD" && !use_fixed) stop("lod_method = FixedLOD but no fixed LOD file at ", fixed_lod_path)
+  if (!use_fixed) msg("WARNING: no Olink fixed LOD file at %s - LOD from negative controls (less precise)", fixed_lod_path %||% "(not set)")
 
   if (use_fixed) {
     lf <- utils::read.table(fixed_lod_path, sep = ";", header = TRUE)
@@ -98,8 +101,9 @@ lod_summary <- function(d) {
   d |> filter(AssayType == "assay", SampleType == "SAMPLE") |>
     group_by(OlinkID, Assay, DataAnalysisRefID) |>
     summarise(LOD_source = paste(unique(na.omit(LOD_source)), collapse = "; "),
-              LOD_median = median(LOD, na.rm = TRUE), LOD_min = min(LOD, na.rm = TRUE),
-              LOD_max = max(LOD, na.rm = TRUE), .groups = "drop") |>
+              LOD_median = median(LOD, na.rm = TRUE), LOD_min = suppressWarnings(min(LOD, na.rm = TRUE)),
+              LOD_max = suppressWarnings(max(LOD, na.rm = TRUE)), .groups = "drop") |>
+    mutate(LOD_source = if_else(LOD_source == "", "none (no values, e.g. Olink EXCLUDED)", LOD_source)) |>
     mutate(across(starts_with("LOD_m"), \(x) if_else(is.finite(x), x, NA_real_)))
 }
 
@@ -166,8 +170,10 @@ wide_matrix <- function(s, which_matrix, assays_keep) {
 
 #' PCA scores (samples) from an assays x samples matrix; missing values set to the assay median.
 pca_scores <- function(m, n = 4) {
+  m <- m[rowSums(!is.na(m)) >= 2, , drop = FALSE]                 # drop proteins without values
   m <- t(apply(m, 1, \(x) { x[is.na(x)] <- median(x, na.rm = TRUE); x }))
-  m <- m[apply(m, 1, sd) > 0, , drop = FALSE]
+  s <- apply(m, 1, sd)
+  m <- m[is.finite(s) & s > 0, , drop = FALSE]                     # and constant ones
   p <- prcomp(t(m), center = TRUE, scale. = TRUE)
   ve <- round(100 * p$sdev^2 / sum(p$sdev^2), 1)
   sc <- as_tibble(p$x[, seq_len(min(n, ncol(p$x)))], rownames = "SampleID")

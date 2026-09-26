@@ -16,7 +16,60 @@ load_config <- function(path = Sys.getenv("OLINK_CONFIG", "config.yml")) {
   cfg <- yaml::read_yaml(path)
   cfg$config_file <- path
   options(olink.cores = cfg$stats$cores %||% 1)
+  cfg$paths <- resolve_data_paths(cfg$paths)
   cfg
+}
+
+# If a configured file is missing, look for it in the same folder under its usual name,
+# so the original file names from Olink / the lab can be used without renaming.
+data_file_patterns <- list(
+  manifest      = "(manifest|SampleSubmissionSheet).*\\.xlsx$",
+  leip_clinical = "LEIP.*clinical.*\\.xlsx$",
+  fixed_lod     = "Fixed_LOD.*\\.csv$",
+  severity      = "(severity|SCORAD|EASI).*\\.(xlsx|csv)$"
+)
+
+resolve_data_paths <- function(paths) {
+  for (key in names(data_file_patterns)) {
+    p <- paths[[key]]
+    if (is.null(p) || file.exists(p)) next
+    dir <- dirname(p)
+    hits <- if (dir.exists(dir)) list.files(dir, pattern = data_file_patterns[[key]], ignore.case = TRUE, full.names = TRUE) else character()
+    hits <- hits[!startsWith(basename(hits), "~$")]          # skip Excel lock files
+    if (length(hits) == 1) {
+      paths[[key]] <- hits
+    } else if (length(hits) > 1) {
+      stop(sprintf("Several candidate files for '%s' in %s: %s\nKeep one, or set paths$%s in config.yml.",
+                   key, dir, paste(basename(hits), collapse = ", "), key))
+    }
+  }
+  paths
+}
+
+#' Check that the input files exist; print what is found and what is missing.
+check_inputs <- function(cfg) {
+  p <- cfg$paths
+  npx <- if (dir.exists(p$npx_dir)) list.files(p$npx_dir, "\\.parquet$") else character()
+  status <- tibble(
+    input = c("manifest", "NPX parquet files", "LEIP clinical data", "Olink fixed LOD file", "severity scores"),
+    required = c("yes", "yes", "no", "recommended", "no"),
+    path = c(p$manifest, file.path(p$npx_dir, "*.parquet"), p$leip_clinical %||% "", p$fixed_lod %||% "", p$severity %||% ""),
+    found = c(file.exists(p$manifest %||% ""), length(npx) > 0, file.exists(p$leip_clinical %||% ""),
+              file.exists(p$fixed_lod %||% ""), file.exists(p$severity %||% ""))
+  )
+  message("Input files (working directory: ", getwd(), "):")
+  for (i in seq_len(nrow(status)))
+    message(sprintf("  [%s] %-22s %s%s", if (status$found[i]) "ok" else if (status$required[i] == "yes") "MISSING" else "--",
+                    status$input[i], status$path[i],
+                    if (i == 2 && length(npx)) paste0("  (", paste(npx, collapse = ", "), ")") else ""))
+  missing <- status$input[!status$found & status$required == "yes"]
+  if (length(missing)) {
+    dd <- dirname(p$manifest)
+    message("\nFiles currently in ", dd, "/: ",
+            if (dir.exists(dd)) paste(list.files(dd), collapse = ", ") else "(folder does not exist)")
+    stop("Missing: ", paste(missing, collapse = ", "), ". See data/README.md for where each file goes.", call. = FALSE)
+  }
+  invisible(status)
 }
 
 #' Path inside the output folder; creates the sub-folder if needed.

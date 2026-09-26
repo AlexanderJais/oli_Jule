@@ -62,7 +62,8 @@ ctrl <- layout |>
   filter(content %in% c("PC", "SC", "Neg Ctrl")) |>
   mutate(SampleType = recode(content, PC = "PLATE_CONTROL", SC = "SAMPLE_CONTROL",
                              `Neg Ctrl` = "NEGATIVE_CONTROL"),
-         SampleID = paste(recode(content, `Neg Ctrl` = "NC"), str_remove(plate, "Plate "), well, sep = "_"))
+         SampleID = recode(content, `Neg Ctrl` = "NC")) |>
+  group_by(plate, SampleID) |> mutate(SampleID = paste0(SampleID, row_number())) |> ungroup()   # PC1..PC5 on every plate, like Olink
 samples <- bind_rows(
   meta |> transmute(SampleID, SampleType = "SAMPLE", plate, well),
   ctrl |> select(SampleID, SampleType, plate, well)
@@ -154,6 +155,18 @@ long$NPX[long$SampleID == bad[1]] <- long$NPX[long$SampleID == bad[1]] - 3
 long$PCNormalizedNPX[long$SampleID == bad[1]] <- long$NPX[long$SampleID == bad[1]]
 long$SampleQC[long$SampleID == bad[2]] <- "WARN"
 long$AssayQC[long$OlinkID == assays$OlinkID[200] & long$PlateID == "Plate2"] <- "WARN"
+
+# like the real delivery: intensity-normalised NPX (PCNormalizedNPX kept), and two assays that
+# Olink excluded (Normalization = EXCLUDED, NPX empty for all samples)
+long <- long |>
+  group_by(PlateID, OlinkID) |>
+  mutate(NPX = if_else(AssayType == "assay", PCNormalizedNPX - median(PCNormalizedNPX[SampleType == "SAMPLE"]), NPX)) |>
+  ungroup() |>
+  mutate(Normalization = "Intensity")
+excl <- assays$OlinkID[c(n_assays - 1, n_assays)]
+long <- long |> mutate(excluded = OlinkID %in% excl,
+                       NPX = if_else(excluded, NA_real_, NPX), PCNormalizedNPX = if_else(excluded, NA_real_, PCNormalizedNPX),
+                       Normalization = if_else(excluded, "EXCLUDED", Normalization)) |> select(-excluded)
 
 # one file per matrix, like the Olink delivery: each file has its samples plus all control wells
 # of the plates they sit on (so the mixed plate's controls appear in both files)

@@ -77,6 +77,15 @@ msg("Samples: %d FAIL, %d WARN, %d outliers -> %d excluded",
     sum(sq$SampleQC == "FAIL"), sum(sq$SampleQC == "WARN"), sum(sq$outlier, na.rm = TRUE), length(drop))
 s <- s |> filter(!SampleID %in% drop)
 
+# ---- assays without any value in a matrix (Olink Normalization = EXCLUDED) are removed ------------
+empty <- s |> group_by(matrix, OlinkID, Assay) |>
+  summarise(n_values = sum(!is.na(value)), normalization = paste(unique(Normalization), collapse = ";"), .groups = "drop") |>
+  filter(n_values == 0)
+save_csv(empty, cfg, "qc", "assays_without_values.csv")
+if (nrow(empty)) msg("%d assay/matrix combinations have no NPX values (Olink: %s) - removed, see qc/assays_without_values.csv",
+                     nrow(empty), paste(unique(empty$normalization), collapse = ", "))
+s <- s |> anti_join(empty |> select(matrix, OlinkID), by = c("matrix", "OlinkID"))
+
 # ---- assay detection filter (per matrix) -----------------------------------------------------
 det <- assay_detection(s, cfg$qc$min_detect_frac)
 save_csv(det, cfg, "qc", "assay_detection.csv")
