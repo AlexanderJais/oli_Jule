@@ -54,9 +54,15 @@ cd137_LvNL <- cd137 |> filter(model == "states_all_visits", contrast == "AD_L_vs
 
 vc <- read_csv(file.path(out, "visit_course/consistency_across_visits.csv"), show_col_types = FALSE) |>
   left_join(truth |> select(OlinkID, role), by = "OlinkID") |> filter(contrast == "Lsite_vs_HC")
+ov15 <- read_csv(file.path(out, "serum_vs_disf/overlap_summary.csv"), show_col_types = FALSE)
+fov  <- read_csv(file.path(out, "focus/focus_overview.csv"), show_col_types = FALSE)
 stopifnot(
+  "serum vs dISF overlap missing (step 15)" = nrow(ov15) > 0 && any(ov15$visit == "all visits") &&
+    file.exists(file.path(out, "serum_vs_disf/venn_AD_vs_healthy_nominal.png")),
+  "focus overview missing a simulated focus protein (step 12)" =
+    all(c("TNFRSF9", "TNFSF9", "KITLG", "CPA4", "FCER1A", "TPSAB1", "TPSD1", "POSTN") %in% fov$protein),
   "no protein regulated at all visits found (step 13)" = sum(vc$all_visits_nominal & vc$role != "null") >= 3,
-  "executive summary PDF missing (step 14)" = file.exists(file.path(out, "Executive_summary.pdf")) &&
+  "executive summary PDF missing (step 16)" = file.exists(file.path(out, "Executive_summary.pdf")) &&
     file.size(file.path(out, "Executive_summary.pdf")) > 20000,
   "lesion-restricted proteins not found (step 09)" =
     sum(prof$lesion_restricted & prof$role == "ISF_lesion_restricted", na.rm = TRUE) >= 4,

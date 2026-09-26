@@ -1,4 +1,4 @@
-# 14 - Executive summary PDF of all findings (runs last)
+# 16 - Executive summary PDF of all findings (runs last)
 # Collects the key numbers, tables and figures of steps 01-13 into output/Executive_summary.pdf.
 # Every section is optional: if an earlier step did not run, its page says so instead of failing.
 
@@ -36,6 +36,8 @@ det_mx  <- out_csv(cfg, "matrix_comparison", "detection_by_matrix.csv")
 enr     <- out_csv(cfg, "matrix_comparison", "relative_enrichment.csv")
 conc_s  <- out_csv(cfg, "matrix_comparison", "disease_signal_concordance_summary.csv")
 traj_s  <- out_csv(cfg, "trajectories", "trajectory_summary.csv")
+fov     <- out_csv(cfg, "focus", "focus_overview.csv")
+ov15    <- out_csv(cfg, "serum_vs_disf", "overlap_summary.csv")
 
 n_sig <- \(r, mdl, ct) if (is.null(r)) NA else sum(r$significant[r$model == mdl & r$contrast == ct], na.rm = TRUE)
 sig_names <- \(r, mdl, ct, dir, n = 10) {
@@ -118,18 +120,25 @@ section("Key findings", {
     if (!is.null(leip)) sprintf("%d dISF-serum correlated proteins checked in LEIP; %d associate with clinical parameters (FDR < %g); %d differ between LEIP and in-study healthy controls (possible pre-analytical effect).",
                                 nrow(leip), if (is.null(leip_a)) 0 else n_distinct(leip_a$Assay[leip_a$significant]), fdr,
                                 sum(leip$source_shift, na.rm = TRUE)) else "n/a")
-  # focus proteins
-  for (fp in unlist(cfg$focus_proteins %||% character())) {
-    f <- list.files(file.path(cfg$paths$output, "focus"), pattern = "_report\\.xlsx$", recursive = TRUE, full.names = TRUE)
-    f <- f[str_detect(basename(f), fixed(fp))]
-    if (!length(f)) next
-    t <- readxl::read_excel(f[1], sheet = "prespecified_tests")
-    key <- t |> filter(paste(model, contrast) %in% c("states_all_visits AD_L_vs_NL", "states_all_visits AD_xL_vs_NL",
-                                                    "states_all_visits AD_NL_vs_HC", "AD_vs_HC_in_study AD_vs_HC",
-                                                    "relapse_delta_xL_minus_NL relapse_vs_non"))
-    items <- c(items, sprintf("## Focus protein %s%s", fp, if (fp == "TNFRSF9") " (CD137 / 4-1BB)" else ""),
-               sprintf("%s %s: %+.2f log2 (95%% CI %.2f to %.2f), p = %.2g", key$matrix, key$contrast, key$estimate,
-                       key$ci_low, key$ci_high, key$p))
+  # focus proteins (one line each) and serum vs dISF overlap
+  if (!is.null(fov)) {
+    items <- c(items, "## Focus proteins (single-protein tests, p-values uncorrected)")
+    for (pr in unique(fov$label)) {
+      d <- fov |> filter(label == pr)
+      g <- \(cmp) { r <- d |> filter(comparison == cmp); if (!nrow(r)) "n/a" else sprintf("%+.2f (p = %.2g)", r$estimate[1], r$p[1]) }
+      items <- c(items, sprintf("%s: dISF lesional vs non-lesional %s; ex-lesional vs non-lesional %s; non-lesional vs healthy %s; serum AD vs healthy %s.",
+                                pr, g("dISF: states_all_visits AD_L_vs_NL"), g("dISF: states_all_visits AD_xL_vs_NL"),
+                                g("dISF: states_all_visits AD_NL_vs_HC"), g("serum: AD_vs_HC_in_study AD_vs_HC")))
+    }
+    missing_fp <- setdiff(toupper(unlist(cfg$focus_proteins)), toupper(unique(fov$protein)))
+    if (length(missing_fp)) items <- c(items, sprintf("Not measured in this dataset: %s.", paste(missing_fp, collapse = ", ")))
+  }
+  if (!is.null(ov15)) {
+    o <- ov15 |> filter(tier == "nominal", visit == "all visits")
+    items <- c(items, "## Serum vs dISF (same question in both matrices, all visits pooled, p < 0.05)",
+               sprintf("%s, %s: dISF %d, serum %d, both %d (same direction %d); dISF only %d (+%d not measurable in serum); serum only %d.",
+                       o$question, o$isf_site, o$dISF_significant, o$serum_significant, o$both_same + o$both_opposite, o$both_same,
+                       o$dISF_only, o$dISF_only_not_in_serum, o$serum_only))
   }
   page_text("Key findings", items, subtitle = sprintf("automatically extracted; FDR < %g unless stated", fdr), size = 9.5)
 })
@@ -219,34 +228,62 @@ section("Serum", {
                                                                                   logFC_AD_vs_Biobank, adj.P.Val_AD_vs_Biobank))
 })
 
-# ---- 9. focus proteins -------------------------------------------------------------------------------------------------
-section("Focus proteins", {
-  for (fp in unlist(cfg$focus_proteins %||% character())) {
-    f <- list.files(file.path(cfg$paths$output, "focus"), pattern = "_report\\.xlsx$", recursive = TRUE, full.names = TRUE)
-    f <- f[str_detect(basename(f), fixed(fp))]
-    if (!length(f)) next
-    lab <- if (fp == "TNFRSF9") "TNFRSF9 (CD137 / 4-1BB)" else fp
-    if (!is.null(clean)) {
-      d <- clean |> filter(Assay == fp | OlinkID == fp, matrix == "ISF") |>
-        mutate(cond = case_when(group == "HC" ~ "healthy skin", group == "AD" & state == "non-lesional" ~ "AD non-lesional",
-                                group == "AD" & state == "ex-lesional" ~ "AD ex-lesional", group == "AD" & state == "lesional" ~ "AD lesional",
-                                group == "CPUO" ~ paste("CPUO", state)),
-               cond = factor(cond, levels = c("healthy skin", "AD non-lesional", "AD ex-lesional", "AD lesional", "CPUO non-lesional", "CPUO lesional")))
-      if (nrow(d)) {
-        p <- ggplot(d |> filter(!is.na(cond)), aes(cond, value)) + geom_boxplot(outlier.shape = NA, fill = "grey92") +
-          geom_jitter(width = 0.15, size = 1) + labs(title = sprintf("%s in dISF by skin state", lab), x = NULL, y = "NPX") +
-          theme(axis.text.x = element_text(angle = 20, hjust = 1))
-        page_plot(p)
-      }
-    }
-    t <- readxl::read_excel(f[1], sheet = "prespecified_tests")
-    page_table(sprintf("%s: pre-specified tests", lab),
-               t |> select(matrix, model, contrast, estimate, ci_low, ci_high, p, any_of("proteome_wide_FDR")),
-               note = "p = single-protein test (primary for a pre-specified protein); proteome_wide_FDR for comparison. Full report: focus/")
+# ---- 9. serum vs dISF per visit (step 15) ---------------------------------------------------------------------------
+section("Serum vs dISF", {
+  if (is.null(ov15)) stop("step 15 results not found")
+  cat_cols <- c(`both, same direction` = "purple3", `both, opposite direction` = "orange3", `dISF only` = "firebrick",
+                `dISF only - not measurable in serum` = "darkred", `serum only` = "steelblue")
+  for (tr in c("nominal", "FDR")) {
+    b <- ov15 |> filter(tier == tr) |>
+      mutate(visit = factor(visit, levels = c(paste0("V", 1:12), "all visits"))) |>
+      select(question, visit, isf_site, `both, same direction` = both_same, `both, opposite direction` = both_opposite,
+             `dISF only` = dISF_only, `dISF only - not measurable in serum` = dISF_only_not_in_serum, `serum only` = serum_only) |>
+      pivot_longer(-c(question, visit, isf_site), names_to = "cat", values_to = "n") |>
+      mutate(cat = factor(cat, levels = names(cat_cols)))
+    p <- ggplot(b, aes(visit, n, fill = cat)) + geom_col() + facet_grid(question ~ isf_site, scales = "free_y") +
+      scale_fill_manual(values = cat_cols) +
+      labs(title = sprintf("Serum vs dISF: overlap of significant proteins per visit (%s)",
+                           if (tr == "FDR") sprintf("FDR < %g", fdr) else "p < 0.05, exploratory"),
+           subtitle = "red = information only dISF provides; purple/orange = seen in both; blue = only serum",
+           x = NULL, y = "proteins", fill = NULL) + theme(legend.position = "bottom")
+    page_plot(p)
   }
+  page_table("Serum vs dISF overlap (p < 0.05)", ov15 |> filter(tier == "nominal") |>
+               select(question, visit, isf_site, dISF = dISF_significant, serum = serum_significant, both_same, both_opposite,
+                      dISF_only, `dISF only, not in serum` = dISF_only_not_in_serum, serum_only),
+             note = "Venn diagrams, volcano plots and protein lists: serum_vs_disf/", rows_per_page = 32)
 })
 
-# ---- 10. methods & caveats ---------------------------------------------------------------------------------------------
+# ---- 10. focus proteins -------------------------------------------------------------------------------------------------
+section("Focus proteins", {
+  if (is.null(fov)) stop("step 12 results not found")
+  hm <- fov |> mutate(comparison = factor(comparison, levels = unique(comparison)))
+  p <- ggplot(hm, aes(comparison, label, fill = estimate)) + geom_tile() +
+    geom_text(aes(label = case_when(p < 0.001 ~ "***", p < 0.01 ~ "**", p < 0.05 ~ "*", TRUE ~ "")), size = 4) +
+    scale_fill_gradient2(low = "steelblue", high = "firebrick") +
+    labs(title = "Focus proteins: effect (log2) per comparison", subtitle = "single-protein tests: * p < 0.05, ** < 0.01, *** < 0.001",
+         x = NULL, y = NULL) + theme(axis.text.x = element_text(angle = 30, hjust = 1))
+  page_plot(p)
+  if (!is.null(clean)) {
+    fps <- unique(fov$protein)
+    d <- clean |> filter(Assay %in% fps, matrix == "ISF") |>
+      mutate(cond = case_when(group == "HC" ~ "healthy skin", group == "AD" & state == "non-lesional" ~ "AD non-lesional",
+                              group == "AD" & state == "ex-lesional" ~ "AD ex-lesional", group == "AD" & state == "lesional" ~ "AD lesional",
+                              group == "CPUO" ~ paste("CPUO", state)),
+             cond = factor(cond, levels = c("healthy skin", "AD non-lesional", "AD ex-lesional", "AD lesional", "CPUO non-lesional", "CPUO lesional")),
+             protein = fov$label[match(Assay, fov$protein)])
+    p <- ggplot(d |> filter(!is.na(cond)), aes(cond, value)) + geom_boxplot(outlier.shape = NA, fill = "grey92") +
+      geom_jitter(width = 0.15, size = 0.5) + facet_wrap(~protein, scales = "free_y") +
+      labs(title = "Focus proteins in dISF by skin state", x = NULL, y = "NPX") +
+      theme(axis.text.x = element_text(angle = 35, hjust = 1))
+    page_plot(p)
+  }
+  page_table("Focus proteins: key single-protein tests",
+             fov |> select(protein, comparison, estimate, ci_low, ci_high, p, proteome_wide_FDR), rows_per_page = 32,
+             note = "p = single-protein test (primary for pre-specified proteins). Per-protein reports and figures: focus/<protein>/")
+})
+
+# ---- 11. methods & caveats ---------------------------------------------------------------------------------------------
 section("Methods", {
   page_text("Methods, caveats and where to find everything", c(
     "## Methods",
@@ -260,7 +297,8 @@ section("Methods", {
     "Age and sex are only available for LEIP; serum models are not adjusted for them.",
     "## Output folders (all under the output directory)",
     "qc/ - QC tables and plots | models/ - all model results and volcano plots (models/volcano/) | visit_course/ - per-visit analysis and time courses",
-    "isf_profile/ - dISF proteome | matrix_comparison/ - dISF vs serum | isf_serum/ - correlations | trajectories/ - disease course | leip_reference/ | enrichment/ | focus/ - focus proteins"),
+    "isf_profile/ - dISF proteome | matrix_comparison/ - dISF vs serum | serum_vs_disf/ - overlap per visit (Venn) | isf_serum/ - correlations",
+    "trajectories/ - disease course | leip_reference/ | enrichment/ | focus/ - focus proteins (overview + one folder per protein)"),
     size = 10)
 })
 

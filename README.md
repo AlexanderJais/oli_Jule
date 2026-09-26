@@ -13,8 +13,9 @@ CPUO), plus serum from RELAD / RELAD2 and LEIP biobank controls.
 | 3. Track changes across the disease course | 11, 04 (time models) | `trajectories/trajectory_results.csv`, per-patient plots in `trajectories/plots/` |
 
 | Per visit / time course (lesion site vs healthy skin at V1–V6; proteins regulated at all visits) | 13 | `visit_course/visit_course.xlsx`, `visit_course/time_course_*.png`, `models/volcano/ISF_by_visit_V*.png` |
-| **Executive summary of everything** | 14 | `Executive_summary.pdf` |
-| Focus: CD137 (4-1BB, assay TNFRSF9) | 12 | `focus/TNFRSF9/TNFRSF9_report.xlsx` + figures |
+| Serum vs dISF per visit: overlap and what dISF adds (lesion site / non-lesional; AD vs healthy; relapse vs non-relapse) | 15 | `serum_vs_disf/` (Venn diagrams, coloured volcano plots, protein lists) |
+| **Executive summary of everything** | 16 | `Executive_summary.pdf` |
+| Focus proteins: CD137 (TNFRSF9), TNFSF9, KITLG, CPA4, FCER1A, TPSAB1, MS4A2, TPSD1, PNOC, POSTN | 12 | `focus/focus_overview.xlsx`, `focus/focus_overview_heatmap.png`, one folder per protein |
 
 Secondary: relapse (04, 05, 11; exploratory) and RELAD/RELAD2 serum relapse (05).
 
@@ -28,7 +29,7 @@ Open `oli_Jule.Rproj` in RStudio (or `setwd()` to this folder): all paths are re
 ```bash
 Rscript install_packages.R        # once
 # put the data files in data/ (see below), then
-Rscript run_all.R                 # runs steps 01-14; results in output/, summary in output/Executive_summary.pdf
+Rscript run_all.R                 # runs all steps; results in output/, summary in output/Executive_summary.pdf
 ```
 
 To run a single step, use `Rscript scripts/0X_....R`. Each step reads what the previous one saved.
@@ -61,7 +62,8 @@ All settings (thresholds, FDR, number of cores) are in `config.yml`.
 | `11_trajectories.R` | **Aim 3.** Residual lesional signal (ex-lesional minus non-lesional) vs weeks since clearance, and vs weeks to relapse (relapsers; exploratory). Serum vs weeks to relapse. Optional severity models, and per-patient trajectory plots of the top proteins (dISF lesional site, non-lesional site, serum; relapse marked). | `trajectories/*` |
 | `12_focus_proteins.R` | **Dedicated analysis of pre-specified proteins** (`focus_proteins` in `config.yml`; default CD137 = TNFRSF9). Runs even if the protein fails the detection filter. Reports detection per matrix and group, and the same models as steps 04/05 plus the xL − NL relapse model for this protein alone (lmerTest / lm). The unadjusted p-value is the primary test, with the proteome-wide FDR shown alongside. Also ISF–serum correlation, severity (if available), LEIP clinical associations, every pipeline result for the protein, and figures. | `focus/<protein>/*` |
 | `13_visit_course.R` | dISF per visit (V1–V6, visits with ≥ `stats$visit_min_subjects` patients): tracked lesion site vs healthy skin, vs non-lesional skin, and non-lesional vs healthy. Same model as step 04, with a volcano plot per visit. Proteins regulated at **all** visits in the same direction are listed at FDR < 0.05 at every visit (strict) and at p < 0.05 at every visit (nominal), with time-course plots of effects and NPX levels. | `visit_course/*`, `models/ISF_by_visit_*` |
-| `14_summary_report.R` | Executive summary PDF: data and QC, automatically extracted key findings per aim, all comparisons, visit course, volcano plots, pathways, dISF vs serum, serum, focus proteins, methods and caveats. Each section is skipped with a note if its step did not run. | `Executive_summary.pdf` |
+| `15_serum_vs_disf.R` | The same question in dISF and serum, per visit and pooled: AD vs healthy (dISF lesion site or non-lesional skin vs healthy skin; MicroAD serum AD vs healthy) and relapse vs non-relapse (only visits before the relapse). Significant sets (FDR, and p < 0.05 as exploratory) are split into both (same / opposite direction), dISF only, dISF only because the protein isn't measurable in serum, and serum only. Output: Venn diagrams, stacked bars per visit, dISF volcano plots coloured by what serum shows, and dISF vs serum effect plots. | `serum_vs_disf/*` |
+| `16_summary_report.R` | Executive summary PDF: data and QC, automatically extracted key findings per aim, all comparisons, visit course, volcano plots, pathways, dISF vs serum, serum, focus proteins, methods and caveats. Each section is skipped with a note if its step did not run. | `Executive_summary.pdf` |
 | `08_leip_reference.R` | For the proteins significant in step 06: LEIP normal range, where AD patients fall in it, clinical associations in LEIP, detectability, and LEIP vs in-study controls. | `leip_reference/*` (incl. `.xlsx`) |
 
 ### Models

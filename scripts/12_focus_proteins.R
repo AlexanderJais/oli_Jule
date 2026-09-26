@@ -17,12 +17,23 @@ meta  <- read_step(cfg, "metadata", "sample_metadata.rds", step = "scripts/01_me
 clean <- read_step(cfg, "data", "npx_clean.rds", step = "scripts/02_import_qc.R")
 clear_outputs(cfg, "focus")
 focus <- unlist(cfg$focus_proteins %||% "TNFRSF9")
+aliases <- c(TNFRSF9 = "CD137 / 4-1BB", TNFSF9 = "CD137L / 4-1BBL", KITLG = "SCF / KIT ligand",
+             CPA4 = "carboxypeptidase A4", FCER1A = "FceRI alpha", TPSAB1 = "tryptase alpha/beta-1",
+             MS4A2 = "FceRI beta", TPSD1 = "tryptase delta-1", PNOC = "prepronociceptin", POSTN = "periostin")
+overview <- list(); found <- character()
 
 for (fp in focus) {
-  pd <- clean |> filter(Assay == fp | OlinkID == fp | UniProt == fp)
-  if (!nrow(pd)) { msg("%s: not found in the NPX data (checked Assay, OlinkID, UniProt)", fp); next }
+  # case-insensitive; also finds the protein inside combined assay names (e.g. "TPSAB1_TPSB2")
+  FP <- toupper(fp)
+  pd <- clean |> filter(toupper(Assay) == FP | OlinkID == fp | UniProt == fp |
+                          str_detect(toupper(Assay), paste0("(^|_)", FP, "($|_)")))
+  if (!nrow(pd)) { msg("%s: NOT in the NPX data (checked Assay, OlinkID, UniProt) - skipped", fp); next }
+  if (n_distinct(pd$OlinkID) > 1) {
+    msg("%s: several assays match (%s) - using %s", fp, paste(unique(pd$Assay), collapse = ", "), pd$Assay[1])
+    pd <- pd |> filter(OlinkID == OlinkID[1])
+  }
   nm <- pd$Assay[1]; oid <- pd$OlinkID[1]
-  aliases <- c(TNFRSF9 = "CD137 / 4-1BB", TNFSF9 = "CD137L / 4-1BBL")
+  found <- c(found, nm)
   lab <- if (nm %in% names(aliases)) sprintf("%s (%s)", nm, aliases[[nm]]) else nm
   fpath <- function(...) file.path("focus", nm, ...)
   msg("==== Focus protein %s (%s) ====", nm, oid)
@@ -203,4 +214,41 @@ for (fp in focus) {
                                                 plate, value, LOD, below_lod)))
   writexl::write_xlsx(sheets, out_path(cfg, fpath(sprintf("%s_report.xlsx", nm))))
   msg("%s: report and figures in %s", nm, file.path(cfg$paths$output, "focus", nm))
+  overview[[nm]] <- list(
+    tests = if (nrow(tests)) tests |> mutate(protein = nm, label = lab, .before = 1) else NULL,
+    det = det |> mutate(protein = nm, .before = 1),
+    values = isf_info |> filter(!is.na(cond)) |> transmute(protein = lab, cond, value, below_lod))
 }
+
+# ---- overview across all focus proteins ----------------------------------------------------------------------
+if (length(overview)) {
+  ov_tests <- map(overview, "tests") |> bind_rows()
+  key <- c("states_all_visits AD_L_vs_NL", "states_all_visits AD_xL_vs_NL", "states_all_visits AD_L_vs_HC",
+           "states_all_visits AD_NL_vs_HC", "AD_vs_HC_in_study AD_vs_HC", "MicroAD_active_vs_cleared active_vs_cleared",
+           "relapse_delta_xL_minus_NL relapse_vs_non", "MicroAD_relapse relapse_vs_non")
+  ov <- ov_tests |> filter(paste(model, contrast) %in% key) |>
+    transmute(protein, label, matrix, comparison = paste0(matrix, ": ", model, " ", contrast), estimate, ci_low, ci_high, p,
+              proteome_wide_FDR) |>
+    mutate(comparison = factor(comparison, levels = unique(comparison[order(matrix != "dISF")])))
+  save_csv(ov, cfg, "focus", "focus_overview.csv")
+  ov_det <- map(overview, "det") |> bind_rows()
+  writexl::write_xlsx(list(overview = ov, all_tests = ov_tests, detection = ov_det), out_path(cfg, "focus", "focus_overview.xlsx"))
+  vals <- map(overview, "values") |> bind_rows() |>
+    mutate(cond = factor(cond_lab[cond], levels = cond_lab))
+  p <- ggplot(vals, aes(cond, value)) + geom_boxplot(outlier.shape = NA, fill = "grey92") +
+    geom_jitter(aes(colour = below_lod), width = 0.15, size = 0.6) +
+    scale_colour_manual(values = c(`FALSE` = "black", `TRUE` = "grey65"), labels = c(`FALSE` = "above LOD", `TRUE` = "below LOD"), name = NULL) +
+    facet_wrap(~protein, scales = "free_y") +
+    labs(title = "Focus proteins in dISF by skin state", x = NULL, y = "NPX") +
+    theme(axis.text.x = element_text(angle = 35, hjust = 1), legend.position = "bottom")
+  save_plot(p, cfg, "focus", "focus_skin_states.png", width = 13, height = 9)
+  hm <- ov |> mutate(z = sign(estimate) * pmin(-log10(p), 10))
+  p <- ggplot(hm, aes(comparison, label, fill = estimate)) + geom_tile() +
+    geom_text(aes(label = case_when(p < 0.001 ~ "***", p < 0.01 ~ "**", p < 0.05 ~ "*", TRUE ~ "")), size = 4) +
+    scale_fill_gradient2(low = "steelblue", high = "firebrick") +
+    labs(title = "Focus proteins: effect (log2) per comparison (* p < 0.05, ** < 0.01, *** < 0.001; single-protein tests)",
+         x = NULL, y = NULL) + theme(axis.text.x = element_text(angle = 35, hjust = 1))
+  save_plot(p, cfg, "focus", "focus_overview_heatmap.png", width = 12, height = 2.5 + 0.4 * n_distinct(hm$label))
+}
+missing <- setdiff(toupper(focus), toupper(found))
+if (length(missing)) msg("Focus proteins not in the data: %s", paste(missing, collapse = ", "))

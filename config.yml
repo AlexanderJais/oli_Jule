@@ -31,7 +31,7 @@ stats:
 
 # Pre-specified proteins for the dedicated analysis (step 12). Olink assay name (gene symbol),
 # OlinkID or UniProt. CD137 / 4-1BB = TNFRSF9; its ligand 4-1BBL = TNFSF9 can be added.
-focus_proteins: ["TNFRSF9"]
+focus_proteins: ["TNFRSF9", "TNFSF9", "KITLG", "CPA4", "FCER1A", "TPSAB1", "MS4A2", "TPSD1", "PNOC", "POSTN"]
 
 enrichment:
   collections: ["H", "C2:CP:REACTOME", "C5:GO:BP"]
