@@ -52,7 +52,12 @@ print(enr_r)
 cd137 <- readxl::read_excel(file.path(out, "focus/TNFRSF9/TNFRSF9_report.xlsx"), sheet = "prespecified_tests")
 cd137_LvNL <- cd137 |> filter(model == "states_all_visits", contrast == "AD_L_vs_NL")
 
+vc <- read_csv(file.path(out, "visit_course/consistency_across_visits.csv"), show_col_types = FALSE) |>
+  left_join(truth |> select(OlinkID, role), by = "OlinkID") |> filter(contrast == "Lsite_vs_HC")
 stopifnot(
+  "no protein regulated at all visits found (step 13)" = sum(vc$all_visits_nominal & vc$role != "null") >= 3,
+  "executive summary PDF missing (step 14)" = file.exists(file.path(out, "Executive_summary.pdf")) &&
+    file.size(file.path(out, "Executive_summary.pdf")) > 20000,
   "lesion-restricted proteins not found (step 09)" =
     sum(prof$lesion_restricted & prof$role == "ISF_lesion_restricted", na.rm = TRUE) >= 4,
   "relative dISF/serum enrichment not recovered (step 10)" = all(enr_r$r > 0.9),

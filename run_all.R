@@ -13,7 +13,7 @@ steps <- c("scripts/01_metadata.R", "scripts/02_import_qc.R", "scripts/03_explor
            "scripts/04_isf_models.R", "scripts/05_serum_models.R", "scripts/06_isf_vs_serum.R",
            "scripts/07_enrichment.R", "scripts/08_leip_reference.R", "scripts/09_isf_profile.R",
            "scripts/10_matrix_comparison.R", "scripts/11_trajectories.R",
-           "scripts/12_focus_proteins.R")
+           "scripts/12_focus_proteins.R", "scripts/13_visit_course.R", "scripts/14_summary_report.R")
 if (!exists("start_at")) start_at <- 1
 if (start_at > 1) message("Starting at step ", start_at, " (reusing earlier results)")
 for (s in steps[start_at:length(steps)]) {

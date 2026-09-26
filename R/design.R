@@ -111,3 +111,22 @@ isf_delta_pairs <- function(info) {
     filter(!is.na(relapse2)) |>
     mutate(SampleID = paste(SubjectID, visit, sep = "_"))
 }
+
+#' Per-visit ISF comparisons (step 13): at each visit, the tracked lesion site (lesional or, after
+#' clearing, ex-lesional) vs healthy skin, vs non-lesional skin of the same patients, and non-lesional
+#' vs healthy. Healthy controls (single visit) are the reference at every visit.
+visit_specs <- function(info, min_subjects = 5) {
+  info <- info |> mutate(site_cond = case_when(group == "AD" & site == "L" ~ "Lsite",
+                                               group == "AD" & site == "NL" ~ "NL",
+                                               group == "HC" ~ "HC"))
+  visits <- info |> filter(group == "AD", !is.na(visit_num)) |> count(visit_num, SubjectID) |>
+    count(visit_num, name = "n_subjects") |> filter(n_subjects >= min_subjects) |> pull(visit_num)
+  hc <- info$SampleID[info$site_cond %in% "HC"]
+  specs <- map(visits, \(v) list(
+    name = paste0("V", v),
+    samples = c(info$SampleID[info$group == "AD" & info$visit_num %in% v & !is.na(info$site_cond)], hc),
+    formula = ~ 0 + site_cond + plate + (1 | SubjectID),
+    contrasts = c(Lsite_vs_HC = "site_condLsite - site_condHC", Lsite_vs_NL = "site_condLsite - site_condNL",
+                  NL_vs_HC = "site_condNL - site_condHC")))
+  list(info = info, specs = specs)
+}

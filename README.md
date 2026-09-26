@@ -12,6 +12,8 @@ CPUO), plus serum from RELAD / RELAD2 and LEIP biobank controls.
 | 2. Compare the dISF and blood proteome | 10, 06, 08 | `matrix_comparison/matrix_comparison.xlsx` (detected where, relatively enriched in dISF, skin vs blood disease signals), `isf_serum/*` (correlation), `leip_reference/*` |
 | 3. Track changes across the disease course | 11, 04 (time models) | `trajectories/trajectory_results.csv`, per-patient plots in `trajectories/plots/` |
 
+| Per visit / time course (lesion site vs healthy skin at V1–V6; proteins regulated at all visits) | 13 | `visit_course/visit_course.xlsx`, `visit_course/time_course_*.png`, `models/volcano/ISF_by_visit_V*.png` |
+| **Executive summary of everything** | 14 | `Executive_summary.pdf` |
 | Focus: CD137 (4-1BB, assay TNFRSF9) | 12 | `focus/TNFRSF9/TNFRSF9_report.xlsx` + figures |
 
 Secondary: relapse (04, 05, 11; exploratory) and RELAD/RELAD2 serum relapse (05).
@@ -26,7 +28,7 @@ Open `oli_Jule.Rproj` in RStudio (or `setwd()` to this folder): all paths are re
 ```bash
 Rscript install_packages.R        # once
 # put the data files in data/ (see below), then
-Rscript run_all.R                 # runs steps 01-12; results in output/
+Rscript run_all.R                 # runs steps 01-14; results in output/, summary in output/Executive_summary.pdf
 ```
 
 To run a single step, use `Rscript scripts/0X_....R`. Each step reads what the previous one saved.
@@ -58,6 +60,8 @@ All settings (thresholds, FDR, number of cores) are in `config.yml`.
 | `10_matrix_comparison.R` | **Aim 2.** Detected in dISF only / serum only / both. Relative dISF/serum enrichment: paired, centred log2 ratio, FDR plus ≥ 2-fold (`stats$min_rel_log2`). Concordance of disease effects in skin vs blood. Whether serum tracks the lesional-minus-non-lesional skin difference visit by visit. | `matrix_comparison/*` |
 | `11_trajectories.R` | **Aim 3.** Residual lesional signal (ex-lesional minus non-lesional) vs weeks since clearance, and vs weeks to relapse (relapsers; exploratory). Serum vs weeks to relapse. Optional severity models, and per-patient trajectory plots of the top proteins (dISF lesional site, non-lesional site, serum; relapse marked). | `trajectories/*` |
 | `12_focus_proteins.R` | **Dedicated analysis of pre-specified proteins** (`focus_proteins` in `config.yml`; default CD137 = TNFRSF9). Runs even if the protein fails the detection filter. Reports detection per matrix and group, and the same models as steps 04/05 plus the xL − NL relapse model for this protein alone (lmerTest / lm). The unadjusted p-value is the primary test, with the proteome-wide FDR shown alongside. Also ISF–serum correlation, severity (if available), LEIP clinical associations, every pipeline result for the protein, and figures. | `focus/<protein>/*` |
+| `13_visit_course.R` | dISF per visit (V1–V6, visits with ≥ `stats$visit_min_subjects` patients): tracked lesion site vs healthy skin, vs non-lesional skin, and non-lesional vs healthy. Same model as step 04, with a volcano plot per visit. Proteins regulated at **all** visits in the same direction are listed at FDR < 0.05 at every visit (strict) and at p < 0.05 at every visit (nominal), with time-course plots of effects and NPX levels. | `visit_course/*`, `models/ISF_by_visit_*` |
+| `14_summary_report.R` | Executive summary PDF: data and QC, automatically extracted key findings per aim, all comparisons, visit course, volcano plots, pathways, dISF vs serum, serum, focus proteins, methods and caveats. Each section is skipped with a note if its step did not run. | `Executive_summary.pdf` |
 | `08_leip_reference.R` | For the proteins significant in step 06: LEIP normal range, where AD patients fall in it, clinical associations in LEIP, detectability, and LEIP vs in-study controls. | `leip_reference/*` (incl. `.xlsx`) |
 
 ### Models

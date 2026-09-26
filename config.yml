@@ -26,6 +26,7 @@ stats:
   fdr: 0.05
   min_group_n: 3              # skip a contrast if a group has fewer samples than this
   min_rel_log2: 1             # step 10: minimum relative dISF/serum difference (log2) to call a protein enriched
+  visit_min_subjects: 5        # step 13: analyse a visit only if >= this many AD patients
   cores: 4                    # parallel workers for the mixed models (1 = serial)
 
 # Pre-specified proteins for the dedicated analysis (step 12). Olink assay name (gene symbol),
