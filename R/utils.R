@@ -107,7 +107,8 @@ save_csv <- function(df, cfg, ...) {
 
 save_plot <- function(p, cfg, ..., width = 8, height = 6) {
   f <- out_path(cfg, ...)
-  ggsave(f, p, width = width, height = height, dpi = 150)
+  # never exceed ggsave's 50-inch limit, however many proteins/contrasts a plot has
+  ggsave(f, p, width = min(width, 45), height = min(height, 45), dpi = 150)
   invisible(f)
 }
 

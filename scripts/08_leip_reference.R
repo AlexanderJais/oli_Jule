@@ -70,13 +70,17 @@ if (length(params)) {
     arrange(p)
   save_csv(assoc, cfg, "leip_reference", "leip_clinical_associations.csv")
   if (nrow(assoc)) {
-    p <- assoc |> filter(parameter != "sex (M - F)") |>
+    # heatmap: the 50 proteins with the strongest clinical association (all are in the CSV)
+    top_hm <- assoc |> group_by(Assay) |> summarise(best = min(p, na.rm = TRUE)) |>
+      slice_min(best, n = 50, with_ties = FALSE) |> pull(Assay)
+    p <- assoc |> filter(parameter != "sex (M - F)", Assay %in% top_hm) |>
       ggplot(aes(parameter, Assay, fill = rho)) + geom_tile() +
       geom_text(aes(label = if_else(significant, "*", "")), size = 5) +
       scale_fill_gradient2(limits = c(-1, 1)) +
-      labs(title = "LEIP: Spearman correlation with clinical parameters (* FDR < 0.05)", x = NULL, y = NULL) +
+      labs(title = sprintf("LEIP: Spearman correlation with clinical parameters (* FDR < 0.05; top %d of %d proteins)",
+                           length(top_hm), n_distinct(assoc$Assay)), x = NULL, y = NULL) +
       theme(axis.text.x = element_text(angle = 45, hjust = 1))
-    save_plot(p, cfg, "leip_reference", "leip_clinical_heatmap.png", width = 9, height = 2 + 0.25 * n_distinct(assoc$Assay))
+    save_plot(p, cfg, "leip_reference", "leip_clinical_heatmap.png", width = 9, height = 2 + 0.25 * length(top_hm))
   }
 }
 
