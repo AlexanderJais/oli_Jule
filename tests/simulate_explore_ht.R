@@ -51,6 +51,17 @@ role <- case_when(
 assays$role <- role
 # coupled proteins 46-50 also depend on BMI in the population
 assays$bmi_slope <- if_else(eff(46, 50), 0.12, 0)
+# LEIP (step 18): Olink GAL follows the galanin ELISA and shares a factor with 3 partner proteins
+# (positions 114-116); FABP4 follows the lab A-FABP; IL10 is not linked to the lab IL-10
+leip_sim <- c("GAL", "FABP4", "IL10")
+if (n_assays >= 130) {
+  for (k in seq_along(leip_sim)) if (!leip_sim[k] %in% assays$Assay) {
+    m <- ht |> filter(Gene == leip_sim[k]) |> slice(1)
+    if (nrow(m)) assays[110 + k, c("OlinkID", "UniProt", "Assay")] <- list(m$OlinkID, m$UniProt, m$Gene)
+  }
+  assays$role[assays$Assay %in% c("GAL", "FABP4") & assays$role == "null"] <- "LEIP_lab_linked"
+  assays$role[114:116][assays$role[114:116] == "null"] <- "LEIP_GAL_partner"
+}
 
 base   <- rnorm(n_assays, 6, 1.5)          # serum level
 isf_off <- rnorm(n_assays, -1.2, 0.8)      # ISF relative to serum
@@ -111,6 +122,20 @@ for (i in seq_len(nrow(samples))) {
   }
   npx[i, ] <- x + rnorm(n_assays, 0, 0.35)
 }
+# LEIP lab-linked proteins (step 18), drawn from a separate random stream so that the rest of the
+# simulation stays the same
+rng <- .Random.seed; set.seed(18)
+leip_i <- which(samples$cohort %in% "LEIP")
+z_gal <- rnorm(length(leip_i))
+sorb <- readxl::read_excel(cfg$paths$leip_clinical, sheet = "All_SORB_parameters")
+lab_effect <- \(v, centre, slope) slope * coalesce(log2(v / centre), 0)
+for (a in which(assays$role == "LEIP_lab_linked")) {
+  npx[leip_i, a] <- npx[leip_i, a] + switch(assays$Assay[a],
+    GAL   = lab_effect(samples[["Galanin [pg/mL]"]][leip_i], 140, 1.8) + 0.8 * z_gal,
+    FABP4 = lab_effect(sorb$c_AFABP4[match(samples$SampleID[leip_i], sorb$Olink_SampleID)], 12, 1.0))
+}
+for (a in which(assays$role == "LEIP_GAL_partner")) npx[leip_i, a] <- npx[leip_i, a] + 1.0 * z_gal
+assign(".Random.seed", rng, envir = globalenv())
 npx <- pmax(npx, nc_lvl[col(npx)] - 0.5)     # floor near background, like real data
 
 # ---- long parquet in Explore HT format ------------------------------------------------
@@ -203,13 +228,18 @@ sev <- meta |> filter(cohort == "MicroAD", group == "AD", matrix == "ISF", site 
   transmute(SubjectID, Visit = visit, EASI = round(pmax(0, if_else(state == "lesional", 12, 3) + rnorm(n(), 0, 2)), 1))
 write_csv(sev, file.path(sim_dir, "severity.csv"))
 
+# step 18 settings: lab/Olink pairs and sanity checks that exist in the simulation (+ one that does not)
+leip_cfg <- cfg$leip_biobank
+leip_cfg$lab_vs_olink <- list(galanin_elisa = "GAL", c_AFABP4 = "FABP4", IL10 = "IL10", c_CRP = "CRP")
+leip_cfg$expected_associations <- c(map(assays$Assay[assays$bmi_slope > 0], \(a) list(protein = a, parameter = "BMI", direction = "positive")),
+                                    list(list(protein = "NOT_ON_PANEL", parameter = "BMI", direction = "positive")))
 yaml::write_yaml(list(
   paths = list(manifest = cfg$paths$manifest, npx_dir = file.path(sim_dir, "npx"),
                severity = file.path(sim_dir, "severity.csv"),
                leip_clinical = cfg$paths$leip_clinical, fixed_lod = file.path(sim_dir, "fixed_lod.csv"),
                output = "output_sim"),
   npx_column = cfg$npx_column, qc = cfg$qc, stats = cfg$stats, enrichment = cfg$enrichment,
-  focus_proteins = cfg$focus_proteins
+  focus_proteins = cfg$focus_proteins, leip_biobank = leip_cfg
 ), file.path(sim_dir, "config_sim.yml"))
 
 msg("Simulated %d samples/controls x %d assays -> %s", nrow(samples), n_assays, sim_dir)

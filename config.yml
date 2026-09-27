@@ -47,3 +47,48 @@ enrichment:
   collections: ["H", "C2:CP:REACTOME", "C5:GO:BP"]
   min_size: 10
   max_size: 500
+
+# LEIP biobank serum only (step 18): Olink proteins vs the clinical parameters, and galanin.
+# Column names of the clinical file are used in plain ASCII: the micro sign becomes u (Ins0_uU_ml),
+# umlauts lose their dots (lipamisch). sex_MF becomes sex_male (1 = M, 0 = F), the galanin ELISA galanin_elisa.
+leip_biobank:
+  galanin_assay: GAL                        # Olink assay (gene symbol) of galanin
+  galanin_lab: "Galanin [pg/mL]"            # column of the galanin ELISA in the LEIP clinical file
+  adjust_for: ["age", "sex_male", "plate"]  # covariates of the adjusted analysis (partial Spearman); plate = Olink plate
+  min_n: 20                                 # a clinical parameter needs >= this many LEIP samples with a value
+  min_group: 5                              # ... and >= this many samples that differ from its most common value
+  gsea: true                                # gene-set enrichment of the proteins correlated with galanin
+  # coarsened copies of other variables (BMI group, tertiles, yes/no versions of scores) - not tested
+  exclude_parameters: ["g_BMI_group_1", "NGT_Glu0", "Vaspin0_tertile", "NGT_Vas_tert", "RE_BIN", "c_DIS_BIN",
+                       "HUNG_BIN", "C_LIPO_norm", "g_alc_binary2", "Proteinurie_ja_nein"]
+  lab_vs_olink:                             # lab value (column of the clinical file) -> Olink assay of the same protein
+    galanin_elisa: GAL
+    c_adiponectin: ADIPOQ
+    c_CRP: CRP
+    IL10: IL10
+    Progranulin: GRN
+    Vaspin0min: SERPINA12
+    c_chemerin: RARRES2
+    BMP2: BMP2
+    c_FGF21: FGF21
+    c_IGF1: IGF1
+    c_AFABP4: FABP4
+    serum_irisin: FNDC5
+    c_apo: APOA1
+    C_APO_B: APOB
+    C_LIPO: LPA
+    Ins0_uU_ml: INS
+    c_AGF: ANGPTL6
+    c_tsh: TSHB
+  expected_associations:                    # sanity checks: associations known from population proteomics
+    - {protein: LEP,    parameter: BMI,       direction: positive}
+    - {protein: LEP,    parameter: c_fett,    direction: positive}
+    - {protein: LEP,    parameter: sex_male,  direction: negative}
+    - {protein: FABP4,  parameter: BMI,       direction: positive}
+    - {protein: IGFBP2, parameter: BMI,       direction: negative}
+    - {protein: IGFBP1, parameter: HOMA_IR,   direction: negative}
+    - {protein: CST3,   parameter: MDRD_kurz, direction: negative}
+    - {protein: B2M,    parameter: MDRD_kurz, direction: negative}
+    - {protein: GDF15,  parameter: age,       direction: positive}
+    - {protein: EDA2R,  parameter: age,       direction: positive}
+    - {protein: KLK3,   parameter: sex_male,  direction: positive}
