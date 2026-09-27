@@ -104,17 +104,7 @@ clin <- tibble(Olink_SampleID = lp$SampleID, SubjectID = lp$SubjectID, SORB_barc
                c_CRP = round(rlnorm(n, 0, 0.7), 2), C_CHOL = round(rnorm(n, 5, 0.9), 2),
                C_HDL = round(rnorm(n, 1.6, 0.4), 2), C_LDL = round(rnorm(n, 3, 0.8), 2),
                C_TRIGLY = round(rlnorm(n, 0, 0.4), 2), c_apo = round(rnorm(n, 1.7, 0.3), 2),
-               MDRD_kurz = round(rnorm(n, 98, 12), 1), Gluc0_mg_dl = round(rnorm(n, 92, 7), 1),
-               `Galanin [pg/mL]` = round(rlnorm(n, log(140), 0.3), 1))
+               MDRD_kurz = round(rnorm(n, 98, 12), 1), Gluc0_mg_dl = round(rnorm(n, 92, 7), 1))
 clin[n, -(1:2)] <- NA                      # like LEIP_35: no clinical data
-# all other SORB variables (step 18): lab values, a log copy, a unit copy, a constant, a coarsened copy
-sorb <- clin |>
-  transmute(Olink_SampleID, SubjectID, Olink_plate = lp$plate, Olink_well = lp$well, SORB_barcode, `Galanin [pg/mL]`,
-            Galanin_ELISA_plate = sample(1:12, n, TRUE), sex = if_else(sex_MF == "M", 1, 0), sex_MF, age, BMI,
-            ln_BMI = round(log(BMI), 3), Gluc0_mg_dl, gluk_0 = round(Gluc0_mg_dl / 18.016, 3), t2d = 0,
-            c_AFABP4 = round(rlnorm(n, log(12), 0.45), 2), IL10 = round(rlnorm(n, log(5), 0.8), 2),
-            RESTRAINT = sample(0:15, n, TRUE), RE_BIN = as.integer(RESTRAINT > 7),
-            c_tsh = round(rlnorm(n, log(1.8), 0.4), 2), low_serum = c(1, rep(0, n - 1)))
-sorb[n, -(1:4)] <- NA
-writexl::write_xlsx(list(Key_parameters = clin, All_SORB_parameters = sorb), "data_sim/LEIP_clinical.xlsx")
+writexl::write_xlsx(list(Key_parameters = clin), "data_sim/LEIP_clinical.xlsx")
 message("Synthetic manifest: ", nrow(manifest), " samples -> data_sim/manifest.xlsx, data_sim/LEIP_clinical.xlsx")

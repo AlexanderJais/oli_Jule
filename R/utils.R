@@ -112,16 +112,6 @@ save_plot <- function(p, cfg, ..., width = 8, height = 6) {
   invisible(f)
 }
 
-#' MSigDB gene sets (msigdbr) as a named list of gene symbols; collections like "H" or "C2:CP:REACTOME".
-load_gene_sets <- function(collections) {
-  map(collections, \(cl) {
-    parts <- str_split_fixed(cl, ":", 2)
-    g <- if (parts[2] == "") msigdbr::msigdbr(species = "Homo sapiens", collection = parts[1])
-         else msigdbr::msigdbr(species = "Homo sapiens", collection = parts[1], subcollection = parts[2])
-    split(g$gene_symbol, g$gs_name)
-  }) |> unlist(recursive = FALSE)
-}
-
 #' Read an intermediate result written by an earlier script; fail with a clear message.
 read_step <- function(cfg, ..., step) {
   p <- file.path(cfg$paths$output, ...)

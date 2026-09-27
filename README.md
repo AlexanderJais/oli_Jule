@@ -5,6 +5,10 @@ study: about 5,400 proteins measured in **dermal interstitial fluid (dISF)** and
 patients with atopic dermatitis (AD) and control persons.
 
 This page tells you what the analysis does, how to run it, and **where to find which result**.
+
+> **LEIP galanin study:** a separate analysis of the LEIP biobank sera (does Olink confirm the galanin
+> ELISA, what galanin correlates with, galanin and HDL) is in [`leip_galanin/`](leip_galanin/README.md).
+> It uses the same data files, but none of the steps described below.
 Technical details (models, design decisions) are in [`docs/TECHNICAL.md`](docs/TECHNICAL.md).
 
 > **Start here:** after a run, open **`output/Executive_summary.pdf`**. It summarises all
@@ -219,38 +223,6 @@ chosen in advance. The FDR is shown alongside.
 Tip: if Excel shows everything in one column, set `sep: ";"` under `export:` in `config.yml`
 and rerun step 17 (`start_at <- 17; source("run_all.R")`).
 
-### `leip_biobank/` – LEIP biobank only: proteins vs clinical data, and galanin (step 18)
-Only the LEIP biobank sera (population controls) are used. Every protein is correlated with every
-clinical parameter of the LEIP clinical file (sheet `Key_parameters` plus all further SORB
-variables in sheet `All_SORB_parameters`), and galanin gets its own analysis.
-**Start with `LEIP_biobank_summary.pdf`**: the answers are on its first pages.
-
-| Question | How it is answered | Where |
-|---|---|---|
-| G1 Is galanin (Olink assay GAL) measurable in LEIP serum? | Share of LEIP samples above LOD | `answers.csv` |
-| G2 Do the Olink GAL levels correspond to the galanin ELISA? | Spearman correlation (also adjusted for Olink plate, within each plate, above LOD only, without flagged samples); same tertile in both methods; GAL's rank among all proteins correlated with the ELISA. **Benchmark:** the same comparison for every other protein measured both by the lab and by Olink (e.g. A-FABP/FABP4, progranulin/GRN, chemerin/RARRES2) | `galanin/GAL_Olink_vs_ELISA.png`, `galanin/lab_vs_Olink_benchmark.png` |
-| G3 Which clinical parameters does galanin correlate with? | Olink GAL and the ELISA vs each parameter, unadjusted and adjusted for age and sex (Olink GAL also for plate). Both methods side by side | `galanin/galanin_vs_clinical.png`, `galanin/GAL_top_clinical_scatter.png` |
-| G4 Which proteins does galanin correlate with? | Olink GAL (and the ELISA) vs every other protein; gene-set enrichment of the ranking | `galanin/GAL_vs_proteins_volcano.png`, `galanin/GAL_top_proteins_scatter.png`, `galanin/GAL_gene_sets.png` |
-| P1 Which clinical parameters show up in the serum proteome? | Every protein × every parameter | `n_significant_per_parameter.png`, `heatmap_key_parameters.png`, `volcano_key_parameters.png`, `top_associations.png` |
-| P2 Sanity check: do known associations show up? | E.g. leptin – BMI, cystatin C – eGFR, GDF15 – age (list in `config.yml`) | `sanity_checks.csv` |
-
-| File | Content |
-|---|---|
-| `LEIP_biobank_summary.pdf` | Answers, the key figures and tables, methods and caveats |
-| `answers.csv` | One line per answer: the verdict and the numbers behind it |
-| `leip_biobank.xlsx` | Which clinical variables are analysed (and why the others are not), samples, detection, all significant associations, top 10 proteins per parameter, sanity checks |
-| `associations_all.csv.gz` | Every protein × every parameter: `rho`, `p`, `fdr`; `rho_adj`, `p_adj`, `fdr_adj` = adjusted for age, sex and Olink plate |
-| `n_significant_per_parameter.csv` | Per parameter: number of significant proteins, and how many would be expected by chance at p < 0.05 |
-| `sample_check.csv` | Manifest vs clinical file: same person and Olink plate for every sample? |
-| `galanin/galanin.xlsx` | All galanin results: agreement with the ELISA, tertiles, plates, benchmark, clinical parameters, proteins, gene sets, sample values |
-
-**How to read it:** `rho` runs from −1 to +1; +0.5 means the protein tends to be high when the
-parameter is high. With 34 persons, only |rho| ≳ 0.35 reaches p < 0.05, and only |rho| ≳ 0.6
-passes the proteome-wide FDR, so weaker true correlations are missed. Olink and ELISA can only
-agree in *ranking* (NPX is relative), not in absolute values. Clinical column names are used in
-plain ASCII (e.g. `Ins0_µU_ml` becomes `Ins0_uU_ml`). Settings: `leip_biobank` in `config.yml`.
-Step 18 only needs steps 01–02: `start_at <- 18; source("run_all.R")`.
-
 ### `data/` (inside `output/`)
 Intermediate files used by the scripts (`.rds`). You don't need to open them.
 
@@ -293,7 +265,7 @@ Model names: `states_all_visits` = all visits together; `baseline_V1` = V1 only;
 |---|---|
 | `run_all.R` | Runs everything in order |
 | `config.yml` | All settings: file paths, thresholds, focus proteins, CSV separator |
-| `scripts/01_…` to `scripts/18_…` | One script per analysis step. The number is also the step in `start_at`. |
+| `scripts/01_…` to `scripts/17_…` | One script per analysis step. The number is also the step in `start_at`. |
 | `R/` | Shared functions used by the scripts |
 | `data/` | Your input files (not uploaded to GitHub) – see `data/README.md` |
 | `output/` | All results (not uploaded to GitHub) |
@@ -319,7 +291,6 @@ Model names: `states_all_visits` = all visits together; `baseline_V1` = V1 only;
 | 15 | `15_key_questions.R` | Answers to the key questions (mast cells, CD137, relapse, dISF vs serum) |
 | 16 | `16_summary_report.R` | Executive summary PDF |
 | 17 | `17_export_data.R` | CSV export of the data |
-| 18 | `18_leip_biobank.R` | LEIP biobank only: proteins vs clinical parameters, galanin (Olink vs ELISA) |
 
 ---
 

@@ -58,29 +58,6 @@ ov15 <- read_csv(file.path(out, "serum_vs_disf/overlap_summary.csv"), show_col_t
 fov  <- read_csv(file.path(out, "focus/focus_overview.csv"), show_col_types = FALSE)
 ex_rl <- read_csv(file.path(out, "export/RELAD2/RELAD2_Serum_NPX_wide.csv"), show_col_types = FALSE)
 kqa <- read_csv(file.path(out, "key_questions/answers.csv"), show_col_types = FALSE)
-lb    <- \(f) read_csv(file.path(out, "leip_biobank", f), show_col_types = FALSE)
-lb_as <- lb("associations_all.csv.gz") |> left_join(truth |> select(OlinkID, role, bmi_slope), by = "OlinkID")
-lb_ag <- lb("galanin/olink_vs_elisa.csv") |> filter(analysis == "all samples")
-lb_gp <- lb("galanin/GAL_vs_proteins.csv") |> left_join(truth |> select(OlinkID, role), by = "OlinkID")
-lb_ev <- lb("galanin/ELISA_vs_proteins.csv"); lb_bm <- lb("galanin/lab_vs_olink_benchmark.csv")
-lb_pa <- lb("parameters.csv"); lb_sa <- lb("sanity_checks.csv"); lb_an <- lb("answers.csv")
-why   <- \(p) coalesce(lb_pa$reason[lb_pa$parameter == p], "analysed")
-stopifnot(
-  "LEIP step 18: Olink GAL does not follow the simulated galanin ELISA" =
-    lb_ag$rho > 0.4 && lb_ag$p < 0.01 && lb_ev$rank_by_rho[lb_ev$Assay == "GAL"] <= 3,
-  "LEIP step 18: GAL partner proteins not among the top GAL correlates" = sum(head(lb_gp$role, 10) == "LEIP_GAL_partner") >= 2,
-  "LEIP step 18: lab vs Olink benchmark wrong" =
-    lb_bm$rho[lb_bm$olink_assay == "FABP4"] > 0.4 && lb_bm$status[lb_bm$olink_assay == "CRP"] == "not measured by Olink",
-  "LEIP step 18: BMI-linked proteins not found" = mean(lb_as$significant[lb_as$parameter == "BMI" & lb_as$bmi_slope > 0]) >= 0.8,
-  "LEIP step 18: false hits for unlinked parameters" = sum(lb_as$significant[lb_as$parameter %in% c("RESTRAINT", "c_tsh", "IL10")]) <= 3,
-  "LEIP step 18: clinical parameter selection wrong" =
-    str_detect(why("ln_BMI"), "log copy") && str_detect(why("gluk_0"), "same ranks as Gluc0_mg_dl") && why("t2d") == "no variation" &&
-    str_detect(why("RE_BIN"), "config") && why("galanin_elisa") == "analysed" && why("sex_male") == "analysed",
-  "LEIP step 18: sanity checks wrong" = all(lb_sa$status[lb_sa$protein != "NOT_ON_PANEL"] == "recovered") &&
-    lb_sa$status[lb_sa$protein == "NOT_ON_PANEL"] == "protein not measured",
-  "LEIP step 18: answers or summary PDF missing" = all(c("G1", "G2", "G3", "G4", "P1", "P2") %in% str_extract(lb_an$question, "^[A-Z][0-9]")) &&
-    file.size(file.path(out, "leip_biobank", "LEIP_biobank_summary.pdf")) > 20000
-)
 stopifnot(
   "key questions incomplete (step 15)" = all(paste0("Q", 1:5) %in% str_extract(kqa$question, "^Q[0-9]")) &&
     any(str_detect(kqa$verdict[str_detect(kqa$question, "^Q1") & kqa$item == "Mast cell score"], "elevated in AD")),

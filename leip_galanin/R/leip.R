@@ -1,13 +1,84 @@
-# Helpers for the LEIP biobank analysis (step 18): reading the clinical file, choosing the
-# clinical parameters, and fast (partial) Spearman correlations of one variable with many proteins.
+# Helpers of the LEIP galanin study: configuration, reading the Olink serum file and the LEIP
+# clinical file, choosing the clinical variables, and fast (partial) Spearman correlations.
+# Uses the repository's generic helpers: R/utils.R (config, output paths, logging), R/qc.R (Olink LOD).
+
+leip_config <- function() load_config(Sys.getenv("LEIP_CONFIG", "leip_galanin/config.yml"))
+
+fmt_p   <- \(p) ifelse(is.na(p), "n/a", sprintf("%.2g", p))
+col_or  <- \(d, nm, default = NA) if (nm %in% names(d)) d[[nm]] else rep(default, nrow(d))
+ensure  <- \(d, cols) { for (c in setdiff(cols, names(d))) d[[c]] <- rep(NA_real_, nrow(d)); d }
+zscore  <- \(v) (v - mean(v, na.rm = TRUE)) / sd(v, na.rm = TRUE)
+r_crit  <- \(p, n) { t <- qt(1 - p / 2, n - 2); t / sqrt(t^2 + n - 2) }      # |rho| needed for p at n samples
+top_str <- \(name, rho, p, k = 5) {
+  o <- head(order(p), k); o <- o[!is.na(p[o])]
+  if (!length(o)) "none" else paste(sprintf("%s (%+.2f)", name[o], rho[o]), collapse = ", ")
+}
+#' OlinkIDs of an assay given as gene symbol (also inside combined names such as "IL12A_IL12B").
+find_assay <- \(det, a) det$OlinkID[str_detect(toupper(det$Assay), paste0("(^|_)", toupper(a), "($|_)"))]
+
+#' The data of step 01, plus: M = measurable proteins (samples x proteins), gal = OlinkID of galanin,
+#' npx = its values, elisa = the ELISA values, cov = covariates of the adjusted analyses.
+leip_load <- function(cfg) {
+  d <- read_step(cfg, "0_data", "leip_data.rds", step = "leip_galanin/scripts/01_data.R")
+  d$M <- d$Y[, d$det$OlinkID[d$det$measurable], drop = FALSE]
+  g <- find_assay(d$det, cfg$galanin$olink_assay %||% "GAL")
+  d$gal <- if (length(g)) g[1] else NA_character_
+  d$npx <- if (!is.na(d$gal)) unname(d$Y[, d$gal]) else rep(NA_real_, nrow(d$Y))
+  d$elisa <- col_or(d$S, "galanin_elisa", NA_real_)
+  d$has_gal <- !is.na(d$gal); d$has_elisa <- sum(!is.na(d$elisa)) >= 10
+  d$cov <- intersect(unlist(cfg$covariates %||% c("age", "sex_male", "plate")), names(d$S))
+  d
+}
+covs_label <- \(v) if (length(v)) paste(recode(v, sex_male = "sex", plate = "Olink plate"), collapse = ", ") else "nothing"
+
+#' Figures of one analysis step: fig() saves the PNG and keeps the plot, figs_save() stores all plots
+#' for the PDF report (plots must only use columns of their own data, no outside variables).
+figs_new  <- function() { e <- new.env(); e$list <- list(); e }
+fig       <- function(f, name, p, cfg, ..., width = 8, height = 6) {
+  save_plot(p, cfg, ..., width = width, height = height); f$list[[name]] <- p; invisible(p)
+}
+figs_save <- function(f, cfg, ...) saveRDS(f$list, out_path(cfg, ...))
+
+#' Answers of one analysis step: add rows with answer(), write them with answers_save().
+answers_new <- function() { e <- new.env(); e$rows <- list(); e }
+answer <- function(a, question, item, verdict, evidence)
+  a$rows[[length(a$rows) + 1]] <- tibble(question = question, item = item, verdict = verdict, evidence = evidence)
+answers_save <- function(a, cfg, ...) { d <- bind_rows(a$rows); save_csv(d, cfg, ...); d }
+
+# ---- Olink data ------------------------------------------------------------------------------------------------
+
+#' Olink rows of the LEIP samples: reads every NPX parquet file that contains one of `ids`, adds the
+#' LOD (R/qc.R add_lod: Olink fixed LOD file, per sample for count-based assays), and returns the
+#' sample x assay rows of these samples. Control IDs are made unique per plate, as in step 02 of
+#' the dISF/serum pipeline.
+read_leip_npx <- function(npx_dir, ids, fixed_lod = NULL, value_col = "PCNormalizedNPX") {
+  files <- list.files(npx_dir, pattern = "\\.parquet$", full.names = TRUE)
+  if (!length(files)) stop("No .parquet files in ", npx_dir)
+  d <- map(files, \(f) {
+    x <- OlinkAnalyze::read_npx(f) |> as_tibble()
+    if (!any(x$SampleID %in% ids)) { msg("%s: no LEIP sample - skipped", basename(f)); return(NULL) }
+    msg("%s: %d LEIP samples", basename(f), n_distinct(x$SampleID[x$SampleID %in% ids]))
+    req <- c("SampleID", "SampleType", "PlateID", "OlinkID", "Assay", "AssayType", value_col, "SampleQC", "DataAnalysisRefID")
+    miss <- setdiff(req, names(x))
+    if (length(miss)) stop(basename(f), " is missing columns: ", paste(miss, collapse = ", "))
+    x <- x |> mutate(SampleID = if_else(SampleType == "SAMPLE", SampleID, paste(SampleID, PlateID, sep = "@")))
+    add_lod(x, fixed_lod, "auto", value_col = value_col) |> mutate(source_file = basename(f))
+  }) |> compact()
+  if (!length(d)) stop("None of the LEIP samples of the clinical file is in the NPX files in ", npx_dir)
+  bind_rows(d) |>
+    filter(SampleType == "SAMPLE", AssayType == "assay", SampleID %in% ids) |>
+    mutate(value = .data[[value_col]], below_lod = if_else(is.na(LOD), NA, value < LOD))
+}
+
+# ---- clinical data -----------------------------------------------------------------------------------------------
 
 #' Plain-ASCII names (micro sign -> u, umlauts -> a/o/u, sharp s -> ss): the same on every system.
 ascii_names <- function(x) {
-  x <- stringi::stri_replace_all_regex(x, "[µμ]", "u")
+  x <- stringi::stri_replace_all_regex(x, paste0("[", intToUtf8(c(0xb5, 0x3bc)), "]"), "u")
   stringi::stri_trans_general(x, "Latin-ASCII")
 }
 
-#' LEIP clinical file: sheet Key_parameters, plus every further variable of sheet All_SORB_parameters
+#' LEIP clinical file: sheet Key_parameters plus every further variable of sheet All_SORB_parameters
 #' (if present). One row per Olink sample. Column names become ASCII; the galanin ELISA column is
 #' renamed to galanin_elisa and sex_MF becomes sex_male (1 = M, 0 = F).
 #' Returns list(data, key = names of the Key_parameters columns).
@@ -78,7 +149,7 @@ select_parameters <- function(clin, key_cols, exclude = character(), min_n = 20,
     mutate(type = case_when(!numeric ~ "text", n_values == 2 ~ "binary", n_values <= 4 ~ "ordinal", TRUE ~ "continuous"),
            reason = case_when(
              parameter %in% leip_technical ~ "identifier / technical",
-             parameter %in% exclude ~ "excluded in config.yml (leip_biobank: exclude_parameters)",
+             parameter %in% exclude ~ "excluded in the config (clinical: exclude)",
              !numeric ~ "not numeric",
              str_detect(parameter, "^(ln|lg)_|_lg$|_lg_") ~ "log copy of another variable (same ranks)",
              n_values < 2 ~ "no variation",
@@ -103,6 +174,8 @@ select_parameters <- function(clin, key_cols, exclude = character(), min_n = 20,
     mutate(label = if (n() > 1) paste0(label, " [", parameter, "]") else label) |>
     ungroup()
 }
+
+# ---- statistics ------------------------------------------------------------------------------------------------
 
 #' Covariate matrix for partial correlations: intercept, ranked numeric covariates, dummy-coded
 #' factors. Covariates without variation in these rows are dropped.
@@ -156,6 +229,27 @@ spearman_vs <- function(x, Y, Z = NULL, min_n = 10) {
          p = 2 * stats::pt(-abs(tt), df))
 }
 
+#' One Spearman (or partial Spearman) correlation: n, rho, 95% CI, p.
+spearman1 <- function(x, y, Z = NULL, min_n = 5)
+  spearman_vs(x, matrix(y, dimnames = list(NULL, "y")), Z, min_n) |> select(-id)
+
+#' Bootstrap comparison of two correlations that share x: rho(x, a) - rho(x, b), with covariates Z
+#' as partial Spearman correlations; percentile 95% CI and a two-sided bootstrap p-value.
+boot_rho_diff <- function(x, a, b, Z = NULL, B = 2000) {
+  dat <- bind_cols(tibble(x = x, a = a, b = b), if (!is.null(Z)) as_tibble(Z))
+  dat <- dat[stats::complete.cases(dat), ]
+  zc <- if (is.null(Z)) NULL else names(Z)
+  rd <- function(s) {                                    # the same partial Spearman as spearman_vs(), for two pairs
+    r <- cbind(rank(s$x), rank(s$a), rank(s$b))
+    if (!is.null(zc)) r <- qr.resid(qr(covariate_matrix(s[zc])), r)
+    suppressWarnings(cor(r[, 1], r[, 2]) - cor(r[, 1], r[, 3]))
+  }
+  bs <- replicate(B, rd(dat[sample.int(nrow(dat), replace = TRUE), ]))
+  bs <- bs[is.finite(bs)]
+  tibble(n = nrow(dat), difference = rd(dat), ci_low = unname(quantile(bs, 0.025)), ci_high = unname(quantile(bs, 0.975)),
+         p_boot = max(1 / length(bs), min(1, 2 * min(mean(bs <= 0), mean(bs >= 0)))))   # never below 1 / resamples
+}
+
 #' Median NPX difference between the two values of a binary parameter (higher code minus lower).
 median_diff <- function(x, Y) {
   ok <- !is.na(x)
@@ -169,4 +263,23 @@ weighted_kappa <- function(tab) {
   w <- 1 - abs(outer(seq_len(k), seq_len(k), "-")) / (k - 1)
   po <- sum(w * p); pe <- sum(w * outer(rowSums(p), colSums(p)))
   (po - pe) / (1 - pe)
+}
+
+#' MSigDB gene sets (msigdbr) as a named list of gene symbols; collections like "H" or "C2:CP:REACTOME".
+load_gene_sets <- function(collections) {
+  map(collections, \(cl) {
+    parts <- str_split_fixed(cl, ":", 2)
+    g <- if (parts[2] == "") msigdbr::msigdbr(species = "Homo sapiens", collection = parts[1])
+         else msigdbr::msigdbr(species = "Homo sapiens", collection = parts[1], subcollection = parts[2])
+    split(g$gene_symbol, g$gs_name)
+  }) |> unlist(recursive = FALSE)
+}
+
+#' GSEA (fgsea) of a protein ranking; `stat` is named by Olink assay (combined assays count per gene).
+rank_gsea <- function(assay, stat, collections, min_size = 10, max_size = 500) {
+  sets <- load_gene_sets(collections)
+  st <- tibble(gene = str_split(assay, "_"), stat) |> filter(!is.na(stat)) |> unnest(gene) |>
+    group_by(gene) |> slice_max(abs(stat), n = 1, with_ties = FALSE) |> ungroup()
+  out <- suppressWarnings(fgsea::fgseaMultilevel(sets, setNames(st$stat, st$gene), minSize = min_size, maxSize = max_size, eps = 0))
+  as_tibble(out) |> mutate(leadingEdge = map_chr(leadingEdge, paste, collapse = ";")) |> arrange(pval)
 }

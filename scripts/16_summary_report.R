@@ -337,8 +337,7 @@ section("Methods", {
     "## Output folders (all under the output directory)",
     "qc/ - QC tables and plots | models/ - all model results and volcano plots (models/volcano/) | visit_course/ - per-visit analysis and time courses",
     "isf_profile/ - dISF proteome | matrix_comparison/ - dISF vs serum | serum_vs_disf/ - overlap per visit (Venn) | isf_serum/ - correlations",
-    "trajectories/ - disease course | leip_reference/ | enrichment/ | focus/ - focus proteins (overview + one folder per protein)",
-    "leip_biobank/ - LEIP biobank only: proteins vs clinical parameters and galanin (step 18, with its own PDF summary)"),
+    "trajectories/ - disease course | leip_reference/ | enrichment/ | focus/ - focus proteins (overview + one folder per protein)"),
     size = 10)
 })
 

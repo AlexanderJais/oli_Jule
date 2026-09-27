@@ -16,7 +16,6 @@ CPUO), plus serum from RELAD / RELAD2 and LEIP biobank controls.
 | Serum vs dISF per visit: overlap and what dISF adds (lesion site / non-lesional; AD vs healthy; relapse vs non-relapse) | 15 | `serum_vs_disf/` (Venn diagrams, coloured volcano plots, protein lists) |
 | **Executive summary of everything** | 16 | `Executive_summary.pdf` |
 | **Data export: all proteins, all samples (CSV); RELAD2 separately** | 17 | `export/` |
-| **LEIP biobank only: proteins vs clinical parameters; galanin (Olink GAL vs ELISA, clinical and protein correlates)** | 18 | `leip_biobank/LEIP_biobank_summary.pdf`, `leip_biobank/galanin/` |
 | Focus proteins: CD137 (TNFRSF9), TNFSF9, KITLG, CPA4, FCER1A, TPSAB1, MS4A2, TPSD1, PNOC, POSTN | 12 | `focus/focus_overview.xlsx`, `focus/focus_overview_heatmap.png`, one folder per protein |
 
 Secondary: relapse (04, 05, 11; exploratory) and RELAD/RELAD2 serum relapse (05).
@@ -42,7 +41,7 @@ To run a single step, use `Rscript scripts/0X_....R`. Each step reads what the p
 |---|---|---|
 | `data/manifest.xlsx` | Olink sample submission sheet; the `manifest` sheet is the master | `paths$manifest` |
 | `data/npx/*.parquet` | Olink NPX files, here `O-MicroAD_ISF_NPX_2026-09-24.parquet` and `O-MicroAD_Serum_NPX_2026-09-24.parquet`; all files in the folder are read, and the file name must contain ISF or Serum | `paths$npx_dir` |
-| `data/LEIP_clinical_parameters_n35.xlsx` | LEIP clinical data: sheet `Key_parameters` (steps 01, 08, 12) and, for step 18, sheet `All_SORB_parameters` with every SORB variable (optional; step 18 needs it) | `paths$leip_clinical` |
+| `data/LEIP_clinical_parameters_n35.xlsx` | LEIP clinical data, sheet `Key_parameters` (optional) | `paths$leip_clinical` |
 | `data/severity.xlsx` | optional: `SubjectID`, `Visit` (V1–V6), plus numeric scores (e.g. SCORAD, EASI, itch NRS). Step 11 then models each protein against each score | `paths$severity` |
 | `data/Explore_HT_Fixed_LOD.csv` | Olink fixed LOD file for Explore HT, version ≥ 6.0.0, from olink.com (recommended) | `paths$fixed_lod` |
 
@@ -67,7 +66,6 @@ All settings (thresholds, FDR, number of cores) are in `config.yml`.
 | `14_serum_vs_disf.R` | The same question in dISF and serum, per visit and pooled: AD vs healthy (dISF lesion site or non-lesional skin vs healthy skin; MicroAD serum AD vs healthy) and relapse vs non-relapse (only visits before the relapse). Significant sets (FDR, and p < 0.05 as exploratory) are split into both (same / opposite direction), dISF only, dISF only because the protein isn't measurable in serum, and serum only. Output: Venn diagrams, stacked bars per visit, dISF volcano plots coloured by what serum shows, and dISF vs serum effect plots. | `serum_vs_disf/*` |
 | `17_export_data.R` | CSV export of the Olink data: `samples.csv` (metadata + QC), `proteins.csv` (annotation, LOD, detection), wide tables per matrix (samples × proteins) as delivered (`NPX`) and as analysed (`PCNormalizedNPX`), a long table (`NPX_long.csv.gz`) with LOD and QC flags, and `export/RELAD2/` with the RELAD2 samples only. Values below LOD are kept as measured. For German Excel set `export: sep: ";"` in `config.yml`. | `export/*` |
 | `16_summary_report.R` | Executive summary PDF: data and QC, automatically extracted key findings per aim, all comparisons, visit course, volcano plots, pathways, dISF vs serum, serum, focus proteins, methods and caveats. Each section is skipped with a note if its step did not run. | `Executive_summary.pdf` |
-| `18_leip_biobank.R` | **LEIP biobank sera only.** Proteins measurable in LEIP (≥ `qc$min_detect_frac` of the LEIP samples above LOD) vs every clinical variable of the LEIP file (`Key_parameters` + `All_SORB_parameters`), and a dedicated galanin analysis (see below). Own PDF summary and `answers.csv`. Needs only steps 01–02. | `leip_biobank/*` |
 | `08_leip_reference.R` | For the proteins significant in step 06: LEIP normal range, where AD patients fall in it, clinical associations in LEIP, detectability, and LEIP vs in-study controls. | `leip_reference/*` (incl. `.xlsx`) |
 
 ### Models
@@ -91,13 +89,6 @@ BH FDR is applied within each contrast.
 - `MicroAD_relapse`: relapsers vs non-relapsers at cleared visits.
 - `RELAD_relapse`: RELAD and RELAD2, adjusted for cohort and plate, plus a sensitivity analysis without the samples with conflicting relapse labels.
 
-### LEIP biobank analysis (18)
-
-- **Clinical variables.** `Key_parameters` plus every further column of `All_SORB_parameters`, linked by Olink sample ID; SubjectID and Olink plate are checked against the manifest (`sample_check.csv`). Column names are made ASCII (µ → u, umlauts lose their dots); `sex_MF` becomes `sex_male` (1 = M), the ELISA column `galanin_elisa`. Not tested: identifiers and technical columns, `ln_`/`lg_` copies, variables without variation, with < `min_n` values or with < `min_group` samples outside the most common value, coarsened copies listed in `leip_biobank$exclude_parameters`, and variables whose ranks equal an earlier one (|Spearman| ≥ 0.99, e.g. glucose in mmol/l and mg/dl, HOMA-IS = 1/HOMA-IR). The reason for every variable is in `parameters.csv`.
-- **Statistics.** Spearman correlation (t approximation as `cor.test(exact = FALSE)`, Fisher-z CI with the Bonett–Wright variance). Adjusted: partial Spearman for `leip_biobank$adjust_for` (default age, sex, Olink plate): all variables ranked, covariates regressed out, Pearson correlation of the residuals (as in ppcor). Samples with a missing value are dropped per protein. BH-FDR over the proteins of each parameter. Binary variables also get the median NPX difference.
-- **Galanin.** Pre-specified, so single-test p-values are primary and it is analysed even if it fails the detection filter. Olink GAL vs ELISA: Spearman (all; adjusted for Olink plate; within plates; above LOD only; without flagged samples), OLS slope of NPX on log2(ELISA) (1 = same fold-change), tertile agreement with linear-weighted kappa, rank of GAL among all proteins correlated with the ELISA, Kruskal–Wallis checks of plate effects. Benchmark: the same for every lab value with an Olink counterpart (`leip_biobank$lab_vs_olink`). Olink GAL and the ELISA vs every clinical variable (unadjusted and adjusted), and the agreement of their two correlation profiles. Olink GAL vs every protein, with fgsea on the rho ranking (collections of `enrichment`).
-- **Sanity checks** (`leip_biobank$expected_associations`): associations known from population proteomics; recovered = p < 0.05 in the expected direction.
-
 ## Design decisions
 
 - **`PCNormalizedNPX` is analysed, not intensity-normalised NPX.** Plate 1 is ISF only, plate 2 is mixed, and plates 3–4 are serum. Intensity normalisation assumes randomised samples of one matrix and would distort plate 2. Step 02 reports the `Normalization` column of the delivered file.
@@ -115,6 +106,6 @@ BH FDR is applied within each contrast.
 Rscript tests/test_pipeline.R
 ```
 
-This needs no study data. It builds a synthetic manifest (and a LEIP clinical file with both sheets) with the same layout and design, simulates the two Olink NPX files (ISF, serum) with known effects, runs all
+This needs no study data. It builds a synthetic manifest with the same layout and design, simulates the two Olink NPX files (ISF, serum) with known effects, runs all
 steps with `data_sim/config_sim.yml` (output in `output_sim/`), and checks that the effects are
 recovered and false positives stay rare.

@@ -13,3 +13,6 @@ output/
 .Rproj.user/
 data_sim/
 output_sim/
+
+# LEIP galanin study: invented test data (outputs are covered by output/ above)
+leip_galanin/tests/data/

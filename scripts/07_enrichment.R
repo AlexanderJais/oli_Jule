@@ -11,7 +11,12 @@ if (!length(files)) stop("No model results found - run scripts 04 and 05 first."
 res <- map(files, \(f) read_csv(f, show_col_types = FALSE) |> mutate(file = basename(f))) |> bind_rows()
 
 collections <- cfg$enrichment$collections
-sets <- load_gene_sets(collections)
+sets <- map(collections, \(cl) {
+  parts <- str_split_fixed(cl, ":", 2)
+  g <- if (parts[2] == "") msigdbr::msigdbr(species = "Homo sapiens", collection = parts[1])
+       else msigdbr::msigdbr(species = "Homo sapiens", collection = parts[1], subcollection = parts[2])
+  split(g$gene_symbol, g$gs_name)
+}) |> unlist(recursive = FALSE)
 sets[["CUSTOM_AD_TH2_AXIS"]] <- c("CCL17", "CCL22", "CCL18", "CCL26", "CCL11", "CCL13", "CCL24", "IL13",
                                   "IL4", "IL5", "IL31", "IL4R", "IL13RA2", "TSLP", "POSTN")
 msg("%d gene sets from %s + custom Th2 set", length(sets), paste(collections, collapse = ", "))
