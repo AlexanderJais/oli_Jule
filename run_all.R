@@ -23,7 +23,7 @@ if (any(!inputs$found & inputs$required == "yes"))
   stop("Missing input file(s) - see data/README.md.", call. = FALSE)
 
 rscript <- file.path(R.home("bin"), "Rscript")   # works on Windows/RStudio without Rscript on PATH
-steps <- file.path("scripts", c("01_data.R", "02_elisa_validation.R", "03_galanin_correlates.R",
+steps <- file.path("scripts", c("01_data.R", "02_elisa_validation.R", "03_olink_galanin.R",
                                 "04_galanin_hdl.R", "05_clinical_screen.R", "06_report.R"))
 if (!exists("start_at")) start_at <- 1
 if (start_at > 1) message("Starting at step ", start_at, " (reusing earlier results)")

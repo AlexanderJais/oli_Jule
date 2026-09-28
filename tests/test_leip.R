@@ -22,7 +22,8 @@ smp <- rd("0_data", "samples.csv"); chk <- rd("0_data", "sample_checks.csv")
 det <- rd("0_data", "detection.csv") |> left_join(truth, by = c("OlinkID", "Assay"))
 agr <- rd("1_elisa_validation", "agreement.csv") |> filter(analysis == "all samples")
 ev  <- rd("1_elisa_validation", "ELISA_vs_all_proteins.csv"); bm <- rd("1_elisa_validation", "lab_vs_Olink_benchmark.csv")
-ne  <- rd("2_galanin_correlates", "neuroendocrine_proteins.csv") |> filter(measure == "Olink GAL")
+ne  <- rd("2_olink_galanin", "neuroendocrine_proteins.csv"); gcl <- rd("2_olink_galanin", "olink_galanin_vs_clinical.csv")
+pcs <- rd("2_olink_galanin", "proteome_axes.csv"); gpr <- rd("2_olink_galanin", "olink_galanin_vs_proteins.csv")
 lip <- rd("3_galanin_hdl", "galanin_vs_lipids.csv"); hp <- rd("3_galanin_hdl", "lipoprotein_proteins.csv")
 dsc <- rd("3_galanin_hdl", "discordance_vs_HDL.csv") |> filter(with == "HDL cholesterol", discordance == "signed", analysis == "all persons")
 ahd <- rd("3_galanin_hdl", "agreement_by_HDL.csv"); agr_all <- rd("1_elisa_validation", "agreement.csv")
@@ -35,7 +36,7 @@ partners <- c("CHGA", "NPY", "SCG2")
 source("R/leip.R"); set.seed(1)
 sim <- tibble(h = rnorm(300), x = rnorm(300), y = x * (0.7 - 0.5 * h) + rnorm(300, 0, 0.5))
 sim_int <- agreement_interaction(sim$x, sim$y, sim$h); sim_null <- agreement_interaction(sim$x, rnorm(300), sim$h)
-unlinked <- c("age", "WHR", "c_fett", "Gluc0_mg_dl", "HOMA_IR", "c_CRP", "MDRD_kurz", "C_TRIGLY", "IL10", "RESTRAINT", "c_tsh")
+unlinked <- c("WHR", "c_fett", "Gluc0_mg_dl", "HOMA_IR", "c_CRP", "MDRD_kurz", "C_TRIGLY", "IL10", "RESTRAINT", "c_tsh")
 stopifnot(
   "01: the failed sample was not left out, or the checks miss it" =
     !"S216" %in% smp$SampleID && grepl("failed", chk$problem[chk$SampleID == "S216"]) && grepl("warning", chk$problem[chk$SampleID == "S190"]),
@@ -48,8 +49,13 @@ stopifnot(
     nrow(swapped) == 2 && all(grepl("possible swap", swapped$fit)) && sum(grepl("possible swap", idt$fit)) <= 3,
   "02: agreement within sex or plate table missing" = all(c("women only", "men only", "adjusted for sex and Olink plate") %in% agr_all$analysis) &&
     file.exists(file.path(out, "1_elisa_validation", "plate_effects.csv")),
-  "03: proteins released together with galanin not found" = all(ne$p[ne$gene %in% partners] < 0.05),
-  "03: false hits among the other neuroendocrine proteins" = sum(ne$p[!ne$gene %in% partners] < 0.05) <= 1,
+  "2a: the ELISA must not be used in the Olink-only analysis" = !"galanin_elisa" %in% gcl$parameter,
+  "2a: built-in link of Olink GAL with age not found" = gcl$rho[gcl$parameter == "age"] < -0.3 && gcl$p[gcl$parameter == "age"] < 0.05,
+  "2a: too many false hits among clinical variables without a link to Olink GAL" = sum(gcl$fdr[gcl$parameter %in% unlinked] < 0.05) <= 1,
+  "2b: proteins released together with galanin not found (adjusted for age, sex, plate: GAL also falls with age)" =
+    all(ne$p_adj[ne$gene %in% partners] < 0.05),
+  "2b: false hits among the other neuroendocrine proteins" = sum(ne$p_adj[!ne$gene %in% partners] < 0.05) <= 1,
+  "2b: protein table or proteome axes missing" = nrow(pcs) >= 3 && !any(gpr$Assay == "GAL") && nrow(gpr) > 200,
   "04: galanin ELISA - HDL link (built in within sex) not found" =
     lp("galanin ELISA", "C_HDL", "all persons")$rho > 0.4 && lp("galanin ELISA", "C_HDL", "adjusted for sex")$p < 0.05,
   "04: galanin ELISA wrongly linked to LDL" = abs(lp("galanin ELISA", "C_LDL", "adjusted for sex")$rho) < 0.4,
@@ -63,6 +69,7 @@ stopifnot(
   "05: too many false hits for clinical variables without a built-in link" = sum(scr$significant[scr$parameter %in% unlinked]) <= 2,
   "06: report or answers incomplete" = file.size(file.path(out, "LEIP_galanin_report.pdf")) > 50000 &&
     all(c("1", "2", "3", "S") %in% substr(ans$question, 1, 1)) &&
-    any(grepl("agreement weaken", ans$item)) && any(grepl("correctly matched", ans$item))
+    any(grepl("agreement weaken", ans$item)) && any(grepl("correctly matched", ans$item)) &&
+    any(grepl("^2a", ans$item)) && any(grepl("^2b", ans$item)) && any(grepl("follow instead", ans$item))
 )
 msg("All LEIP galanin checks passed.")

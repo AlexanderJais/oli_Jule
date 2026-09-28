@@ -12,6 +12,7 @@
 #     shows whether the clinical file and the Olink samples are correctly matched - overall, and per
 #     person (does the profile of lab values match the person's own Olink sample best?)
 #   - technical factors: Olink plate, ELISA plate
+#   - what does the ELISA follow instead? proteins, gene sets (GSEA) and clinical parameters
 # Out: output/1_elisa_validation/
 
 source("R/utils.R")
@@ -21,6 +22,7 @@ set.seed(cfg$seed %||% 1)
 d <- leip_load(cfg)
 clear_outputs(cfg, "1_elisa_validation")
 Q <- "1 Does Olink confirm the galanin ELISA?"
+fdr_cut <- cfg$fdr %||% 0.05
 ans <- answers_new()
 if (!d$has_gal || !d$has_elisa) {
   answer(ans, Q, "Olink GAL vs ELISA", "not possible",
@@ -170,6 +172,21 @@ if (nrow(idp) >= 3) {
     arrange(desc(own_rank), desc(own_distance))
 }
 
+# ---- what does the ELISA follow instead? clinical parameters and gene sets ----------------------------------------------------------
+params <- setdiff(d$pinfo$parameter[d$pinfo$analysed], "galanin_elisa")
+cov_e <- setdiff(d$cov, "plate")                                    # the ELISA was not run on the Olink plates
+clin_e <- map(params, \(pm) {
+  u <- spearman1(S[[pm]], d$elisa, min_n = 10)
+  a <- spearman1(S[[pm]], d$elisa, { z <- S[setdiff(cov_e, pm)]; if (ncol(z)) z }, min_n = 10)
+  tibble(parameter = pm, n = u$n, rho = u$rho, ci_low = u$ci_low, ci_high = u$ci_high, p = u$p, rho_adj = a$rho, p_adj = a$p)
+}) |> bind_rows() |> mutate(fdr = p.adjust(p, "BH")) |> relocate(fdr, .after = p) |>
+  left_join(d$pinfo |> select(parameter, label, type, key), by = "parameter") |> relocate(parameter, label, type, key) |> arrange(p)
+gsea_e <- NULL
+if (isTRUE(cfg$gsea$run %||% TRUE) && nrow(ev) >= 50)
+  gsea_e <- tryCatch(rank_gsea(ev$Assay, ev$rho, cfg$gsea$collections %||% c("H", "C2:CP:REACTOME", "C5:GO:BP"),
+                               cfg$gsea$min_size %||% 10, cfg$gsea$max_size %||% 500),
+                     error = \(e) { msg("Gene-set enrichment skipped: %s", conditionMessage(e)); NULL })
+
 # ---- answers -------------------------------------------------------------------------------------------------------------------------
 verdict <- case_when(is.na(a0$p) ~ "not enough data",
                      a0$p < 0.05 & a0$rho >= 0.5 ~ "yes: both methods rank the samples similarly",
@@ -226,6 +243,15 @@ answer(ans, Q, "Per person: does each Olink sample belong to the right person?",
          "The 3 persons where ELISA and Olink galanin disagree most: ",
          paste(sprintf("%s (own sample rank %s)", top_g$SubjectID, coalesce(as.character(top_g$own_rank), "n/a")), collapse = ", "),
          ". If their own samples fit well, the galanin disagreement is not a sample swap on the Olink side; it then lies in the galanin measurements (or a mix-up of the ELISA values only)."))
+he <- clin_e |> filter(p < 0.05); ge <- if (!is.null(gsea_e)) gsea_e |> filter(padj < fdr_cut) else tibble()
+answer(ans, Q, "What does the ELISA follow instead? (proteins, gene sets, clinical parameters)",
+       sprintf("%d proteins at FDR < %g; %s; %d of %d clinical parameters at p < 0.05 (about %.1f expected by chance)",
+               sum(ev$fdr < fdr_cut, na.rm = TRUE), fdr_cut, if (is.null(gsea_e)) "gene sets not tested" else sprintf("%d gene sets at padj < %g", nrow(ge), fdr_cut),
+               nrow(he), sum(!is.na(clin_e$p)), 0.05 * sum(!is.na(clin_e$p))),
+       paste0(if (nrow(ge)) paste0("Gene sets: ", paste(head(sprintf("%s (NES %+.1f)", ge$pathway, ge$NES), 5), collapse = "; "), ". ") else "",
+              if (nrow(he)) paste0("Clinical: ", paste(head(sprintf("%s %+.2f (p = %s; adjusted for %s %+.2f, p = %s)", he$label, he$rho, fmt_p(he$p),
+                                                                    covs_label(cov_e), he$rho_adj, fmt_p(he$p_adj)), 10), collapse = "; "), ". ") else "",
+              "An ELISA that follows other proteins or processes more than galanin may measure something else as well (cross-reactivity, matrix effects)."))
 interp <- case_when(
   is.na(fa) | is.na(a0$rho) ~ "not enough data to judge",
   fa < 0.5 ~ "Olink GAL is mostly below LOD, so Olink cannot validate the ELISA here",
@@ -311,9 +337,12 @@ if (nrow(plate_fx)) save_csv(plate_fx, cfg, "1_elisa_validation", "plate_effects
 save_csv(bench, cfg, "1_elisa_validation", "lab_vs_Olink_benchmark.csv")
 if (nrow(ident)) save_csv(ident, cfg, "1_elisa_validation", "sample_identity.csv")
 save_csv(ev, cfg, "1_elisa_validation", "ELISA_vs_all_proteins.csv")
+save_csv(clin_e, cfg, "1_elisa_validation", "ELISA_vs_clinical.csv")
+if (!is.null(gsea_e)) save_csv(gsea_e, cfg, "1_elisa_validation", "ELISA_gene_sets.csv")
 save_csv(samples, cfg, "1_elisa_validation", "galanin_values_per_sample.csv")
 writexl::write_xlsx(list(answers = answers, GAL_detection = gdet, agreement = agree, leave_one_out = loo, tertiles = tert_tab,
                          tertile_agreement = tert, plate_effects = plate_fx, lab_vs_Olink = bench, sample_identity = ident, ELISA_vs_proteins = ev,
+                         ELISA_vs_clinical = clin_e, ELISA_gene_sets = gsea_e %||% tibble(),
                          protein_profiles = prof |> arrange(desc(abs(rho_GAL) + abs(rho_ELISA))),
                          profile_test = tibble(proteins = nrow(prof), r = prof_r, permutations = B, p = prof_p),
                          samples = samples) |> keep(\(x) is.data.frame(x) && ncol(x) > 0),

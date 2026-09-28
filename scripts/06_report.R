@@ -7,7 +7,7 @@ source("R/leip.R")
 cfg <- load_config()
 d <- leip_load(cfg)
 S <- d$S
-dirs <- c("1_elisa_validation", "2_galanin_correlates", "3_galanin_hdl", "4_clinical_screen")
+dirs <- c("1_elisa_validation", "2_olink_galanin", "3_galanin_hdl", "4_clinical_screen")
 answers <- map(dirs, \(x) out_csv(cfg, x, "answers.csv")) |> compact() |> bind_rows()
 save_csv(answers, cfg, "answers.csv")
 figs <- map(setNames(dirs, dirs), \(x) { f <- file.path(cfg$paths$output, x, "figures.rds"); if (file.exists(f)) readRDS(f) else list() })
@@ -26,9 +26,9 @@ section("Overview", {
   hdl_sex <- if (all(c("C_HDL", "sex_male") %in% names(S)))
     sprintf("HDL cholesterol: women %s, men %s mmol/l; galanin ELISA: women %s, men %s pg/mL.", q(S$C_HDL[S$sex_male %in% 0], 2),
             q(S$C_HDL[S$sex_male %in% 1], 2), q(d$elisa[S$sex_male %in% 0], 0), q(d$elisa[S$sex_male %in% 1], 0)) else NULL
-  page_text("LEIP cohort: galanin - Olink validation of the ELISA, galanin correlates, galanin and HDL", c(
+  page_text("LEIP cohort: galanin - Olink validation of the ELISA, Olink galanin, galanin and HDL", c(
     "## Questions",
-    "1. Does Olink confirm the galanin ELISA?  2. What does galanin correlate with (Olink proteins, clinical data)?  3. Is galanin related to HDL - could it bind to HDL particles?  Supplementary: all proteins vs all clinical parameters, with sanity checks.",
+    "1. Does Olink confirm the galanin ELISA?  2. Olink galanin on its own, the ELISA ignored: 2a which clinical parameters and 2b which other Olink proteins go with it?  3. Is galanin related to HDL - could it bind to HDL particles?  Supplementary: all proteins vs all clinical parameters, with sanity checks.",
     "## Samples",
     sprintf("%d LEIP biobank sera in the Olink data after QC, %d with clinical data: %d women, %d men; age %s years; BMI %s.",
             nrow(S), n_clin, sum(sx == 0, na.rm = TRUE), sum(sx == 1, na.rm = TRUE), q(col_or(S, "age")), q(col_or(S, "BMI"))),
@@ -80,20 +80,48 @@ section("1 Olink vs ELISA", {
                note = "worst fits first, plus the 3 largest galanin disagreements; own_rank 1 = the own Olink sample fits best; possible swap: own sample not among the best 25%; all persons: 1_elisa_validation/sample_identity.csv")
   show("1_elisa_validation", "profiles")
   show("1_elisa_validation", "elisa_volcano")
+  ec <- out_csv(cfg, "1_elisa_validation", "ELISA_vs_clinical.csv")
+  if (!is.null(ec)) page_table("1  What does the ELISA follow instead? Clinical parameters with p < 0.05",
+                               ec |> filter(p < 0.05) |> select(parameter = label, n, rho, p, fdr, rho_adj, p_adj),
+                               note = sprintf("adjusted: partial Spearman for %s; about %.1f of %d parameters reach p < 0.05 by chance", covs_label(setdiff(d$cov, "plate")),
+                                              0.05 * nrow(ec), nrow(ec)))
+  eg <- out_csv(cfg, "1_elisa_validation", "ELISA_gene_sets.csv")
+  if (!is.null(eg) && nrow(eg)) page_table("1  What does the ELISA follow instead? Gene sets (GSEA, top 15 by p)",
+                                           eg |> slice_min(pval, n = 15, with_ties = FALSE) |> transmute(pathway = str_trunc(pathway, 60), size, NES, pval, padj),
+                                           note = "GSEA on the ranking of all proteins by their correlation with the ELISA")
 })
-section("2 Galanin correlates", {
-  if (!is.null(figs[["2_galanin_correlates"]]$volcano_GAL)) show("2_galanin_correlates", "volcano_GAL")
-  if (!is.null(figs[["2_galanin_correlates"]]$neuroendocrine)) show("2_galanin_correlates", "neuroendocrine")
-  pr <- tab("2_galanin_correlates", "galanin_vs_all_proteins.csv")
-  for (m in unique(pr$measure))
-    page_table(sprintf("2  Proteins most strongly correlated with the %s", m),
-               pr |> filter(measure == m) |> head(30) |> select(protein, n, rho, p, fdr, rho_adj, p_adj),
-               note = sprintf("adjusted: partial Spearman for %s; all proteins: 2_galanin_correlates/galanin_vs_all_proteins.csv", covs_label(d$cov)))
-  gs <- out_csv(cfg, "2_galanin_correlates", "gene_sets.csv")
-  if (!is.null(gs) && nrow(gs)) page_table("2  Gene sets (GSEA on the galanin correlation ranking)",
-                                           gs |> group_by(measure) |> slice_min(pval, n = 12, with_ties = FALSE) |> ungroup() |>
-                                             transmute(measure, pathway = str_trunc(pathway, 55), size, NES, pval, padj))
-  if (!is.null(figs[["2_galanin_correlates"]]$clinical)) show("2_galanin_correlates", "clinical")
+section("2 Olink galanin on its own (ELISA ignored)", {
+  g2 <- "2_olink_galanin"
+  show_if <- \(n) if (!is.null(figs[[g2]][[n]])) show(g2, n)
+  show_if("clinical")
+  cl <- tab(g2, "olink_galanin_vs_clinical.csv")
+  page_table("2a  Olink galanin vs clinical parameters: p < 0.05 unadjusted or adjusted",
+             cl |> filter(coalesce(p < 0.05 | p_adj < 0.05, FALSE)) |>
+               select(parameter = label, n, rho, p, fdr, rho_adj, p_adj, rho_women, rho_men, loo_min, loo_max, robust),
+             note = sprintf("adjusted: partial Spearman for %s; loo = range of rho leaving out one person; robust: see the answers. All: %s/olink_galanin_vs_clinical.csv",
+                            covs_label(d$cov), g2))
+  show_if("clinical_scatter")
+  tf <- out_csv(cfg, g2, "technical_factors.csv")
+  if (!is.null(tf)) page_table("2a  Technical factors: plates and flagged samples",
+                               tf |> separate_rows(detail, sep = "; ") |>
+                                 mutate(across(c(n_flagged, p), \(v) if_else(factor == lag(factor, default = ""), NA, v)),
+                                        factor = if_else(factor == lag(factor, default = ""), "", factor)),
+                               note = "Olink plate: median GAL NPX per plate, Kruskal-Wallis p; flagged samples: GAL z-score (p only with >= 3 flagged)")
+  show_if("volcano")
+  page_table("2b  Proteins most strongly correlated with Olink galanin", tab(g2, "olink_galanin_vs_proteins.csv") |> head(30) |>
+               select(protein, n, rho, p, fdr, rho_adj, p_adj, frac_above_lod),
+             note = sprintf("adjusted: partial Spearman for %s; all proteins: %s/olink_galanin_vs_proteins.csv", covs_label(d$cov), g2))
+  show_if("top_proteins")
+  show_if("heatmap")
+  show_if("neuroendocrine")
+  gs <- out_csv(cfg, g2, "gene_sets.csv")
+  if (!is.null(gs) && nrow(gs)) page_table("2b  Gene sets (GSEA on the ranking by correlation with Olink galanin)",
+                                           gs |> slice_min(pval, n = 20, with_ties = FALSE) |> transmute(pathway = str_trunc(pathway, 60), size, NES, pval, padj))
+  show_if("proteome_axes")
+  pa <- out_csv(cfg, g2, "proteome_axes.csv")
+  if (!is.null(pa) && nrow(pa)) page_table("2b  Main axes of the serum proteome (principal components)",
+                                           pa |> transmute(component, variance_pct, rho_GAL, p_GAL, plate_p, strongest_clinical, top_proteins = str_trunc(top_proteins, 38)),
+                                           note = "top_proteins: the proteins most correlated with each component (all in proteome_axes.csv)")
 })
 section("3 Galanin and HDL", {
   show("3_galanin_hdl", "hdl_by_sex")
@@ -129,13 +157,13 @@ section("Methods", page_text("Methods, caveats and files", c(
   "## Data",
   "LEIP biobank sera (population controls) of the O-MicroAD Olink Explore HT run. The LEIP samples are the rows of the clinical file (Olink_SampleID). Olink values: PC-normalised NPX from the delivered parquet file, LOD from the Olink fixed LOD file (per sample for count-based assays), samples failing Olink QC left out. Clinical data: sheet Key_parameters plus all further variables of sheet All_SORB_parameters; identifiers, log copies, constants, too-small groups and duplicate variables are not tested (0_data/parameters.csv).",
   "## Statistics",
-  "Spearman correlation, p-value from the t approximation, 95% CI by Fisher z (Bonett-Wright). Partial Spearman: all variables ranked, covariates regressed out. Differences between two correlations with galanin (e.g. HDL vs LDL): bootstrap over persons. Sample identity per person: distance between the lab values and the Olink values of the benchmark proteins (rank-based normal scores, weighted by 1 / (2 (1 - rho))); the own sample should be among the best matches. Olink vs ELISA: also adjusted for sex, within each sex, within plates, above LOD, without flagged samples, leave-one-out, tertile agreement (weighted kappa), NPX per doubling of the ELISA; specificity = rank of Olink GAL among all proteins correlated with the ELISA, and agreement of the two protein-correlation profiles (permutation test). Gene sets: fgsea on the rho ranking.",
+  "Spearman correlation, p-value from the t approximation, 95% CI by Fisher z (Bonett-Wright). Partial Spearman: all variables ranked, covariates regressed out. Olink galanin on its own (2): the ELISA is not used; clinical parameters also within each sex and leaving out one person at a time; proteome axes = principal components of all measurable proteins (scaled; missing values replaced by the protein median). Differences between two correlations with galanin (e.g. HDL vs LDL): bootstrap over persons. Sample identity per person: distance between the lab values and the Olink values of the benchmark proteins (rank-based normal scores, weighted by 1 / (2 (1 - rho))); the own sample should be among the best matches. Olink vs ELISA: also adjusted for sex, within each sex, within plates, above LOD, without flagged samples, leave-one-out, tertile agreement (weighted kappa), NPX per doubling of the ELISA; specificity = rank of Olink GAL among all proteins correlated with the ELISA, and agreement of the two protein-correlation profiles (permutation test). Gene sets: fgsea on the rho ranking.",
   "Added after the first results (exploratory): does the ELISA-Olink agreement weaken as HDL rises - linear model of Olink GAL on ELISA x HDL on standardised ranks (+ sex, Olink plate) - and the size of the disagreement |z(ELISA) - z(Olink GAL)| vs HDL. Sanity checks are judged adjusted for age, sex and Olink plate.",
   "## Caveats",
   "n = 34: exploratory; weak correlations are missed and single p < 0.05 results can be chance (with ~3000 proteins, |rho| of about 0.55 occurs by chance alone). Correlation is not binding: the HDL analysis shows whether the data are compatible with binding; experiments are needed (see the last answer of 3).",
   "Sex matters: women have higher HDL, and galanin may differ by sex; results adjusted for sex and within each sex are shown.",
   "NPX is relative: Olink and the ELISA can only agree in ranking. The Olink assay targets the galanin precursor (UniProt P22466); a galanin ELISA may detect the mature peptide or other fragments. Biobank serum was not collected for peptide measurements (proteolysis).",
   "## Files (output/)",
-  "answers.csv | 0_data/ (samples, checks, detection, parameters) | 1_elisa_validation/ | 2_galanin_correlates/ | 3_galanin_hdl/ | 4_clinical_screen/ - each with an .xlsx of all its tables and the figures")))
+  "answers.csv | 0_data/ (samples, checks, detection, parameters) | 1_elisa_validation/ | 2_olink_galanin/ | 3_galanin_hdl/ | 4_clinical_screen/ - each with an .xlsx of all its tables and the figures")))
 invisible(grDevices::dev.off())
 msg("Report: %s", out_file)

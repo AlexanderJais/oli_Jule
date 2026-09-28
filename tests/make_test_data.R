@@ -7,7 +7,7 @@
 # Built-in truth:
 #   - the galanin ELISA rises with HDL (also within each sex) and is a little higher in women
 #   - Olink GAL follows the ELISA, but less where HDL is high (as if HDL-bound galanin escaped the
-#     Olink assay), and shares a factor with CHGA, NPY and SCG2
+#     Olink assay), shares a factor with CHGA, NPY and SCG2, and falls with age (the ELISA does not)
 #   - the Olink HDL proteins (APOA1, APOA2, APOM, LCAT, PON1, PON3, CLU) follow HDL, APOB follows LDL
 #   - LEP follows BMI and sex; FABP4, LPA, GRN and RARRES2 follow their lab values (A-FABP, Lp(a),
 #     progranulin, chemerin); 15 proteins are below LOD; all else is noise
@@ -28,7 +28,7 @@ p <- tibble(SampleID = sprintf("S%03d", 181 + seq_len(n)), SubjectID = sprintf("
          C_LDL = round(rnorm(n, 3, 0.8), 2), C_TRIGLY = round(rlnorm(n, 0, 0.4), 2),
          C_CHOL = round(C_LDL + C_HDL + C_TRIGLY / 2.2 + rnorm(n, 0, 0.2), 2),
          C_APO_B = round(0.3 + 0.18 * C_LDL + rnorm(n, 0, 0.08), 2), C_LIPO = round(rlnorm(n, log(0.15), 1), 3),
-         hdl_z = as.numeric(scale(C_HDL)), ldl_z = as.numeric(scale(C_LDL)),
+         hdl_z = as.numeric(scale(C_HDL)), ldl_z = as.numeric(scale(C_LDL)), age_z = as.numeric(scale(age)),
          log2_elisa = 7.1 + 0.25 * hdl_z + 0.15 * female + rnorm(n, 0, 0.3),
          galanin = round(2^log2_elisa, 1),
          c_AFABP4 = round(rlnorm(n, log(12), 0.45), 2), IL10 = round(rlnorm(n, log(5), 0.8), 2),
@@ -80,7 +80,7 @@ for (i in seq_len(nrow(wells))) {
   k <- match(coalesce(swap[w$SampleID], w$SampleID), p$SampleID)
   if (!is.na(k)) {
     q <- p[k, ]
-    x <- x + (role == "galanin") * (1.5 * (q$log2_elisa - 7.1) - 0.2 * q$hdl_z + 0.5 * q$z_ne) +
+    x <- x + (role == "galanin") * (1.5 * (q$log2_elisa - 7.1) - 0.2 * q$hdl_z + 0.5 * q$z_ne - 0.4 * q$age_z) +
       (role == "GAL_partner") * 0.9 * q$z_ne + (role == "HDL_protein") * 0.5 * q$hdl_z + (role == "LDL_protein") * 0.5 * q$ldl_z +
       (assays$Assay == "LEP") * (0.15 * (q$BMI - 25) + 0.5 * q$female) + (assays$Assay == "FABP4") * log2(q$c_AFABP4 / 12) +
       (assays$Assay == "LPA") * 0.5 * log2(q$C_LIPO / 0.15) + (assays$Assay == "GRN") * log2(q$Progranulin / 100) +
