@@ -30,6 +30,8 @@ ahd <- rd("3_galanin_hdl", "agreement_by_HDL.csv"); agr_all <- rd("1_elisa_valid
 idt <- rd("1_elisa_validation", "sample_identity.csv"); swapped <- idt |> filter(SubjectID %in% c("LEIP_05", "LEIP_06"))
 scr <- rd("4_clinical_screen", "associations_all.csv.gz"); san <- rd("4_clinical_screen", "sanity_checks.csv")
 ppm <- rd("4_clinical_screen", "per_parameter.csv")
+pk  <- rd("paper_platelets", "key_results.csv"); pv <- \(item) pk$value[pk$item == item]
+pfig <- file.path(out, "paper_platelets", c(paste0("Figure", 1:3), paste0("FigureS", 1:3)))
 ans <- rd("answers.csv")
 lp  <- \(m, l, a) lip |> filter(measure == m, lipid == l, analysis == a)
 partners <- c("CHGA", "NPY", "SCG2")
@@ -70,6 +72,12 @@ stopifnot(
   "05: too many false hits for clinical variables without a built-in link" = sum(scr$significant[scr$parameter %in% unlinked]) <= 2,
   "05: per-parameter protein lists wrong" = grepl("LEP", ppm$proteins[ppm$parameter == "BMI"]) &&
     all(ppm$n_significant == map_int(ppm$parameter, \(x) sum(scr$significant[scr$parameter == x]))),
+  "07: paper figures missing" = all(file.exists(c(paste0(pfig, ".pdf"), paste0(pfig, ".png"), paste0(pfig, ".tiff")))) &&
+    all(file.exists(file.path(out, "paper_platelets", c("figure_legends.md", "source_data.xlsx")))),
+  "07: built-in link of GAL with the platelet release factor not found" =
+    as.numeric(str_match(pv("GAL vs platelet score"), "rho = ([-0-9.]+)")[, 2]) > 0.3 &&
+    as.numeric(pv("random protein sets of the same size: one-sided p")) < 0.05,
+  "07: the platelet protein below LOD was used" = grepl("^10 of|^11 of", pv("platelet proteins used")) && !grepl("CD40LG", pv("platelet proteins used")),
   "06: report or answers incomplete" = file.size(file.path(out, "LEIP_galanin_report.pdf")) > 50000 &&
     all(c("1", "2", "3", "4") %in% substr(ans$question, 1, 1)) &&
     any(grepl("agreement weaken", ans$item)) && any(grepl("correctly matched", ans$item)) &&

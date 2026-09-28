@@ -24,7 +24,7 @@ if (any(!inputs$found & inputs$required == "yes"))
 
 rscript <- file.path(R.home("bin"), "Rscript")   # works on Windows/RStudio without Rscript on PATH
 steps <- file.path("scripts", c("01_data.R", "02_elisa_validation.R", "03_olink_galanin.R",
-                                "04_galanin_hdl.R", "05_clinical_screen.R", "06_report.R"))
+                                "04_galanin_hdl.R", "05_clinical_screen.R", "06_report.R", "07_platelet_figures.R"))
 if (!exists("start_at")) start_at <- 1
 if (start_at > 1) message("Starting at step ", start_at, " (reusing earlier results)")
 for (s in steps[start_at:length(steps)]) {
@@ -32,4 +32,4 @@ for (s in steps[start_at:length(steps)]) {
   status <- system2(rscript, s)
   if (status != 0) stop(s, " failed (exit ", status, ")")
 }
-message("\nDone. Start with ", file.path(p$output, "LEIP_galanin_report.pdf"))
+message("\nDone. Start with ", file.path(p$output, "LEIP_galanin_report.pdf"), "; paper figures: ", file.path(p$output, "paper_platelets"))

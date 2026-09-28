@@ -25,6 +25,21 @@ Correlations can show whether the data **fit** the idea that galanin binds HDL; 
 it. The report lists experiments that could (galanin in lipoprotein fractions, ApoA-I pull-down,
 ELISA vs Olink in HDL-depleted serum).
 
+### Paper figures: is serum galanin released from platelets?
+
+`scripts/07_platelet_figures.R` (step 7) makes journal-ready figures from the Olink data only:
+Figures 1–3 and S1–S3 as PDF (vector) plus 600-dpi PNG and TIFF, `figure_legends.md` (legends with
+the numbers filled in), `source_data.xlsx` (the data behind every panel) and `key_results.csv`, in
+`output/paper_platelets/`. It tests whether galanin rises and falls with the proteins that platelets
+release or shed when blood clots (PF4, PPBP, CXCL5, CCL5, TGF-β1, BDNF, EGF, P-selectin, GPV, GPVI …).
+The platelet set is defined from the literature in `config.yml` (`platelets:`), not by correlation
+with galanin, and is compared with random protein sets of the same size. The figures cannot show
+where galanin comes from: they show whether the serum data fit release from platelets; plasma vs
+serum and platelet releasate experiments are needed to confirm it.
+
+To make only the figures (after step 1 has run once): `start_at <- 7; source("run_all.R")`. The first
+time, install the two extra packages: `install.packages(c("cowplot", "ggrepel"))`.
+
 ---
 
 ## 2. Data
@@ -59,6 +74,7 @@ galanin follows HDL within each sex) that the analysis must find.
 | 4 | `scripts/04_galanin_hdl.R` | Question 3 |
 | 5 | `scripts/05_clinical_screen.R` | Question 4 (proteins vs all clinical parameters) and sanity checks |
 | 6 | `scripts/06_report.R` | PDF report and `answers.csv` |
+| 7 | `scripts/07_platelet_figures.R` | Paper figures: galanin and platelets (`output/paper_platelets/`) |
 
 ---
 
@@ -119,6 +135,7 @@ correlations of |rho| ≈ 0.5 also occur by chance. "Not significant" does not m
 | `R/olink.R` | Reading the Olink files and the LOD (the LOD routine of the O-MicroAD analysis, unchanged) |
 | `R/leip.R` | Clinical file, choice of clinical variables, (partial) Spearman correlations, bootstrap, answers and figures |
 | `R/report.R` | PDF pages |
+| `R/figures.R` | Paper figure style (fonts, colour-blind-safe colours, PDF/PNG/TIFF export) |
 | `data/` | Your input files (not uploaded to GitHub) – see `data/README.md` |
 | `output/` | All results (not uploaded to GitHub) |
 | `tests/` | `make_test_data.R` (invented data with known effects) and `test_leip.R` (runs everything and checks the effects are found) |

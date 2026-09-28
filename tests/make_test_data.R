@@ -12,6 +12,8 @@
 #   - LEP follows BMI and sex; FABP4, LPA, GRN and RARRES2 follow their lab values (A-FABP, Lp(a),
 #     progranulin, chemerin); 15 proteins are below LOD; all else is noise
 #   - the Olink samples of LEIP_05 and LEIP_06 are swapped (the per-person identity check must find it)
+#   - platelet proteins (PF4, PPBP, CXCL5, ... and PEAR1) share a release factor, and Olink GAL follows it
+#     in part (the paper figures of scripts/07 must find it); CD40LG is below LOD
 
 source("R/utils.R")
 set.seed(20260927)
@@ -37,7 +39,8 @@ p <- tibble(SampleID = sprintf("S%03d", 181 + seq_len(n)), SubjectID = sprintf("
 p <- bind_cols(p, local({
   seed <- .Random.seed; on.exit(assign(".Random.seed", seed, envir = globalenv()))
   set.seed(4242)
-  tibble(Progranulin = round(rlnorm(n, log(100), 0.35), 1), c_chemerin = round(rlnorm(n, log(180), 0.35), 1))
+  tibble(Progranulin = round(rlnorm(n, log(100), 0.35), 1), c_chemerin = round(rlnorm(n, log(180), 0.35), 1),
+         z_plt = rnorm(n))                                  # platelet release factor (platelet proteins, GAL)
 }))
 swap <- c(S186 = "S187", S187 = "S186")                 # Olink samples of LEIP_05 and LEIP_06 swapped
 
@@ -54,7 +57,7 @@ undetected <- assays$idx %in% sample(which(!assays$Assay %in% named), 15)
 role <- case_when(assays$Assay == "GAL" ~ "galanin", assays$Assay %in% c("CHGA", "NPY", "SCG2") ~ "GAL_partner",
                   assays$Assay %in% c("APOA1", "APOA2", "APOM", "LCAT", "PON1", "PON3", "CLU") ~ "HDL_protein",
                   assays$Assay == "APOB" ~ "LDL_protein", assays$Assay %in% c("LEP", "FABP4", "LPA", "GRN", "RARRES2") ~ "clinical_linked",
-                  undetected ~ "below_LOD", TRUE ~ "null")
+                  undetected ~ "below_LOD", assays$Assay == "PEAR1" ~ "platelet", TRUE ~ "null")
 
 # ---- samples and controls on the plates ------------------------------------------------------------------------------
 others <- tibble(SampleID = sprintf("S%03d", 1:20), plate = rep(c("Plate 3", "Plate 4"), 10))
@@ -76,11 +79,13 @@ for (i in seq_len(nrow(wells))) {
   if (w$SampleType == "NEGATIVE_CONTROL") { npx[i, ] <- nc_lvl + rnorm(na, 0, 0.3); next }
   if (w$SampleType == "PLATE_CONTROL")    { npx[i, ] <- base + rnorm(na, 0, 0.08); next }
   if (w$SampleType == "SAMPLE_CONTROL")   { npx[i, ] <- base + 0.2 + rnorm(na, 0, 0.12); next }
-  x <- base + plate_off[w$plate, ] + rnorm(na, 0, 0.35) - if (w$file == "ISF") 1 else 0
+  e <- rnorm(na, 0, 0.35); e[role == "galanin"] <- 0.5 * e[role == "galanin"]   # GAL: far above LOD, measured precisely
+  x <- base + plate_off[w$plate, ] + e - if (w$file == "ISF") 1 else 0
   k <- match(coalesce(swap[w$SampleID], w$SampleID), p$SampleID)
   if (!is.na(k)) {
     q <- p[k, ]
-    x <- x + (role == "galanin") * (1.5 * (q$log2_elisa - 7.1) - 0.2 * q$hdl_z + 0.5 * q$z_ne - 0.4 * q$age_z) +
+    x <- x + (role == "galanin") * (1.5 * (q$log2_elisa - 7.1) - 0.2 * q$hdl_z + 0.5 * q$z_ne - 0.4 * q$age_z + 0.35 * q$z_plt) +
+      (role == "platelet") * 0.9 * q$z_plt +
       (role == "GAL_partner") * 0.9 * q$z_ne + (role == "HDL_protein") * 0.5 * q$hdl_z + (role == "LDL_protein") * 0.5 * q$ldl_z +
       (assays$Assay == "LEP") * (0.15 * (q$BMI - 25) + 0.5 * q$female) + (assays$Assay == "FABP4") * log2(q$c_AFABP4 / 12) +
       (assays$Assay == "LPA") * 0.5 * log2(q$C_LIPO / 0.15) + (assays$Assay == "GRN") * log2(q$Progranulin / 100) +
@@ -89,6 +94,33 @@ for (i in seq_len(nrow(wells))) {
   x[undetected] <- nc_lvl[undetected] + 0.3 + rnorm(sum(undetected), 0, 0.3)
   npx[i, ] <- x
 }
+
+# ---- more platelet proteins: own random stream, so all other test data stay the same -----------------------------------
+extra <- ht |> filter(Gene %in% c("PF4", "PPBP", "CXCL5", "CCL5", "TGFB1", "BDNF", "EGF", "SELP", "GP5", "GP6", "CD40LG"),
+                      !Gene %in% assays$Assay) |>
+  transmute(OlinkID, UniProt, Assay = Gene, idx = na + row_number())
+extra$Block <- sort(unique(assays$Block))[(seq_len(nrow(extra)) - 1) %% n_distinct(assays$Block) + 1]   # existing blocks only
+ex <- local({
+  seed <- .Random.seed; on.exit(assign(".Random.seed", seed, envir = globalenv()))
+  set.seed(777)
+  k <- nrow(extra); b <- rnorm(k, 6, 1.5); dead <- extra$Assay == "CD40LG"
+  off <- matrix(rnorm(4 * k, 0, 0.08), 4, dimnames = list(paste("Plate", 1:4), NULL))
+  m <- matrix(NA_real_, nrow(wells), k)
+  for (i in seq_len(nrow(wells))) {
+    w <- wells[i, ]
+    if (w$SampleType == "NEGATIVE_CONTROL") { m[i, ] <- b - 5.5 + rnorm(k, 0, 0.3); next }
+    if (w$SampleType == "PLATE_CONTROL")    { m[i, ] <- b + rnorm(k, 0, 0.08); next }
+    if (w$SampleType == "SAMPLE_CONTROL")   { m[i, ] <- b + 0.2 + rnorm(k, 0, 0.12); next }
+    x <- b + off[w$plate, ] + rnorm(k, 0, 0.35) - if (w$file == "ISF") 1 else 0
+    j <- match(coalesce(swap[w$SampleID], w$SampleID), p$SampleID)
+    if (!is.na(j)) x <- x + 0.9 * p$z_plt[j]
+    x[dead] <- b[dead] - 5.5 + 0.3 + rnorm(sum(dead), 0, 0.3)
+    m[i, ] <- x
+  }
+  list(npx = m, base = b, role = if_else(dead, "below_LOD", "platelet"))
+})
+assays <- bind_rows(assays, extra |> select(names(assays)))
+npx <- cbind(npx, ex$npx); base <- c(base, ex$base); nc_lvl <- base - 5.5; role <- c(role, ex$role); na <- nrow(assays)
 
 # ---- Olink parquet files (Explore HT layout) -------------------------------------------------------------------------
 blocks <- sort(unique(assays$Block))
@@ -161,6 +193,6 @@ cfg$lab_vs_olink <- list(galanin_elisa = "GAL", c_apo = "APOA1", c_AFABP4 = "FAB
 cfg$expected_associations <- list(list(protein = "LEP", parameter = "BMI", direction = "positive"),
                                   list(protein = "APOA1", parameter = "C_HDL", direction = "positive"),
                                   list(protein = "NOT_ON_PANEL", parameter = "BMI", direction = "positive"))
-cfg$bootstrap <- 500; cfg$permutations <- 200
+cfg$bootstrap <- 500; cfg$permutations <- 200; cfg$platelets$random_sets <- 2000
 yaml::write_yaml(cfg, file.path(td, "config_test.yml"))
 message("Test data: ", nrow(p), " LEIP samples, ", na, " assays -> ", td)

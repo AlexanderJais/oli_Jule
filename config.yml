@@ -88,3 +88,14 @@ expected_associations:   # sanity checks: associations known from population pro
   - {protein: EDA2R,  parameter: age,       direction: positive}
   - {protein: KLK3,   parameter: sex_male,  direction: positive}
   - {protein: APOA1,  parameter: c_apo,     direction: positive}
+
+# Paper figures (scripts/07_platelet_figures.R): is serum galanin released from platelets?
+# The platelet set is defined from the literature, NOT by correlation with galanin: proteins made by
+# megakaryocytes / platelets that platelets release or shed when blood clots (they are much higher
+# in serum than in plasma). Only proteins on the panel and measurable in LEIP serum are used.
+platelets:
+  released: ["PF4", "PPBP", "CXCL5", "CCL5", "PDGFA", "PDGFB", "TGFB1", "BDNF", "EGF", "VEGFA", "CD40LG",
+             "ANGPT1", "SERPINE1", "SPARC", "TREML1"]              # granule cargo, released on activation
+  membrane: ["SELP", "GP5", "GP6", "GP1BA", "GP1BB", "CLEC1B", "PEAR1"]   # platelet surface proteins, shed on activation
+  gene_sets: ["GOBP_PLATELET_ACTIVATION", "REACTOME_RESPONSE_TO_ELEVATED_PLATELET_CYTOSOLIC_CA2"]   # enrichment curves (Figure 1); the Reactome set holds platelet degranulation
+  random_sets: 10000     # random protein sets of the same size (specificity of the galanin-platelet link)
