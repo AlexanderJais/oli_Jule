@@ -4,9 +4,9 @@
 # Out: output/0_data/leip_data.rds and samples.csv, sample_checks.csv, detection.csv, parameters.csv
 
 source("R/utils.R")
-source("R/qc.R")                      # add_lod(): the Olink LOD, as in the main analysis
-source("leip_galanin/R/leip.R")
-cfg <- leip_config()
+source("R/olink.R")                   # reading the Olink files; LOD as in the O-MicroAD analysis
+source("R/leip.R")
+cfg <- load_config()
 clear_outputs(cfg, "0_data")
 
 # ---- clinical file (defines the LEIP samples) -----------------------------------------------------------------------

@@ -6,8 +6,8 @@
 # Out: output/4_clinical_screen/
 
 source("R/utils.R")
-source("leip_galanin/R/leip.R")
-cfg <- leip_config()
+source("R/leip.R")
+cfg <- load_config()
 d <- leip_load(cfg)
 S <- d$S; M <- d$M
 fdr_cut <- cfg$fdr %||% 0.05

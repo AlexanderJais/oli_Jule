@@ -1,4 +1,4 @@
-# Invented test data for the LEIP galanin study (no study data needed). Writes leip_galanin/tests/data/:
+# Invented test data for the LEIP galanin study (no study data needed). Writes tests/data/:
 #   npx/LEIP_TEST_Serum_NPX.parquet  Olink Explore HT format: 35 LEIP + 20 other serum samples on 3 plates
 #   npx/LEIP_TEST_ISF_NPX.parquet    a file without LEIP samples (must be skipped)
 #   fixed_lod.csv                    Olink fixed LOD file format (every 5th assay count-based)
@@ -13,7 +13,7 @@
 
 source("R/utils.R")
 set.seed(20260927)
-td <- "leip_galanin/tests/data"
+td <- "tests/data"
 unlink(td, recursive = TRUE); dir.create(file.path(td, "npx"), recursive = TRUE)
 
 # ---- LEIP persons and clinical values ---------------------------------------------------------------------------
@@ -140,10 +140,10 @@ man <- wells |> filter(SampleType == "SAMPLE") |>
 writexl::write_xlsx(list(manifest = man), file.path(td, "manifest.xlsx"))
 write_csv(assays |> mutate(role) |> select(OlinkID, Assay, role), file.path(td, "truth.csv"))
 
-cfg <- yaml::read_yaml("leip_galanin/config.yml")
+cfg <- yaml::read_yaml("config.yml")
 cfg$paths <- list(npx_dir = file.path(td, "npx"), fixed_lod = file.path(td, "fixed_lod.csv"),
                   leip_clinical = file.path(td, "LEIP_clinical.xlsx"), manifest = file.path(td, "manifest.xlsx"),
-                  output = "leip_galanin/tests/output")
+                  output = "tests/output")
 cfg$lab_vs_olink <- list(galanin_elisa = "GAL", c_apo = "APOA1", c_AFABP4 = "FABP4", IL10 = "IL10", c_CRP = "CRP")
 cfg$expected_associations <- list(list(protein = "LEP", parameter = "BMI", direction = "positive"),
                                   list(protein = "APOA1", parameter = "C_HDL", direction = "positive"),

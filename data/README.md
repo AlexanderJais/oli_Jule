@@ -1,23 +1,20 @@
 # Data folder
 
-Put the input files here, with exactly these names (paths are set in `config.yml`):
+Put the input files here (paths are set in `config.yml`; the usual Olink and lab file names are
+also found when they differ slightly, e.g. `Explore HT_Fixed LOD.csv`):
 
 ```
 data/
-├── manifest.xlsx                          Olink sample submission sheet (sheet "manifest" is used)
-├── LEIP_clinical_parameters_n35.xlsx      LEIP clinical data (sheet "Key_parameters")
-├── Explore_HT_Fixed_LOD.csv               Olink fixed LOD file (Explore HT, version >= 6.0.0)
-├── severity.xlsx                          optional: SubjectID, Visit, SCORAD / EASI / NRS ...
+├── LEIP_clinical_parameters_n35.xlsx      LEIP clinical data: sheet "Key_parameters" (incl. "Galanin [pg/mL]")
+│                                          and sheet "All_SORB_parameters". Its column Olink_SampleID defines
+│                                          which Olink samples are LEIP samples.
+├── Explore_HT_Fixed_LOD.csv               Olink fixed LOD file (Explore HT, version >= 6.0.0) - recommended
+├── manifest.xlsx                          optional: Olink sample submission sheet, to cross-check the SubjectIDs
 └── npx/
-    ├── O-MicroAD_ISF_NPX_2026-09-24.parquet
-    └── O-MicroAD_Serum_NPX_2026-09-24.parquet
+    └── O-MicroAD_Serum_NPX_2026-09-24.parquet   the Olink serum file that contains the LEIP samples
 ```
 
-All `.parquet` files in `data/npx/` are read. With one file per matrix, the file name must contain
-"ISF" or "Serum"; step 02 checks that each file's samples have that matrix in the manifest. Controls
-of plate 2 (in both files) are handled per file for the LOD and counted once for control QC.
-
-The LEIP galanin study (`leip_galanin/`) reads the serum parquet file, the fixed LOD file and the LEIP
-clinical file with both sheets (`Key_parameters` and `All_SORB_parameters`).
+All `.parquet` files in `data/npx/` are looked at; files without LEIP samples (e.g. the dISF file of
+the same Olink run) are skipped.
 
 The data files are git-ignored, so they are not uploaded to GitHub.

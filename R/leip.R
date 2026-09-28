@@ -1,8 +1,5 @@
-# Helpers of the LEIP galanin study: configuration, reading the Olink serum file and the LEIP
-# clinical file, choosing the clinical variables, and fast (partial) Spearman correlations.
-# Uses the repository's generic helpers: R/utils.R (config, output paths, logging), R/qc.R (Olink LOD).
-
-leip_config <- function() load_config(Sys.getenv("LEIP_CONFIG", "leip_galanin/config.yml"))
+# Helpers of the LEIP galanin study: loading the prepared data, reading the LEIP clinical file,
+# choosing the clinical variables, (partial) Spearman correlations, answers and figures.
 
 fmt_p   <- \(p) ifelse(is.na(p), "n/a", sprintf("%.2g", p))
 col_or  <- \(d, nm, default = NA) if (nm %in% names(d)) d[[nm]] else rep(default, nrow(d))
@@ -19,7 +16,7 @@ find_assay <- \(det, a) det$OlinkID[str_detect(toupper(det$Assay), paste0("(^|_)
 #' The data of step 01, plus: M = measurable proteins (samples x proteins), gal = OlinkID of galanin,
 #' npx = its values, elisa = the ELISA values, cov = covariates of the adjusted analyses.
 leip_load <- function(cfg) {
-  d <- read_step(cfg, "0_data", "leip_data.rds", step = "leip_galanin/scripts/01_data.R")
+  d <- read_step(cfg, "0_data", "leip_data.rds", step = "scripts/01_data.R")
   d$M <- d$Y[, d$det$OlinkID[d$det$measurable], drop = FALSE]
   g <- find_assay(d$det, cfg$galanin$olink_assay %||% "GAL")
   d$gal <- if (length(g)) g[1] else NA_character_
@@ -44,31 +41,6 @@ answers_new <- function() { e <- new.env(); e$rows <- list(); e }
 answer <- function(a, question, item, verdict, evidence)
   a$rows[[length(a$rows) + 1]] <- tibble(question = question, item = item, verdict = verdict, evidence = evidence)
 answers_save <- function(a, cfg, ...) { d <- bind_rows(a$rows); save_csv(d, cfg, ...); d }
-
-# ---- Olink data ------------------------------------------------------------------------------------------------
-
-#' Olink rows of the LEIP samples: reads every NPX parquet file that contains one of `ids`, adds the
-#' LOD (R/qc.R add_lod: Olink fixed LOD file, per sample for count-based assays), and returns the
-#' sample x assay rows of these samples. Control IDs are made unique per plate, as in step 02 of
-#' the dISF/serum pipeline.
-read_leip_npx <- function(npx_dir, ids, fixed_lod = NULL, value_col = "PCNormalizedNPX") {
-  files <- list.files(npx_dir, pattern = "\\.parquet$", full.names = TRUE)
-  if (!length(files)) stop("No .parquet files in ", npx_dir)
-  d <- map(files, \(f) {
-    x <- OlinkAnalyze::read_npx(f) |> as_tibble()
-    if (!any(x$SampleID %in% ids)) { msg("%s: no LEIP sample - skipped", basename(f)); return(NULL) }
-    msg("%s: %d LEIP samples", basename(f), n_distinct(x$SampleID[x$SampleID %in% ids]))
-    req <- c("SampleID", "SampleType", "PlateID", "OlinkID", "Assay", "AssayType", value_col, "SampleQC", "DataAnalysisRefID")
-    miss <- setdiff(req, names(x))
-    if (length(miss)) stop(basename(f), " is missing columns: ", paste(miss, collapse = ", "))
-    x <- x |> mutate(SampleID = if_else(SampleType == "SAMPLE", SampleID, paste(SampleID, PlateID, sep = "@")))
-    add_lod(x, fixed_lod, "auto", value_col = value_col) |> mutate(source_file = basename(f))
-  }) |> compact()
-  if (!length(d)) stop("None of the LEIP samples of the clinical file is in the NPX files in ", npx_dir)
-  bind_rows(d) |>
-    filter(SampleType == "SAMPLE", AssayType == "assay", SampleID %in% ids) |>
-    mutate(value = .data[[value_col]], below_lod = if_else(is.na(LOD), NA, value < LOD))
-}
 
 # ---- clinical data -----------------------------------------------------------------------------------------------
 

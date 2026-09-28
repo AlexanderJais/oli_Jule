@@ -11,8 +11,6 @@ output/
 .Rhistory
 .RData
 .Rproj.user/
-data_sim/
-output_sim/
 
-# LEIP galanin study: invented test data (outputs are covered by output/ above)
-leip_galanin/tests/data/
+# invented test data (tests/make_test_data.R); test results go to tests/output/ (covered by output/)
+tests/data/

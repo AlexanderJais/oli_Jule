@@ -3,8 +3,8 @@
 
 source("R/utils.R")
 source("R/report.R")                  # PDF page helpers (page_text, page_table, page_plot, section)
-source("leip_galanin/R/leip.R")
-cfg <- leip_config()
+source("R/leip.R")
+cfg <- load_config()
 d <- leip_load(cfg)
 S <- d$S
 dirs <- c("1_elisa_validation", "2_galanin_correlates", "3_galanin_hdl", "4_clinical_screen")
@@ -111,7 +111,7 @@ section("Methods", page_text("Methods, caveats and files", c(
   "n = 34: exploratory; weak correlations are missed and single p < 0.05 results can be chance (with ~3000 proteins, |rho| of about 0.55 occurs by chance alone). Correlation is not binding: the HDL analysis shows whether the data are compatible with binding; experiments are needed (see the last answer of 3).",
   "Sex matters: women have higher HDL, and galanin may differ by sex; results adjusted for sex and within each sex are shown.",
   "NPX is relative: Olink and the ELISA can only agree in ranking. The Olink assay targets the galanin precursor (UniProt P22466); a galanin ELISA may detect the mature peptide or other fragments. Biobank serum was not collected for peptide measurements (proteolysis).",
-  "## Files (leip_galanin/output/)",
+  "## Files (output/)",
   "answers.csv | 0_data/ (samples, checks, detection, parameters) | 1_elisa_validation/ | 2_galanin_correlates/ | 3_galanin_hdl/ | 4_clinical_screen/ - each with an .xlsx of all its tables and the figures")))
 invisible(grDevices::dev.off())
 msg("Report: %s", out_file)

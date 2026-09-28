@@ -12,8 +12,8 @@
 # Out: output/3_galanin_hdl/
 
 source("R/utils.R")
-source("leip_galanin/R/leip.R")
-cfg <- leip_config()
+source("R/leip.R")
+cfg <- load_config()
 set.seed(cfg$seed %||% 1)
 d <- leip_load(cfg)
 S <- d$S

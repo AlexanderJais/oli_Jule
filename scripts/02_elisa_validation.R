@@ -12,8 +12,8 @@
 # Out: output/1_elisa_validation/
 
 source("R/utils.R")
-source("leip_galanin/R/leip.R")
-cfg <- leip_config()
+source("R/leip.R")
+cfg <- load_config()
 set.seed(cfg$seed %||% 1)
 d <- leip_load(cfg)
 clear_outputs(cfg, "1_elisa_validation")

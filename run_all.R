@@ -1,20 +1,30 @@
-# Run the whole pipeline in order.
-#   Rscript run_all.R                 # real data (config.yml)
-#   OLINK_CONFIG=data_sim/config_sim.yml Rscript run_all.R   # simulated data
-# Resume from a later step (earlier results are reused): in R/RStudio
-#   start_at <- 8; source("run_all.R")
-if (!file.exists("R/utils.R"))
-  stop("Working directory must be the project folder (the one containing R/ and scripts/). ",
+# LEIP galanin study - runs all steps in order.
+#   In RStudio: open oli_Jule.Rproj, then            source("run_all.R")
+#   Resume at a step (earlier results are reused):   start_at <- 3; source("run_all.R")
+#   Check that everything works, with invented data: source("tests/test_leip.R")
+if (!file.exists("R/leip.R") || !file.exists("scripts/01_data.R"))
+  stop("Working directory must be the project folder (the one containing run_all.R, R/ and scripts/). ",
        "In RStudio open oli_Jule.Rproj, or run setwd(\"path/to/oli_Jule\") first. Current: ", getwd())
 source("R/utils.R")
-check_inputs(load_config())        # stops with a clear list if a required input is missing
+cfg <- load_config()
+
+p <- cfg$paths
+npx <- if (dir.exists(p$npx_dir)) list.files(p$npx_dir, "\\.parquet$") else character()
+inputs <- tibble(input = c("Olink NPX parquet file(s)", "LEIP clinical file", "Olink fixed LOD file", "manifest"),
+                 required = c("yes", "yes", "recommended", "no"),
+                 path = c(file.path(p$npx_dir, "*.parquet"), p$leip_clinical %||% "", p$fixed_lod %||% "", p$manifest %||% ""),
+                 found = c(length(npx) > 0, file.exists(p$leip_clinical %||% ""), file.exists(p$fixed_lod %||% ""),
+                           file.exists(p$manifest %||% "")))
+message("LEIP galanin study - input files (working directory: ", getwd(), "):")
+for (i in seq_len(nrow(inputs)))
+  message(sprintf("  [%s] %-26s %s", if (inputs$found[i]) "ok" else if (inputs$required[i] == "yes") "MISSING" else "--",
+                  inputs$input[i], inputs$path[i]))
+if (any(!inputs$found & inputs$required == "yes"))
+  stop("Missing input file(s) - see data/README.md.", call. = FALSE)
+
 rscript <- file.path(R.home("bin"), "Rscript")   # works on Windows/RStudio without Rscript on PATH
-steps <- c("scripts/01_metadata.R", "scripts/02_import_qc.R", "scripts/03_explore.R",
-           "scripts/04_isf_models.R", "scripts/05_serum_models.R", "scripts/06_isf_vs_serum.R",
-           "scripts/07_enrichment.R", "scripts/08_leip_reference.R", "scripts/09_isf_profile.R",
-           "scripts/10_matrix_comparison.R", "scripts/11_trajectories.R",
-           "scripts/12_focus_proteins.R", "scripts/13_visit_course.R", "scripts/14_serum_vs_disf.R", "scripts/15_key_questions.R",
-           "scripts/16_summary_report.R", "scripts/17_export_data.R")
+steps <- file.path("scripts", c("01_data.R", "02_elisa_validation.R", "03_galanin_correlates.R",
+                                "04_galanin_hdl.R", "05_clinical_screen.R", "06_report.R"))
 if (!exists("start_at")) start_at <- 1
 if (start_at > 1) message("Starting at step ", start_at, " (reusing earlier results)")
 for (s in steps[start_at:length(steps)]) {
@@ -22,4 +32,4 @@ for (s in steps[start_at:length(steps)]) {
   status <- system2(rscript, s)
   if (status != 0) stop(s, " failed (exit ", status, ")")
 }
-message("\nAll steps finished. Results are in the output folder set in the config.")
+message("\nDone. Start with ", file.path(p$output, "LEIP_galanin_report.pdf"))

@@ -1,23 +1,23 @@
 # End-to-end test of the LEIP galanin study with invented data (no study data needed):
 # make the test data -> run all steps -> check that the built-in effects are found (see make_test_data.R).
-#   In RStudio (project folder): source("leip_galanin/tests/test_leip.R")   - takes about 2-4 minutes
+#   In RStudio (project folder): source("tests/test_leip.R")   - takes about 2-4 minutes
 # Must end with "All LEIP galanin checks passed".
-if (!file.exists("leip_galanin/run.R"))
-  stop("Working directory must be the project folder (the one containing leip_galanin/ and R/). ",
+if (!file.exists("run_all.R") || !file.exists("R/leip.R"))
+  stop("Working directory must be the project folder (the one containing run_all.R and R/). ",
        "In RStudio open oli_Jule.Rproj, or run setwd(\"path/to/oli_Jule\") first. Current: ", getwd())
 source("R/utils.R")
 rscript <- file.path(R.home("bin"), "Rscript")
-stopifnot(system2(rscript, "leip_galanin/tests/make_test_data.R") == 0)
-unlink("leip_galanin/tests/output", recursive = TRUE)
+stopifnot(system2(rscript, "tests/make_test_data.R") == 0)
+unlink("tests/output", recursive = TRUE)
 old <- Sys.getenv("LEIP_CONFIG")
-Sys.setenv(LEIP_CONFIG = "leip_galanin/tests/data/config_test.yml")
-status <- system2(rscript, "leip_galanin/run.R")
+Sys.setenv(LEIP_CONFIG = "tests/data/config_test.yml")
+status <- system2(rscript, "run_all.R")
 if (nzchar(old)) Sys.setenv(LEIP_CONFIG = old) else Sys.unsetenv("LEIP_CONFIG")
 stopifnot("the LEIP study did not run through" = status == 0)
 
-out   <- "leip_galanin/tests/output"
+out   <- "tests/output"
 rd    <- \(...) read_csv(file.path(out, ...), show_col_types = FALSE)
-truth <- read_csv("leip_galanin/tests/data/truth.csv", show_col_types = FALSE)
+truth <- read_csv("tests/data/truth.csv", show_col_types = FALSE)
 smp <- rd("0_data", "samples.csv"); chk <- rd("0_data", "sample_checks.csv")
 det <- rd("0_data", "detection.csv") |> left_join(truth, by = c("OlinkID", "Assay"))
 agr <- rd("1_elisa_validation", "agreement.csv") |> filter(analysis == "all samples")
