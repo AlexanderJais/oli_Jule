@@ -8,7 +8,9 @@
 #      and does galanin follow them (each protein, and an "HDL protein score")?
 #   d) where does Olink GAL rank among all proteins correlated with HDL-C?
 #   e) do the ELISA and Olink disagree more when HDL is high? (expected if one assay does not see
-#      HDL-bound galanin)
+#      HDL-bound galanin, or if HDL interferes with one assay). Added after the first results
+#      (exploratory): the size of the disagreement in either direction, and whether the agreement
+#      weakens as HDL rises (ELISA x HDL interaction)
 # Out: output/3_galanin_hdl/
 
 source("R/utils.R")
@@ -68,8 +70,12 @@ spec <- imap(measures, \(v, m) map(comps, \(cp) {
   cp <- unlist(cp)
   bind_rows(boot_rho_diff(v, S[[cp[1]]], S[[cp[2]]], B = B) |> mutate(analysis = "all persons"),
             if (has_sex) boot_rho_diff(v, S[[cp[1]]], S[[cp[2]]], Zof(c("sex_male", plate_for(m))), B = B) |> mutate(analysis = "adjusted for sex")) |>
-    mutate(measure = m, comparison = sprintf("rho(%s) - rho(%s)", param_label(cp[1]), param_label(cp[2])))
-}) |> bind_rows()) |> bind_rows() |> relocate(measure, comparison, analysis)
+    mutate(measure = m, comparison = sprintf("rho(%s) - rho(%s)", param_label(cp[1]), param_label(cp[2])),
+           vs_other_lipid = !cp[2] %in% c(hdl_col, apo_col))       # HDL (or ApoA-I) vs a non-HDL lipid
+}) |> bind_rows()) |> bind_rows()
+spec <- if (nrow(spec)) relocate(spec, measure, comparison, analysis) else
+  tibble(measure = character(), comparison = character(), analysis = character(), difference = numeric(),
+         ci_low = numeric(), ci_high = numeric(), vs_other_lipid = logical())
 
 # ---- c) HDL proteins measured by Olink ------------------------------------------------------------------------------------------------------
 hp <- bind_rows(tibble(gene = unlist(h$hdl_proteins), group = "HDL particle"),
@@ -108,14 +114,30 @@ hv <- bind_rows(spearman_vs(S[[hdl_col]], Yh) |> mutate(analysis = "all persons"
 gal_hdl_rank <- hv |> filter(is_galanin)
 
 # ---- e) do the two assays disagree more when HDL is high? -----------------------------------------------------------------------------------
-disc <- NULL; disc_tab <- tibble(); split_tab <- tibble()
+# signed discordance (pre-specified): is the ELISA relatively higher than Olink where HDL is high?
+# added after the first run (exploratory): is the disagreement larger in either direction (absolute
+# discordance), and does the agreement weaken as HDL rises (ELISA x HDL interaction)?
+disc <- NULL; disc_tab <- tibble(); split_tab <- tibble(); int_tab <- tibble(); top_disc <- tibble()
 if (d$has_gal && d$has_elisa) {
   ok <- !is.na(d$npx) & coalesce(d$elisa > 0, FALSE)
   disc <- rep(NA_real_, nrow(S)); disc[ok] <- zscore(log2(d$elisa[ok])) - zscore(d$npx[ok])
   targets <- compact(list(`HDL cholesterol` = S[[hdl_col]], `ApoA-I (lab)` = if (apo_col %in% names(S)) S[[apo_col]], `HDL protein score` = hdl_score))
-  disc_tab <- imap(targets, \(t, nm) bind_rows(spearman1(disc, t, min_n = 8) |> mutate(analysis = "all persons"),
-                                               if (has_sex) spearman1(disc, t, Zof(c("sex_male", "plate")), min_n = 8) |> mutate(analysis = "adjusted for sex, Olink plate")) |>
-                     mutate(with = nm)) |> bind_rows() |> relocate(with, analysis)
+  adj <- if (has_sex) Zof(c("sex_male", "plate"))
+  disc_tab <- imap(targets, \(t, nm) map(c("signed", "absolute"), \(k) {
+    dv <- if (k == "signed") disc else abs(disc)
+    bind_rows(spearman1(dv, t, min_n = 8) |> mutate(analysis = "all persons"),
+              if (has_sex) spearman1(dv, t, adj, min_n = 8) |> mutate(analysis = "adjusted for sex, Olink plate")) |>
+      mutate(discordance = k)
+  }) |> bind_rows() |> mutate(with = nm)) |> bind_rows() |> relocate(with, discordance, analysis)
+  int_tab <- imap(targets, \(t, nm) bind_rows(
+    agreement_interaction(d$elisa[ok], d$npx[ok], t[ok]) |> mutate(analysis = "all persons"),
+    if (has_sex) agreement_interaction(d$elisa[ok], d$npx[ok], t[ok], adj[ok, ]) |> mutate(analysis = "adjusted for sex, Olink plate")) |>
+      mutate(with = nm)) |> bind_rows() |>
+    ensure(c("slope_low", "slope_mean", "slope_high", "interaction", "ci_low", "ci_high", "p")) |> relocate(with, analysis)
+  # the persons with the largest disagreement: where are they in the HDL distribution?
+  top_disc <- tibble(SubjectID = S$SubjectID, HDL = S[[hdl_col]], discordance = disc) |> filter(!is.na(HDL), !is.na(discordance)) |>
+    mutate(HDL_rank = rank(-HDL, ties.method = "min"), of = n(), higher = if_else(discordance > 0, "ELISA higher", "Olink higher")) |>
+    slice_max(abs(discordance), n = 3, with_ties = FALSE)
   # ELISA-Olink agreement below and above the median HDL; bootstrap over persons for the difference
   hi  <- S[[hdl_col]] > median(S[[hdl_col]], na.rm = TRUE)
   idx <- which(ok & !is.na(hi))
@@ -150,9 +172,14 @@ for (m in names(measures)) {
                 if (nrow(eff)) sprintf(". Linear model (%s): %s, p = %s.", eff$model, eff$meaning, fmt_p(eff$p)) else "."))
   oth <- lip |> filter(measure == m, analysis == "all persons", lipid != hdl_col)
   sp <- spec |> filter(measure == m)
+  spo <- sp |> filter(vs_other_lipid, analysis == "all persons")
+  closest <- nrow(oth) && all(abs(oth$rho[oth$lipid != apo_col]) < abs(a0$rho), na.rm = TRUE)
   answer(ans, Q, sprintf("Is the %s correlation specific to HDL?", m),
-         if (!nrow(oth)) "no other lipids" else if (all(abs(oth$rho[oth$lipid != apo_col]) < abs(a0$rho), na.rm = TRUE) && isTRUE(a0$p < 0.05))
-           "yes: HDL is the lipid most closely related to galanin" else "not clearly: other lipids relate as closely",
+         if (!sig0 && !(has_sex && sig1)) "not applicable: no clear correlation with HDL to begin with"
+         else if (!nrow(oth)) "no other lipids"
+         else if (closest && nrow(spo) && all(spo$ci_low > 0)) "yes: galanin is closer to HDL than to the other lipids (bootstrap CIs above 0)"
+         else if (closest) "partly: HDL is the lipid most closely related to galanin, but not clearly more than the others (bootstrap CIs include 0)"
+         else "no: other lipids relate as closely",
          paste0(paste(sprintf("%s %+.2f (p = %s)", oth$label, oth$rho, fmt_p(oth$p)), collapse = "; "),
                 if (nrow(sp)) paste0(". Bootstrap differences: ", paste(sprintf("%s [%s] %+.2f (95%% CI %+.2f to %+.2f)", sp$comparison, sp$analysis,
                                                                           sp$difference, sp$ci_low, sp$ci_high), collapse = "; ")) else "", "."))
@@ -177,17 +204,40 @@ if (nrow(gal_hdl_rank)) {
          sprintf("HDL-C vs Olink GAL rho %+.2f (p = %s). The proteins most correlated with HDL-C: %s.", g0$rho, fmt_p(g0$p), top_str(top_h$protein, top_h$rho, top_h$p, 8)))
 }
 if (nrow(disc_tab)) {
-  d0 <- disc_tab |> filter(with == "HDL cholesterol", analysis == "all persons")
-  d1 <- disc_tab |> filter(with == "HDL cholesterol", analysis != "all persons")
-  answer(ans, Q, "Do the ELISA and Olink disagree more when HDL is high?",
+  dh <- disc_tab |> filter(with == "HDL cholesterol")
+  d0 <- dh |> filter(discordance == "signed", analysis == "all persons"); d1 <- dh |> filter(discordance == "signed", analysis != "all persons")
+  e0 <- ga("galanin ELISA", hdl_col, "all persons"); o0 <- ga("Olink GAL", hdl_col, "all persons")
+  answer(ans, Q, "Does the ELISA read relatively higher than Olink when HDL is high?",
          case_when(is.na(d0$p) ~ "not enough data", d0$p < 0.05 & d0$rho > 0 ~ "yes: the ELISA reads relatively higher than Olink when HDL is high",
-                   d0$p < 0.05 ~ "yes: the ELISA reads relatively lower than Olink when HDL is high", TRUE ~ "no clear relation"),
+                   d0$p < 0.05 ~ "no, lower: the ELISA reads relatively lower than Olink when HDL is high", TRUE ~ "no clear relation"),
          paste0(sprintf("Discordance = z(ELISA) - z(Olink GAL) vs HDL-C: rho %+.2f (p = %s)", d0$rho, fmt_p(d0$p)),
                 if (nrow(d1)) sprintf("; %s: %+.2f (p = %s)", d1$analysis, d1$rho, fmt_p(d1$p)) else "",
+                sprintf(". This restates the two separate correlations with HDL-C (ELISA %+.2f, Olink GAL %+.2f) rather than adding evidence.", e0$rho, o0$rho),
+                " If galanin binds HDL and Olink does not detect the bound form (e.g. a hidden epitope), the ELISA reads relatively higher where HDL is high."))
+  i0 <- int_tab |> filter(with == "HDL cholesterol", analysis == "all persons"); i1 <- int_tab |> filter(with == "HDL cholesterol", analysis != "all persons")
+  b0 <- dh |> filter(discordance == "absolute", analysis == "all persons"); b1 <- dh |> filter(discordance == "absolute", analysis != "all persons")
+  weaker <- isTRUE(i0$p < 0.05 && i0$interaction < 0); larger <- isTRUE(b0$p < 0.05 && b0$rho > 0)
+  trend <- isTRUE(i0$p < 0.2 && i0$interaction < 0) || isTRUE(b0$p < 0.2 && b0$rho > 0)
+  answer(ans, Q, "Does the ELISA-Olink agreement weaken as HDL rises? (exploratory)",
+         if (!nrow(i0) || is.na(i0$p)) "not enough data"
+         else if (weaker && larger) "yes: the agreement is weaker and the disagreement larger where HDL is high"
+         else if (weaker) "yes: the agreement is weaker where HDL is high"
+         else if (larger) "yes: the disagreement is larger where HDL is high"
+         else if (trend) "not significant (a weak trend in that direction)"
+         else "no",
+         paste0(sprintf("ELISA x HDL-C interaction on Olink GAL (standardised ranks): %+.2f (95%% CI %+.2f to %+.2f), p = %s; agreement slope %.2f at low HDL (-1 SD) and %.2f at high HDL (+1 SD)",
+                        i0$interaction, i0$ci_low, i0$ci_high, fmt_p(i0$p), i0$slope_low, i0$slope_high),
+                if (nrow(i1)) sprintf("; %s: %+.2f (p = %s)", i1$analysis, i1$interaction, fmt_p(i1$p)) else "",
+                sprintf(". Size of the disagreement |z(ELISA) - z(Olink GAL)| vs HDL-C: rho %+.2f (p = %s)", b0$rho, fmt_p(b0$p)),
+                if (nrow(b1)) sprintf("; %s: %+.2f (p = %s)", b1$analysis, b1$rho, fmt_p(b1$p)) else "",
                 if (nrow(split_tab)) sprintf(". ELISA vs Olink: rho %.2f below and %.2f above the median HDL (difference %+.2f, 95%% CI %+.2f to %+.2f)",
                                              split_tab$rho_ELISA_vs_Olink[1], split_tab$rho_ELISA_vs_Olink[2], split_tab$rho_ELISA_vs_Olink[3],
                                              split_tab$ci_low[3], split_tab$ci_high[3]) else "",
-                ". If galanin binds HDL and one assay does not detect the bound form (e.g. a hidden epitope), the disagreement grows with HDL."))
+                if (nrow(top_disc)) sprintf(". The %d persons with the largest disagreement: %s", nrow(top_disc),
+                                            paste(sprintf("%s (%s; HDL-C %.2f, rank %d of %d)", top_disc$SubjectID, top_disc$higher, top_disc$HDL,
+                                                          top_disc$HDL_rank, top_disc$of), collapse = ", ")) else "",
+                ". If HDL changes what one assay measures (bound galanin missed by Olink, or HDL interfering with the ELISA), the agreement weakens where HDL is high.",
+                " Exploratory: the interaction and the size of the disagreement were added after the first results; they need confirmation."))
 }
 answer(ans, Q, "What would confirm binding to HDL?", "needs experiments - correlations cannot show binding",
        "Measure galanin in lipoprotein fractions (ultracentrifugation or size-exclusion chromatography: HDL vs LDL/VLDL vs lipoprotein-free); precipitate ApoA-I (anti-ApoA-I beads) and measure the co-precipitated galanin; compare the ELISA and Olink in HDL-rich vs HDL-depleted serum or after delipidation (spike-in recovery).")
@@ -249,15 +299,39 @@ p4 <- ggplot(v0, aes(rho, -log10(p))) + geom_point(colour = "grey65", size = 0.8
        x = "Spearman rho with HDL-C", y = "-log10 p")
 fig(F, "hdl_volcano", p4, cfg, "3_galanin_hdl", "HDL_vs_all_proteins.png", width = 9, height = 7)
 if (!is.null(disc)) {
-  dd <- tibble(hdl = S[[hdl_col]], disc = disc, sex = sexlab) |> filter(!is.na(hdl), !is.na(disc))
-  d0 <- disc_tab |> filter(with == "HDL cholesterol", analysis == "all persons")
-  p5 <- ggplot(dd, aes(hdl, disc)) + geom_hline(yintercept = 0, colour = "grey60") +
+  kind_lab <- \(k) { r <- disc_tab |> filter(with == "HDL cholesterol", analysis == "all persons", discordance == k)
+    sprintf("%s\nrho with HDL-C %+.2f (p = %s)", c(signed = "signed: z(ELISA) - z(Olink GAL)", absolute = "size: |z(ELISA) - z(Olink GAL)| (exploratory)")[[k]],
+            r$rho, fmt_p(r$p)) }
+  dd <- tibble(SubjectID = S$SubjectID, hdl = S[[hdl_col]], signed = disc, absolute = abs(disc), sex = sexlab) |>
+    filter(!is.na(hdl), !is.na(signed)) |>
+    pivot_longer(c(signed, absolute), names_to = "kind", values_to = "v") |>
+    mutate(kind = factor(map_chr(kind, kind_lab), map_chr(c("signed", "absolute"), kind_lab)),
+           top = SubjectID %in% top_disc$SubjectID)
+  p5 <- ggplot(dd, aes(hdl, v)) + geom_hline(yintercept = 0, colour = "grey60") +
     geom_smooth(method = "lm", formula = y ~ x, colour = "grey30", linewidth = 0.6) + geom_point(aes(colour = sex), size = 2.3) +
-    scale_colour_manual(values = c(women = "#c0392b", men = "#2471a3", all = "grey30")) +
+    geom_text(data = dd |> filter(top), aes(label = SubjectID), size = 2.7, vjust = -0.9, colour = "grey25") +
+    scale_colour_manual(values = c(women = "#c0392b", men = "#2471a3", all = "grey30")) + facet_wrap(~kind, scales = "free_y") +
     labs(title = "Do the ELISA and Olink disagree more when HDL is high?",
-         subtitle = sprintf("discordance = z(ELISA) - z(Olink GAL); rho with HDL-C %+.2f (p = %s)", d0$rho, fmt_p(d0$p)),
-         x = "HDL cholesterol (lab)", y = "z(ELISA) - z(Olink GAL)", colour = NULL)
-  fig(F, "discordance", p5, cfg, "3_galanin_hdl", "assay_discordance_vs_HDL.png", width = 8, height = 6)
+         subtitle = "left: is the ELISA relatively higher than Olink? right: is the disagreement larger, in either direction? (labelled: the 3 largest)",
+         x = "HDL cholesterol (lab)", y = NULL, colour = NULL)
+  fig(F, "discordance", p5, cfg, "3_galanin_hdl", "assay_discordance_vs_HDL.png", width = 11, height = 5.5)
+}
+if (nrow(split_tab)) {
+  half_lab <- sprintf("HDL-C %s: rho %.2f (n = %d)", c("below the median", "above the median"), split_tab$rho_ELISA_vs_Olink[1:2], split_tab$n[1:2])
+  sd2 <- tibble(SubjectID = S$SubjectID, elisa = d$elisa, npx = d$npx, hi = hi, sex = sexlab) |>
+    filter(ok, !is.na(hi)) |> mutate(half = factor(if_else(hi, half_lab[2], half_lab[1]), half_lab),
+                                     top = SubjectID %in% top_disc$SubjectID)
+  i0 <- int_tab |> filter(with == "HDL cholesterol", analysis == "all persons")
+  p6 <- ggplot(sd2, aes(elisa, npx)) + geom_smooth(method = "lm", formula = y ~ x, colour = "grey30", linewidth = 0.6, se = FALSE) +
+    geom_point(aes(colour = sex), size = 2.3) +
+    geom_text(data = sd2 |> filter(top), aes(label = SubjectID), size = 2.7, vjust = -0.9, colour = "grey25") +
+    scale_colour_manual(values = c(women = "#c0392b", men = "#2471a3", all = "grey30")) +
+    scale_x_continuous(trans = "log2") + facet_wrap(~half) +
+    labs(title = "Olink GAL vs ELISA in persons with lower and higher HDL",
+         subtitle = sprintf("difference above - below %+.2f (95%% CI %+.2f to %+.2f); ELISA x HDL-C interaction %+.2f (p = %s, exploratory)",
+                            split_tab$rho_ELISA_vs_Olink[3], split_tab$ci_low[3], split_tab$ci_high[3], i0$interaction, fmt_p(i0$p)),
+         x = "galanin ELISA (pg/mL, log2 scale)", y = "Olink GAL (NPX)", colour = NULL)
+  fig(F, "agreement_by_hdl", p6, cfg, "3_galanin_hdl", "agreement_by_HDL.png", width = 11, height = 5.5)
 }
 
 # ---- tables --------------------------------------------------------------------------------------------------------------------------------------
@@ -267,9 +341,10 @@ save_csv(spec, cfg, "3_galanin_hdl", "HDL_specificity.csv")
 save_csv(lm_tab, cfg, "3_galanin_hdl", "effect_sizes.csv")
 if (nrow(hp_tab)) save_csv(hp_tab, cfg, "3_galanin_hdl", "lipoprotein_proteins.csv")
 if (nrow(disc_tab)) save_csv(disc_tab, cfg, "3_galanin_hdl", "discordance_vs_HDL.csv")
+if (nrow(int_tab)) save_csv(int_tab, cfg, "3_galanin_hdl", "agreement_by_HDL.csv")
 figs_save(F, cfg, "3_galanin_hdl", "figures.rds")
 writexl::write_xlsx(list(answers = answers, galanin_vs_lipids = lip, effect_sizes = lm_tab, HDL_specificity = spec,
                          lipoprotein_proteins = hp_tab, HDL_vs_all_proteins = hv, discordance_vs_HDL = disc_tab,
-                         agreement_by_HDL = split_tab) |> keep(\(x) is.data.frame(x) && ncol(x) > 0),
+                         agreement_by_HDL = int_tab, agreement_median_split = split_tab, most_discordant = top_disc) |> keep(\(x) is.data.frame(x) && ncol(x) > 0),
                     out_path(cfg, "3_galanin_hdl", "galanin_hdl.xlsx"))
 for (i in seq_len(nrow(answers))) msg("%s: %s", answers$item[i], answers$verdict[i])

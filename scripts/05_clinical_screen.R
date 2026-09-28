@@ -1,6 +1,7 @@
 # 05 - Supplementary: every measurable Olink protein vs every clinical variable of the LEIP file.
 # Context for the galanin results (what else relates to HDL, sex, BMI ... in these sera) and a check
-# of the data: associations known from population proteomics must show up (config: expected_associations).
+# of the data: associations known from population proteomics must show up (config: expected_associations;
+# judged adjusted for age, sex and plate, since sex can hide them in 34 persons).
 #   Spearman (primary) and partial Spearman adjusted for age, sex and Olink plate; BH-FDR over the
 #   proteins of each variable.
 # Out: output/4_clinical_screen/
@@ -44,17 +45,26 @@ nsig <- assoc |>
   relocate(significant, .before = positive) |> relocate(significant_adjusted, .before = positive_adj) |>
   arrange(desc(significant), desc(significant_adjusted))
 
+# judged adjusted for the covariates (age, sex, plate): in 34 persons a known association can be hidden
+# by sex (e.g. leptin is much higher in women, BMI is higher in men); unadjusted values alongside
 sanity <- map(cfg$expected_associations %||% list(), \(e) {
   row <- tibble(protein = e$protein, parameter = e$parameter, label = param_label(e$parameter), expected = e$direction)
   oid <- find_assay(d$det, e$protein)[1]
   if (is.na(oid)) return(row |> mutate(status = "protein not measured"))
   if (!e$parameter %in% names(S) || sum(!is.na(S[[e$parameter]])) < 10) return(row |> mutate(status = "parameter not available"))
+  z <- S[setdiff(d$cov, e$parameter)]
   r <- spearman1(S[[e$parameter]], d$Y[, oid], min_n = 10)
-  ok <- isTRUE(r$p < 0.05 && sign(r$rho) == if (e$direction == "negative") -1 else 1)
+  ra <- spearman1(S[[e$parameter]], d$Y[, oid], if (ncol(z)) z, min_n = 10)
+  found <- \(x) isTRUE(x$p < 0.05 && sign(x$rho) == if (e$direction == "negative") -1 else 1)
   row |> mutate(frac_above_lod = d$det$frac_above_lod[d$det$OlinkID == oid], n = r$n, rho = r$rho, p = r$p,
-                status = if (ok) "recovered" else "not recovered")
+                rho_adj = ra$rho, p_adj = ra$p, adjusted_for = covs_label(names(z)),
+                unadjusted = if (found(r)) "recovered" else "not recovered", status = if (found(ra)) "recovered" else "not recovered")
 }) |> bind_rows()
-if (nrow(sanity)) sanity <- ensure(sanity, c("frac_above_lod", "n", "rho", "p")) |> relocate(status, .after = last_col())
+if (nrow(sanity)) {
+  sanity <- ensure(sanity, c("frac_above_lod", "n", "rho", "p", "rho_adj", "p_adj"))
+  for (cl in setdiff(c("adjusted_for", "unadjusted"), names(sanity))) sanity[[cl]] <- NA_character_
+  sanity <- relocate(sanity, status, .after = last_col())
+}
 
 hit <- nsig |> filter(significant > 0)
 answer(ans, Q, "Which clinical parameters show up in the LEIP serum proteome?",
@@ -65,10 +75,13 @@ answer(ans, Q, "Which clinical parameters show up in the LEIP serum proteome?",
 if (nrow(sanity)) {
   tested <- sanity |> filter(status %in% c("recovered", "not recovered"))
   answer(ans, Q, "Sanity check: do associations known from population studies show up?",
-         sprintf("%d of %d recovered (p < 0.05, expected direction)%s", sum(tested$status == "recovered"), nrow(tested),
+         sprintf("%d of %d recovered (adjusted for %s; p < 0.05, expected direction; unadjusted: %d)%s", sum(tested$status == "recovered"), nrow(tested),
+                 covs_label(d$cov), sum(tested$unadjusted == "recovered"),
                  if (nrow(tested) < nrow(sanity)) sprintf("; %d not testable", nrow(sanity) - nrow(tested)) else ""),
-         paste(sprintf("%s ~ %s: %s", sanity$protein, sanity$label,
-                       if_else(is.na(sanity$rho), sanity$status, sprintf("rho %+.2f, p = %s", sanity$rho, fmt_p(sanity$p)))), collapse = "; "))
+         paste0(paste(sprintf("%s ~ %s: %s", sanity$protein, sanity$label,
+                              if_else(is.na(sanity$rho), sanity$status, sprintf("adjusted rho %+.2f (p = %s), unadjusted %+.2f (p = %s)",
+                                                                                sanity$rho_adj, fmt_p(sanity$p_adj), sanity$rho, fmt_p(sanity$p)))), collapse = "; "),
+                ". Adjusted: a covariate is left out when it is the parameter itself."))
 }
 answers <- answers_save(ans, cfg, "4_clinical_screen", "answers.csv")
 

@@ -222,6 +222,23 @@ boot_rho_diff <- function(x, a, b, Z = NULL, B = 2000) {
          p_boot = max(1 / length(bs), min(1, 2 * min(mean(bs <= 0), mean(bs >= 0)))))   # never below 1 / resamples
 }
 
+#' Does the agreement of two measurements x and y depend on a third variable h? Linear model on
+#' standardised ranks, rank(y) ~ rank(x) * rank(h) (+ covariates Z as they are). slope = SDs of y per SD
+#' of x (on ranks, close to Spearman's rho) at low (-1 SD), mean and high (+1 SD) h; interaction < 0:
+#' x and y agree less where h is high.
+agreement_interaction <- function(x, y, h, Z = NULL, min_n = 12) {
+  dat <- bind_cols(tibble(x = x, y = y, h = h), if (!is.null(Z)) as_tibble(Z))
+  dat <- dat[stats::complete.cases(dat), ]
+  if (nrow(dat) < min_n) return(tibble(n = nrow(dat)))
+  zc <- if (is.null(Z)) character() else names(Z)
+  zc <- zc[map_lgl(zc, \(v) n_distinct(dat[[v]]) > 1)]
+  dat <- dat |> mutate(across(c(x, y, h), \(v) as.numeric(scale(rank(v)))))
+  f <- lm(reformulate(c("x * h", zc), "y"), data = dat)
+  b <- coef(f); ci <- suppressWarnings(confint(f)["x:h", ])
+  tibble(n = nrow(dat), slope_low = b[["x"]] - b[["x:h"]], slope_mean = b[["x"]], slope_high = b[["x"]] + b[["x:h"]],
+         interaction = b[["x:h"]], ci_low = ci[[1]], ci_high = ci[[2]], p = summary(f)$coefficients["x:h", 4])
+}
+
 #' Median NPX difference between the two values of a binary parameter (higher code minus lower).
 median_diff <- function(x, Y) {
   ok <- !is.na(x)

@@ -9,7 +9,9 @@
 #   - Olink GAL follows the ELISA, but less where HDL is high (as if HDL-bound galanin escaped the
 #     Olink assay), and shares a factor with CHGA, NPY and SCG2
 #   - the Olink HDL proteins (APOA1, APOA2, APOM, LCAT, PON1, PON3, CLU) follow HDL, APOB follows LDL
-#   - LEP follows BMI and sex, FABP4 the lab A-FABP; 15 proteins are below LOD; all else is noise
+#   - LEP follows BMI and sex; FABP4, LPA, GRN and RARRES2 follow their lab values (A-FABP, Lp(a),
+#     progranulin, chemerin); 15 proteins are below LOD; all else is noise
+#   - the Olink samples of LEIP_05 and LEIP_06 are swapped (the per-person identity check must find it)
 
 source("R/utils.R")
 set.seed(20260927)
@@ -31,6 +33,13 @@ p <- tibble(SampleID = sprintf("S%03d", 181 + seq_len(n)), SubjectID = sprintf("
          galanin = round(2^log2_elisa, 1),
          c_AFABP4 = round(rlnorm(n, log(12), 0.45), 2), IL10 = round(rlnorm(n, log(5), 0.8), 2),
          z_ne = rnorm(n))                                   # shared neuroendocrine factor (GAL, CHGA, NPY, SCG2)
+# lab values of two more proteins that Olink also measures; own random stream, so the other test data stay the same
+p <- bind_cols(p, local({
+  seed <- .Random.seed; on.exit(assign(".Random.seed", seed, envir = globalenv()))
+  set.seed(4242)
+  tibble(Progranulin = round(rlnorm(n, log(100), 0.35), 1), c_chemerin = round(rlnorm(n, log(180), 0.35), 1))
+}))
+swap <- c(S186 = "S187", S187 = "S186")                 # Olink samples of LEIP_05 and LEIP_06 swapped
 
 # ---- assays ------------------------------------------------------------------------------------------------------
 ht <- readRDS(system.file("extdata", "OlinkID_HT_mapping.rds", package = "OlinkAnalyze")) |>
@@ -44,7 +53,7 @@ base <- rnorm(na, 6, 1.5); nc_lvl <- base - 5.5
 undetected <- assays$idx %in% sample(which(!assays$Assay %in% named), 15)
 role <- case_when(assays$Assay == "GAL" ~ "galanin", assays$Assay %in% c("CHGA", "NPY", "SCG2") ~ "GAL_partner",
                   assays$Assay %in% c("APOA1", "APOA2", "APOM", "LCAT", "PON1", "PON3", "CLU") ~ "HDL_protein",
-                  assays$Assay == "APOB" ~ "LDL_protein", assays$Assay %in% c("LEP", "FABP4") ~ "clinical_linked",
+                  assays$Assay == "APOB" ~ "LDL_protein", assays$Assay %in% c("LEP", "FABP4", "LPA", "GRN", "RARRES2") ~ "clinical_linked",
                   undetected ~ "below_LOD", TRUE ~ "null")
 
 # ---- samples and controls on the plates ------------------------------------------------------------------------------
@@ -68,12 +77,14 @@ for (i in seq_len(nrow(wells))) {
   if (w$SampleType == "PLATE_CONTROL")    { npx[i, ] <- base + rnorm(na, 0, 0.08); next }
   if (w$SampleType == "SAMPLE_CONTROL")   { npx[i, ] <- base + 0.2 + rnorm(na, 0, 0.12); next }
   x <- base + plate_off[w$plate, ] + rnorm(na, 0, 0.35) - if (w$file == "ISF") 1 else 0
-  k <- match(w$SampleID, p$SampleID)
+  k <- match(coalesce(swap[w$SampleID], w$SampleID), p$SampleID)
   if (!is.na(k)) {
     q <- p[k, ]
     x <- x + (role == "galanin") * (1.5 * (q$log2_elisa - 7.1) - 0.2 * q$hdl_z + 0.5 * q$z_ne) +
       (role == "GAL_partner") * 0.9 * q$z_ne + (role == "HDL_protein") * 0.5 * q$hdl_z + (role == "LDL_protein") * 0.5 * q$ldl_z +
-      (assays$Assay == "LEP") * (0.15 * (q$BMI - 25) + 0.5 * q$female) + (assays$Assay == "FABP4") * log2(q$c_AFABP4 / 12)
+      (assays$Assay == "LEP") * (0.15 * (q$BMI - 25) + 0.5 * q$female) + (assays$Assay == "FABP4") * log2(q$c_AFABP4 / 12) +
+      (assays$Assay == "LPA") * 0.5 * log2(q$C_LIPO / 0.15) + (assays$Assay == "GRN") * log2(q$Progranulin / 100) +
+      (assays$Assay == "RARRES2") * log2(q$c_chemerin / 180)
   }
   x[undetected] <- nc_lvl[undetected] + 0.3 + rnorm(sum(undetected), 0, 0.3)
   npx[i, ] <- x
@@ -130,7 +141,8 @@ sorb <- key |>
             SORB_barcode, `Galanin [pg/mL]`, Galanin_ELISA_plate = sample(1:12, n, TRUE), sex = if_else(sex_MF == "M", 1, 0), sex_MF,
             age, BMI, ln_BMI = round(log(BMI), 3), Gluc0_mg_dl, gluk_0 = round(Gluc0_mg_dl / 18.016, 3),
             C_APO_B = p$C_APO_B, C_LIPO = p$C_LIPO, c_AFABP4 = p$c_AFABP4, IL10 = p$IL10, RESTRAINT = sample(0:15, n, TRUE),
-            RE_BIN = as.integer(RESTRAINT > 7), c_tsh = round(rlnorm(n, log(1.8), 0.4), 2), Progranulin = round(rlnorm(n, log(100), 0.2), 1))
+            RE_BIN = as.integer(RESTRAINT > 7), c_tsh = round(rlnorm(n, log(1.8), 0.4), 2), Progranulin = p$Progranulin,
+            c_chemerin = p$c_chemerin)
 key[n, -(1:2)] <- NA; sorb[n, -c(1:4)] <- NA          # like LEIP_35: no clinical data
 writexl::write_xlsx(list(README = tibble(Item = "Purpose", Note = "Invented test data"), Key_parameters = key,
                          All_SORB_parameters = sorb), file.path(td, "LEIP_clinical.xlsx"))
@@ -144,7 +156,8 @@ cfg <- yaml::read_yaml("config.yml")
 cfg$paths <- list(npx_dir = file.path(td, "npx"), fixed_lod = file.path(td, "fixed_lod.csv"),
                   leip_clinical = file.path(td, "LEIP_clinical.xlsx"), manifest = file.path(td, "manifest.xlsx"),
                   output = "tests/output")
-cfg$lab_vs_olink <- list(galanin_elisa = "GAL", c_apo = "APOA1", c_AFABP4 = "FABP4", IL10 = "IL10", c_CRP = "CRP")
+cfg$lab_vs_olink <- list(galanin_elisa = "GAL", c_apo = "APOA1", c_AFABP4 = "FABP4", C_LIPO = "LPA", Progranulin = "GRN",
+                         c_chemerin = "RARRES2", IL10 = "IL10", c_CRP = "CRP")
 cfg$expected_associations <- list(list(protein = "LEP", parameter = "BMI", direction = "positive"),
                                   list(protein = "APOA1", parameter = "C_HDL", direction = "positive"),
                                   list(protein = "NOT_ON_PANEL", parameter = "BMI", direction = "positive"))

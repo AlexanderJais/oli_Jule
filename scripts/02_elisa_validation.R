@@ -2,12 +2,15 @@
 # Galanin is measured twice in the same LEIP sera: by ELISA (pg/mL) and by Olink (assay GAL; NPX,
 # a relative log2 value). The two can only agree in ranking the samples, not in absolute values.
 #   - is Olink GAL above its LOD in LEIP serum?
-#   - agreement: Spearman (all samples; adjusted for Olink plate; within each plate; above LOD only;
-#     without flagged samples; without extreme ELISA values), leave-one-out range, tertile agreement
-#     (weighted kappa), and the change in NPX per doubling of the ELISA value (1 = same fold-change)
+#   - agreement: Spearman (all samples; adjusted for Olink plate; adjusted for sex and plate; women and
+#     men separately; within each plate; above LOD only; without flagged samples; without extreme ELISA
+#     values), leave-one-out range, tertile agreement (weighted kappa), and the change in NPX per
+#     doubling of the ELISA value (1 = same fold-change)
 #   - specificity: the rank of Olink GAL among all proteins correlated with the ELISA, and whether the
 #     ELISA and Olink GAL correlate with the same proteins (protein profiles, permutation test)
-#   - benchmark: the same comparison for the other proteins measured by the lab and by Olink
+#   - benchmark: the same comparison for the other proteins measured by the lab and by Olink; it also
+#     shows whether the clinical file and the Olink samples are correctly matched - overall, and per
+#     person (does the profile of lab values match the person's own Olink sample best?)
 #   - technical factors: Olink plate, ELISA plate
 # Out: output/1_elisa_validation/
 
@@ -59,9 +62,13 @@ agree_row <- function(what, keep = rep(TRUE, nrow(pair)), covs = NULL, min_pairs
 }
 flagged <- coalesce(pair$SampleQC != "PASS", FALSE) | coalesce(pair$qc_outlier, FALSE) |
   coalesce(col_or(pair, "low_serum", 0) == 1, FALSE) | coalesce(col_or(pair, "lipamisch", 0) == 1, FALSE)
+has_sex <- "sex_male" %in% names(pair) && n_distinct(na.omit(pair$sex_male)) == 2
 agree <- bind_rows(
   agree_row("all samples"),
   agree_row("adjusted for Olink plate", covs = "plate"),
+  if (has_sex) list(agree_row("adjusted for sex and Olink plate", covs = c("sex_male", "plate")),
+                    agree_row("women only", coalesce(pair$sex_male == 0, FALSE), min_pairs = 5),
+                    agree_row("men only", coalesce(pair$sex_male == 1, FALSE), min_pairs = 5)),
   agree_row("only samples with GAL above LOD", coalesce(!pair$below_lod, FALSE)),
   agree_row("without flagged samples (QC warning / outlier, low serum, lipaemic)", !flagged),
   agree_row("without extreme ELISA values (|z| > 3, log scale)", abs(zscore(pair$log2_elisa)) <= 3),
@@ -82,6 +89,7 @@ kw <- function(v, g, what) {
   ok <- !is.na(v) & !is.na(g)
   if (n_distinct(g[ok]) < 2) return(NULL)
   m <- tapply(v[ok], as.character(g[ok]), median)
+  m <- m[str_order(names(m), numeric = TRUE)]                  # plate 2 before plate 10
   tibble(test = what, n = sum(ok), groups = length(m), medians = paste(sprintf("%s: %.3g", names(m), m), collapse = "; "),
          p = kruskal.test(v[ok], factor(g[ok]))$p.value)
 }
@@ -131,6 +139,37 @@ bench <- imap(cfg$lab_vs_olink %||% list(galanin_elisa = "GAL"), \(assay, lab) {
   arrange(desc(status == "compared"), desc(rho))
 others <- bench |> filter(status == "compared", lab != "galanin_elisa", !is.na(rho))
 
+# ---- per person: is each Olink sample the right one? ------------------------------------------------------------------------------
+# The lab values of the benchmark proteins that agree with Olink (rho >= 0.5) form a profile per person; so do their
+# Olink values. Distance between the lab profile of person i and the Olink profile of sample j: rank-based normal
+# scores, mean squared difference weighted by how well each protein agrees (1 / (2 (1 - rho)), the expected squared
+# difference of a correct pair). A person's own sample should be among the best matches; a swapped or mislabelled
+# sample fits no better than a stranger's - also where a single swap barely changes the correlations over all persons.
+nscore <- \(v) { r <- rep(NA_real_, length(v)); k <- !is.na(v); r[k] <- qnorm((rank(v[k]) - 0.5) / sum(k)); r }
+idp <- others |> filter(rho >= 0.5)
+ident <- tibble(SampleID = character(), SubjectID = character(), own_rank = integer(), of = integer(), own_distance = numeric(),
+                best_match = character(), fit = character())
+if (nrow(idp) >= 3) {
+  L <- sapply(idp$lab, \(l) nscore(S[[l]]))                     # persons x proteins: lab
+  O <- sapply(idp$OlinkID, \(o) nscore(d$Y[, o]))              # samples x proteins: Olink
+  w <- 1 / (2 * (1 - pmin(idp$rho, 0.95)))
+  D <- sapply(seq_len(nrow(O)), \(j) {                         # D[i, j]: lab of person i vs Olink of sample j
+    sq <- sweep(L, 2, O[j, ])^2; ok <- !is.na(sq)
+    sqrt(as.vector(ifelse(ok, sq, 0) %*% w) / as.vector(ok %*% w))
+  })
+  D[rowSums(!is.na(L)) < 3, ] <- NA
+  best <- apply(D, 1, \(r) if (all(is.na(r))) NA_integer_ else which.min(r))
+  ident <- tibble(SampleID = S$SampleID, SubjectID = S$SubjectID, plate = S$plate, proteins = rowSums(!is.na(L)),
+                  own_distance = diag(D),
+                  own_rank = map_int(seq_len(nrow(D)), \(i) if (is.na(D[i, i])) NA_integer_ else as.integer(sum(D[i, ] < D[i, i], na.rm = TRUE) + 1)),
+                  of = colSums(!is.na(t(D))), best_match = S$SubjectID[best], best_distance = D[cbind(seq_len(nrow(D)), best)]) |>
+    left_join(pair |> select(SampleID, galanin_discordance = discordance), by = "SampleID") |>
+    filter(!is.na(own_rank)) |>
+    mutate(fit = case_when(own_rank == 1 ~ "best match", own_rank <= of / 4 ~ "among the best 25%",
+                           TRUE ~ "possible swap (no better than others)")) |>
+    arrange(desc(own_rank), desc(own_distance))
+}
+
 # ---- answers -------------------------------------------------------------------------------------------------------------------------
 verdict <- case_when(is.na(a0$p) ~ "not enough data",
                      a0$p < 0.05 & a0$rho >= 0.5 ~ "yes: both methods rank the samples similarly",
@@ -138,9 +177,14 @@ verdict <- case_when(is.na(a0$p) ~ "not enough data",
                      a0$p < 0.05 & a0$rho < 0 ~ "no: opposite ranking (unexpected)",
                      TRUE ~ "no: the Olink values do not follow the ELISA")
 pl <- if (nrow(plate_fx)) plate_fx |> filter(str_detect(test, "^galanin ELISA by Olink plate")) else tibble()
+ro <- \(a) agree |> filter(analysis == a)
+sx_txt <- if (has_sex) with(list(s1 = ro("adjusted for sex and Olink plate"), w = ro("women only"), m = ro("men only")),
+  sprintf("Adjusted for sex and Olink plate rho = %.2f (p = %s); women rho = %.2f (p = %s, n = %d), men rho = %.2f (p = %s, n = %d). ",
+          s1$rho, fmt_p(s1$p), w$rho, fmt_p(w$p), w$n, m$rho, fmt_p(m$p), m$n)) else ""
 answer(ans, Q, "Olink GAL vs ELISA", verdict,
        paste0(sprintf("Spearman rho = %.2f (95%% CI %.2f to %.2f), p = %s, n = %d; adjusted for Olink plate rho = %.2f (p = %s). ",
                       a0$rho, a0$ci_low, a0$ci_high, fmt_p(a0$p), a0$n, a1$rho, fmt_p(a1$p)),
+              sx_txt,
               sprintf("Leaving out one person gives rho %.2f to %.2f. ", min(loo$rho), max(loo$rho)),
               sprintf("Same tertile in %.0f%% of persons (chance 33%%), opposite tertiles in %.0f%%; weighted kappa %.2f. ",
                       tert$same_tertile_pct, tert$opposite_tertile_pct, tert$weighted_kappa),
@@ -159,11 +203,34 @@ answer(ans, Q, "Benchmark: how well do lab assays and Olink agree for other prot
        if (!nrow(others)) "no other protein measured by both" else sprintf("median rho %.2f over %d proteins (galanin: %.2f)", median(others$rho), nrow(others), a0$rho),
        if (!nrow(others)) "" else paste(sprintf("%s vs Olink %s: rho %.2f (rank %d of %d)", others$label, others$olink_assay, others$rho,
                                                 others$rank_among_proteins, others$n_proteins), collapse = "; "))
+good <- others |> filter(rho >= 0.7, rank_among_proteins <= 5)
+answer(ans, Q, "Are the clinical data and the Olink data of the same persons correctly matched?",
+       if (!nrow(others)) "cannot be checked: no other protein measured by the lab and by Olink"
+       else if (nrow(good) >= 3) sprintf("yes: for %d lab assays the matching Olink protein is the best or near-best match among all proteins", nrow(good))
+       else "not confirmed: fewer than 3 lab assays agree clearly with Olink",
+       paste0(if (nrow(good)) paste0(paste(sprintf("%s rho %.2f (rank %d)", good$label, good$rho, good$rank_among_proteins), collapse = "; "), ". ") else "",
+              "A general mix-up between the rows of the clinical file and the Olink samples would destroy these correlations; a single swap would not (see the next answer). ",
+              "It does not check the galanin ELISA values themselves: a mix-up on the ELISA plates, or an ELISA run on another aliquot or blood draw, would affect galanin only."))
+top_g <- pair |> slice_max(abs(discordance), n = 3, with_ties = FALSE) |> left_join(ident |> select(SampleID, own_rank), by = "SampleID")
+mism <- ident |> filter(own_rank > of / 4)
+answer(ans, Q, "Per person: does each Olink sample belong to the right person?",
+       if (!nrow(ident)) "cannot be checked: fewer than 3 lab assays agree with Olink (rho >= 0.5)"
+       else if (!nrow(mism)) sprintf("yes: for all %d persons their own Olink sample is among the best matches of their lab values (best match: %d)",
+                                     nrow(ident), sum(ident$own_rank == 1))
+       else sprintf("check %d of %d persons: their own Olink sample fits their lab values no better than other persons' samples", nrow(mism), nrow(ident)),
+       if (!nrow(ident)) "" else paste0(
+         sprintf("Profile of %d proteins measured by the lab and by Olink (%s); own sample the best match for %d of %d persons. ", nrow(idp),
+                 paste(idp$olink_assay, collapse = ", "), sum(ident$own_rank == 1), nrow(ident)),
+         if (nrow(mism)) paste0("Possible swap or mix-up: ", paste(sprintf("%s (own sample rank %d of %d; best match: Olink sample of %s)", mism$SubjectID,
+                                                                        mism$own_rank, mism$of, mism$best_match), collapse = "; "), ". ") else "",
+         "The 3 persons where ELISA and Olink galanin disagree most: ",
+         paste(sprintf("%s (own sample rank %s)", top_g$SubjectID, coalesce(as.character(top_g$own_rank), "n/a")), collapse = ", "),
+         ". If their own samples fit well, the galanin disagreement is not a sample swap on the Olink side; it then lies in the galanin measurements (or a mix-up of the ELISA values only)."))
 interp <- case_when(
   is.na(fa) | is.na(a0$rho) ~ "not enough data to judge",
   fa < 0.5 ~ "Olink GAL is mostly below LOD, so Olink cannot validate the ELISA here",
   a0$p < 0.05 & a0$rho >= 0.5 ~ "the ELISA is supported by an independent method",
-  nrow(others) > 0 & median(others$rho) >= 0.5 & a0$rho < 0.3 ~ "other lab assays agree well with Olink, galanin does not: the disagreement is specific to galanin (e.g. different forms measured - precursor vs peptide - or a matrix effect such as binding to HDL, see 3)",
+  nrow(others) > 0 & median(others$rho) >= 0.5 & a0$rho < 0.3 ~ "other lab assays agree well with Olink, galanin does not: the disagreement is specific to galanin - different forms measured (precursor vs mature peptide), degradation of the peptide, the ELISA itself (specificity, matrix effects, plate-to-plate variation) or binding to HDL (see 3)",
   nrow(others) > 0 & median(others$rho) < 0.3 ~ "lab assays and Olink agree poorly in general in these samples (pre-analytics, sample age?), so galanin cannot be judged alone",
   TRUE ~ "partial agreement; see the details")
 answer(ans, Q, "Interpretation", interp,
@@ -240,11 +307,13 @@ figs_save(F, cfg, "1_elisa_validation", "figures.rds")
 # ---- tables ---------------------------------------------------------------------------------------------------------------------------
 samples <- pair |> select(SampleID, SubjectID, plate, elisa, log2_elisa, npx, LOD, below_lod, discordance, any_of(c("sex_male", "C_HDL", "c_apo")))
 save_csv(agree, cfg, "1_elisa_validation", "agreement.csv")
+if (nrow(plate_fx)) save_csv(plate_fx, cfg, "1_elisa_validation", "plate_effects.csv")
 save_csv(bench, cfg, "1_elisa_validation", "lab_vs_Olink_benchmark.csv")
+if (nrow(ident)) save_csv(ident, cfg, "1_elisa_validation", "sample_identity.csv")
 save_csv(ev, cfg, "1_elisa_validation", "ELISA_vs_all_proteins.csv")
 save_csv(samples, cfg, "1_elisa_validation", "galanin_values_per_sample.csv")
 writexl::write_xlsx(list(answers = answers, GAL_detection = gdet, agreement = agree, leave_one_out = loo, tertiles = tert_tab,
-                         tertile_agreement = tert, plate_effects = plate_fx, lab_vs_Olink = bench, ELISA_vs_proteins = ev,
+                         tertile_agreement = tert, plate_effects = plate_fx, lab_vs_Olink = bench, sample_identity = ident, ELISA_vs_proteins = ev,
                          protein_profiles = prof |> arrange(desc(abs(rho_GAL) + abs(rho_ELISA))),
                          profile_test = tibble(proteins = nrow(prof), r = prof_r, permutations = B, p = prof_p),
                          samples = samples) |> keep(\(x) is.data.frame(x) && ncol(x) > 0),

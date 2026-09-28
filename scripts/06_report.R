@@ -62,7 +62,22 @@ section("1 Olink vs ELISA", {
                select(analysis, n, rho, ci_low, ci_high, p, npx_per_doubling),
              note = "rho = Spearman; npx_per_doubling = change of Olink NPX per doubling of the ELISA value (1 = same fold-change)")
   show("1_elisa_validation", "z_agreement")
+  pf <- out_csv(cfg, "1_elisa_validation", "plate_effects.csv")
+  if (!is.null(pf) && nrow(pf))
+    page_table("1  Technical factors: do the values differ between plates?",
+               pf |> mutate(test = str_remove(test, " \\(.*$")) |> separate_rows(medians, sep = "; ") |>
+                 mutate(plate = str_remove(medians, ": [^:]*$"), median = as.numeric(str_extract(medians, "[^ ]+$"))) |>
+                 group_by(test) |> mutate(across(c(n, groups, p), \(v) if_else(row_number() == 1, v, NA))) |> ungroup() |>
+                 mutate(test = if_else(test == lag(test, default = ""), "", test)) |> select(test, n, groups, p, plate, median),
+               note = "Kruskal-Wallis test; median per plate (ELISA in pg/mL, Olink GAL in NPX). ELISA values that differ between Olink plates: the samples were not placed on the plates at random")
   show("1_elisa_validation", "benchmark")
+  idt <- out_csv(cfg, "1_elisa_validation", "sample_identity.csv")
+  if (!is.null(idt) && nrow(idt))
+    page_table("1  Per person: does the Olink sample fit the person's lab values?",
+               idt |> mutate(top_galanin = rank(-abs(galanin_discordance), na.last = "keep") <= 3) |>
+                 filter(row_number() <= 15 | coalesce(top_galanin, FALSE)) |>
+                 select(SubjectID, plate, proteins, own_distance, own_rank, of, best_match, galanin_discordance, fit),
+               note = "worst fits first, plus the 3 largest galanin disagreements; own_rank 1 = the own Olink sample fits best; possible swap: own sample not among the best 25%; all persons: 1_elisa_validation/sample_identity.csv")
   show("1_elisa_validation", "profiles")
   show("1_elisa_validation", "elisa_volcano")
 })
@@ -93,20 +108,29 @@ section("3 Galanin and HDL", {
   if (!is.null(figs[["3_galanin_hdl"]]$hdl_proteins)) show("3_galanin_hdl", "hdl_proteins")
   show("3_galanin_hdl", "hdl_volcano")
   if (!is.null(figs[["3_galanin_hdl"]]$discordance)) show("3_galanin_hdl", "discordance")
+  if (!is.null(figs[["3_galanin_hdl"]]$agreement_by_hdl)) show("3_galanin_hdl", "agreement_by_hdl")
+  ds <- out_csv(cfg, "3_galanin_hdl", "discordance_vs_HDL.csv")
+  if (!is.null(ds) && nrow(ds)) page_table("3  ELISA-Olink disagreement vs HDL", ds |> select(with, discordance, analysis, n, rho, ci_low, ci_high, p),
+                                           note = "signed = z(ELISA) - z(Olink GAL), pre-specified; absolute = its size in either direction, added after the first results (exploratory)")
+  it <- out_csv(cfg, "3_galanin_hdl", "agreement_by_HDL.csv")
+  if (!is.null(it) && nrow(it)) page_table("3  Does the ELISA-Olink agreement weaken as HDL rises? (exploratory)",
+                                           it |> select(with, analysis, n, slope_low, slope_high, interaction, ci_low, ci_high, p),
+                                           note = "Olink GAL ~ ELISA x HDL on standardised ranks (+ sex, Olink plate); slope = agreement at HDL -1 SD (low) and +1 SD (high); interaction < 0: weaker where HDL is high")
 })
 section("Supplementary: proteins vs clinical parameters", {
   if (!is.null(figs[["4_clinical_screen"]]$nsig)) show("4_clinical_screen", "nsig")
   if (!is.null(figs[["4_clinical_screen"]]$heatmap)) show("4_clinical_screen", "heatmap")
   san <- out_csv(cfg, "4_clinical_screen", "sanity_checks.csv")
   if (!is.null(san)) page_table("Sanity checks: associations known from population studies",
-                                san |> select(protein, parameter = label, expected, n, rho, p, status),
-                                note = "recovered = p < 0.05 in the expected direction")
+                                san |> select(protein, parameter = label, expected, n, rho, p, rho_adj, p_adj, unadjusted, status),
+                                note = sprintf("status: adjusted for %s (a covariate is left out when it is the parameter); recovered = p < 0.05 in the expected direction", covs_label(d$cov)))
 })
 section("Methods", page_text("Methods, caveats and files", c(
   "## Data",
   "LEIP biobank sera (population controls) of the O-MicroAD Olink Explore HT run. The LEIP samples are the rows of the clinical file (Olink_SampleID). Olink values: PC-normalised NPX from the delivered parquet file, LOD from the Olink fixed LOD file (per sample for count-based assays), samples failing Olink QC left out. Clinical data: sheet Key_parameters plus all further variables of sheet All_SORB_parameters; identifiers, log copies, constants, too-small groups and duplicate variables are not tested (0_data/parameters.csv).",
   "## Statistics",
-  "Spearman correlation, p-value from the t approximation, 95% CI by Fisher z (Bonett-Wright). Partial Spearman: all variables ranked, covariates regressed out. Differences between two correlations with galanin (e.g. HDL vs LDL): bootstrap over persons. Olink vs ELISA: also within plates, above LOD, without flagged samples, leave-one-out, tertile agreement (weighted kappa), NPX per doubling of the ELISA; specificity = rank of Olink GAL among all proteins correlated with the ELISA, and agreement of the two protein-correlation profiles (permutation test). Gene sets: fgsea on the rho ranking.",
+  "Spearman correlation, p-value from the t approximation, 95% CI by Fisher z (Bonett-Wright). Partial Spearman: all variables ranked, covariates regressed out. Differences between two correlations with galanin (e.g. HDL vs LDL): bootstrap over persons. Sample identity per person: distance between the lab values and the Olink values of the benchmark proteins (rank-based normal scores, weighted by 1 / (2 (1 - rho))); the own sample should be among the best matches. Olink vs ELISA: also adjusted for sex, within each sex, within plates, above LOD, without flagged samples, leave-one-out, tertile agreement (weighted kappa), NPX per doubling of the ELISA; specificity = rank of Olink GAL among all proteins correlated with the ELISA, and agreement of the two protein-correlation profiles (permutation test). Gene sets: fgsea on the rho ranking.",
+  "Added after the first results (exploratory): does the ELISA-Olink agreement weaken as HDL rises - linear model of Olink GAL on ELISA x HDL on standardised ranks (+ sex, Olink plate) - and the size of the disagreement |z(ELISA) - z(Olink GAL)| vs HDL. Sanity checks are judged adjusted for age, sex and Olink plate.",
   "## Caveats",
   "n = 34: exploratory; weak correlations are missed and single p < 0.05 results can be chance (with ~3000 proteins, |rho| of about 0.55 occurs by chance alone). Correlation is not binding: the HDL analysis shows whether the data are compatible with binding; experiments are needed (see the last answer of 3).",
   "Sex matters: women have higher HDL, and galanin may differ by sex; results adjusted for sex and within each sex are shown.",
