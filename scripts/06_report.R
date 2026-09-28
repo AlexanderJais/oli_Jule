@@ -156,7 +156,7 @@ section("4 Proteins vs all clinical parameters", {
   if (!is.null(pp) && nrow(pp))
     page_text("4  Proteins at FDR < 0.05 for each clinical parameter",
               sprintf("%s (n = %d): %d%s. Adjusted for %s: %d%s.", pp$label, pp$n_samples, pp$n_significant, map_chr(pp$proteins, first_k),
-                      covs_label(d$cov), pp$n_significant_adjusted, map_chr(pp$proteins_adjusted, first_k)),
+                      map_chr(pp$parameter, \(x) covs_label(setdiff(d$cov, x))), pp$n_significant_adjusted, map_chr(pp$proteins_adjusted, first_k)),
               subtitle = "strongest first, with Spearman rho (adjusted: partial rho); a covariate is left out when it is the parameter itself; all proteins: 4_clinical_screen/per_parameter.csv",
               size = 8.5, width = 150)
   if (!is.null(figs[["4_clinical_screen"]]$heatmap)) show("4_clinical_screen", "heatmap")
