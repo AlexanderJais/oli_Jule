@@ -1,7 +1,7 @@
 # LEIP cohort – galanin
 
 An analysis of the **LEIP biobank sera** (population controls) that were measured on the Olink
-Explore HT panel together with the O-MicroAD samples. It asks three questions about **galanin**.
+Explore HT panel together with the O-MicroAD samples. It asks three questions about **galanin**, and which proteins go with each clinical parameter.
 
 > **Start here:** after a run, open **`output/LEIP_galanin_report.pdf`**. Its first pages give the
 > answers; the other pages show the evidence.
@@ -19,7 +19,7 @@ data files.
 | **1** | **Does Olink confirm our galanin ELISA?** | Galanin was measured twice in the same sera: ELISA (pg/mL) and Olink (assay GAL). Do both rank the persons the same way (also within each sex and each plate)? Also: is GAL above its LOD; does the ELISA follow Olink GAL more than any other protein; do both correlate with the same proteins; do the values differ between plates; and, as a **benchmark**, how well do the other lab assays (ApoA-I, ApoB, Lp(a), A-FABP …) agree with Olink in the same sera – which also shows whether the clinical file and the Olink samples are correctly matched, overall and **per person** (a single swapped sample barely changes the overall correlations); and what the ELISA follows instead (proteins, gene sets, clinical parameters) | `output/1_elisa_validation/` |
 | **2** | **Olink galanin on its own (the ELISA is ignored)** | **2a** Olink GAL vs every clinical parameter – unadjusted, adjusted for age, sex and plate, within each sex, leaving out one person at a time; which associations are robust; technical factors (plate, flagged samples). **2b** Olink GAL vs every measurable Olink protein; pre-specified: proteins stored and released together with galanin (chromogranins, secretogranins, NPY …); pathways (GSEA); the main axes of the serum proteome (principal components); do GAL's strongest partners form groups (heatmap)? | `output/2_olink_galanin/` |
 | **3** | **Galanin and HDL – could galanin bind to HDL?** | Galanin vs HDL-C, ApoA-I and the other lipids – for all persons, **adjusted for sex** (women have higher HDL) and within each sex; is it specific to HDL (vs LDL, triglycerides, ApoB)?; galanin vs the HDL proteins measured by Olink (APOA1, APOA2, APOM, LCAT, PON1/3 …); does GAL behave like an HDL-associated protein?; **do the ELISA and Olink disagree more when HDL is high** (as expected if one assay does not see HDL-bound galanin, or HDL interferes with one assay)? Added after the first results (exploratory): does the **agreement weaken as HDL rises** (ELISA × HDL interaction), and is the disagreement larger in either direction? | `output/3_galanin_hdl/` |
-| S | Supplementary: every protein vs every clinical parameter | Context (what else relates to HDL, sex, BMI …) and a data check: known associations (leptin–BMI, cystatin C–eGFR …) must show up, judged adjusted for age, sex and plate (in 34 persons sex can hide them: leptin is much higher in women, BMI higher in men) | `output/4_clinical_screen/` |
+| **4** | **Which Olink proteins go with each clinical parameter?** | Every measurable protein vs every analysed clinical parameter, unadjusted and adjusted for age, sex and plate; for each parameter the list of proteins at FDR < 0.05; how much of it is sex and age (many parameters differ between women and men or change with age and then share those proteins); which associations hold after adjusting. Also a data check: known associations (leptin–BMI, cystatin C–eGFR …) must show up | `output/4_clinical_screen/` |
 
 Correlations can show whether the data **fit** the idea that galanin binds HDL; they cannot prove
 it. The report lists experiments that could (galanin in lipoprotein fractions, ApoA-I pull-down,
@@ -57,7 +57,7 @@ galanin follows HDL within each sex) that the analysis must find.
 | 2 | `scripts/02_elisa_validation.R` | Question 1 |
 | 3 | `scripts/03_olink_galanin.R` | Question 2 (Olink galanin only) |
 | 4 | `scripts/04_galanin_hdl.R` | Question 3 |
-| 5 | `scripts/05_clinical_screen.R` | Supplementary screen and sanity checks |
+| 5 | `scripts/05_clinical_screen.R` | Question 4 (proteins vs all clinical parameters) and sanity checks |
 | 6 | `scripts/06_report.R` | PDF report and `answers.csv` |
 
 ---
@@ -72,7 +72,7 @@ galanin follows HDL within each sex) that the analysis must find.
 | `1_elisa_validation/` | `GAL_Olink_vs_ELISA.png`, `agreement_z_scores.png` (where do the methods disagree?), `lab_vs_Olink_benchmark.png`, `ELISA_vs_all_proteins.png`, `protein_profiles_GAL_vs_ELISA.png`; `agreement.csv`, `plate_effects.csv`, `sample_identity.csv` (per person: does the Olink sample fit the person's lab values?), `ELISA_vs_clinical.csv` and `ELISA_gene_sets.csv` (what the ELISA follows instead); all tables in `elisa_validation.xlsx` |
 | `2_olink_galanin/` | 2a: `olink_galanin_vs_clinical.png`, `olink_galanin_top_clinical.png`, `olink_galanin_vs_clinical.csv`, `technical_factors.csv`; 2b: `olink_galanin_vs_all_proteins.png`, `olink_galanin_top_proteins.png`, `top_proteins_heatmap.png`, `neuroendocrine_proteins.png`, `gene_sets.png`, `proteome_axes.png`, `olink_galanin_vs_proteins.csv`; all tables in `olink_galanin.xlsx` |
 | `3_galanin_hdl/` | `galanin_vs_HDL_by_sex.png`, `galanin_vs_lipids.png`, `galanin_vs_HDL_proteins.png`, `HDL_vs_all_proteins.png`, `assay_discordance_vs_HDL.png`, `agreement_by_HDL.png` (Olink vs ELISA at lower and higher HDL); `discordance_vs_HDL.csv`, `agreement_by_HDL.csv`; tables in `galanin_hdl.xlsx` |
-| `4_clinical_screen/` | `n_significant_per_parameter.png`, `heatmap_key_parameters.png`, `volcano_key_parameters.png`; `associations_all.csv.gz` (every protein × every parameter), `clinical_screen.xlsx` |
+| `4_clinical_screen/` | `per_parameter.csv` (for each clinical parameter: every protein at FDR < 0.05, unadjusted and adjusted), `n_significant_per_parameter.png`, `heatmap_key_parameters.png`, `volcano_key_parameters.png`; `associations_all.csv.gz` (every protein × every parameter), `clinical_screen.xlsx` (sheet `significant`: every significant pair with all statistics) |
 
 ---
 

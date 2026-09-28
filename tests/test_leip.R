@@ -29,6 +29,7 @@ dsc <- rd("3_galanin_hdl", "discordance_vs_HDL.csv") |> filter(with == "HDL chol
 ahd <- rd("3_galanin_hdl", "agreement_by_HDL.csv"); agr_all <- rd("1_elisa_validation", "agreement.csv")
 idt <- rd("1_elisa_validation", "sample_identity.csv"); swapped <- idt |> filter(SubjectID %in% c("LEIP_05", "LEIP_06"))
 scr <- rd("4_clinical_screen", "associations_all.csv.gz"); san <- rd("4_clinical_screen", "sanity_checks.csv")
+ppm <- rd("4_clinical_screen", "per_parameter.csv")
 ans <- rd("answers.csv")
 lp  <- \(m, l, a) lip |> filter(measure == m, lipid == l, analysis == a)
 partners <- c("CHGA", "NPY", "SCG2")
@@ -67,8 +68,10 @@ stopifnot(
     all(san$unadjusted[san$protein %in% c("LEP", "APOA1")] == "recovered") && all(!is.na(san$rho_adj[san$protein %in% c("LEP", "APOA1")])) &&
     san$status[san$protein == "NOT_ON_PANEL"] == "protein not measured",
   "05: too many false hits for clinical variables without a built-in link" = sum(scr$significant[scr$parameter %in% unlinked]) <= 2,
+  "05: per-parameter protein lists wrong" = grepl("LEP", ppm$proteins[ppm$parameter == "BMI"]) &&
+    all(ppm$n_significant == map_int(ppm$parameter, \(x) sum(scr$significant[scr$parameter == x]))),
   "06: report or answers incomplete" = file.size(file.path(out, "LEIP_galanin_report.pdf")) > 50000 &&
-    all(c("1", "2", "3", "S") %in% substr(ans$question, 1, 1)) &&
+    all(c("1", "2", "3", "4") %in% substr(ans$question, 1, 1)) &&
     any(grepl("agreement weaken", ans$item)) && any(grepl("correctly matched", ans$item)) &&
     any(grepl("^2a", ans$item)) && any(grepl("^2b", ans$item)) && any(grepl("follow instead", ans$item))
 )

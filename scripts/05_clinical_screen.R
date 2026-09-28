@@ -1,9 +1,11 @@
-# 05 - Supplementary: every measurable Olink protein vs every clinical variable of the LEIP file.
-# Context for the galanin results (what else relates to HDL, sex, BMI ... in these sera) and a check
-# of the data: associations known from population proteomics must show up (config: expected_associations;
-# judged adjusted for age, sex and plate, since sex can hide them in 34 persons).
+# 05 - Aim 4: which Olink proteins go with each clinical parameter? Every measurable Olink protein vs
+# every analysed clinical variable of the LEIP file.
 #   Spearman (primary) and partial Spearman adjusted for age, sex and Olink plate; BH-FDR over the
-#   proteins of each variable.
+#   proteins of each variable. Per parameter: the list of proteins at FDR < 0.05, before and after the
+#   adjustment - in 34 persons many parameters differ between women and men or with age, and then
+#   share the sex and age proteins (how much of it is sex and age is summarised).
+#   Also a check of the data: associations known from population proteomics must show up (config:
+#   expected_associations; judged adjusted for age, sex and plate).
 # Out: output/4_clinical_screen/
 
 source("R/utils.R")
@@ -17,7 +19,7 @@ pinfo <- d$pinfo
 params <- pinfo$parameter[pinfo$analysed]
 ptype <- setNames(pinfo$type, pinfo$parameter)
 ans <- answers_new()
-Q <- "S Supplementary: proteins vs clinical parameters"
+Q <- "4 Which Olink proteins go with the clinical parameters?"
 
 assoc <- map(params, \(pm) {
   x <- S[[pm]]
@@ -66,12 +68,38 @@ if (nrow(sanity)) {
   sanity <- relocate(sanity, status, .after = last_col())
 }
 
+# per parameter: every protein at FDR < 0.05 (strongest first), before and after the adjustment
+sig_list <- \(prot, r, p, keep) { o <- order(p); o <- o[keep[o]]; if (!length(o)) "" else paste(sprintf("%s (%+.2f)", prot[o], r[o]), collapse = ", ") }
+per_param <- assoc |>
+  group_by(parameter, label, type, key) |>
+  summarise(proteins = sig_list(protein, rho, p, significant), proteins_adjusted = sig_list(protein, rho_adj, p_adj, significant_adj),
+            n_samples = max(n, na.rm = TRUE), n_significant = sum(significant), n_significant_adjusted = sum(significant_adj), .groups = "drop") |>
+  filter(n_significant + n_significant_adjusted > 0) |>
+  relocate(n_samples, n_significant, n_significant_adjusted, .after = key) |>
+  arrange(desc(n_significant), desc(n_significant_adjusted))
+
 hit <- nsig |> filter(significant > 0)
 answer(ans, Q, "Which clinical parameters show up in the LEIP serum proteome?",
        sprintf("%d of %d parameters with proteins at FDR < %g (adjusted for %s: %d)", nrow(hit), nrow(nsig), fdr_cut, covs_label(d$cov),
                sum(nsig$significant_adjusted > 0)),
        if (nrow(hit)) paste(head(sprintf("%s: %d at FDR < %g, strongest %s", hit$label, hit$significant, fdr_cut, hit$top_proteins), 10), collapse = "; ")
        else "No protein passes the FDR for any parameter.")
+sa <- intersect(c("sex_male", "age"), params)
+other <- assoc |> filter(!parameter %in% sa)
+n_u <- sum(other$significant); n_a <- sum(other$significant_adj); kept <- sum(other$significant & other$significant_adj)
+answer(ans, Q, "How much of this is sex and age?",
+       if (!n_u) "nothing to explain: no protein associations besides sex and age"
+       else sprintf("%s: of %d protein associations of the other parameters, %d remain after adjusting for %s",
+                    if (kept / n_u < 0.5) "most of it" else "part of it", n_u, kept, covs_label(d$cov)),
+       paste0(paste(sprintf("%s: %d proteins at FDR < %g (adjusted: %d)", param_label(sa), map_int(sa, \(x) sum(assoc$significant[assoc$parameter == x])),
+                            fdr_cut, map_int(sa, \(x) sum(assoc$significant_adj[assoc$parameter == x]))), collapse = "; "),
+              ". Parameters that differ between women and men or change with age (body build, liver and kidney values, hormones ...) share these proteins, so their unadjusted lists largely repeat the sex and age signatures.",
+              sprintf(" After adjusting, %d associations of the other parameters remain and %d appear only after adjusting.", kept, n_a - kept)))
+ah <- other |> filter(significant_adj) |> arrange(p_adj)
+answer(ans, Q, sprintf("Which associations hold after adjusting for %s? (parameters other than sex and age)", covs_label(d$cov)),
+       sprintf("%d protein-parameter pairs, %d parameters", nrow(ah), n_distinct(ah$parameter)),
+       if (nrow(ah)) paste0(paste(head(sprintf("%s ~ %s %+.2f", ah$label, ah$protein, ah$rho_adj), 40), collapse = "; "),
+                            if (nrow(ah) > 40) sprintf("; ... (all %d: per_parameter.csv)", nrow(ah)) else "", ".") else "none")
 if (nrow(sanity)) {
   tested <- sanity |> filter(status %in% c("recovered", "not recovered"))
   answer(ans, Q, "Sanity check: do associations known from population studies show up?",
@@ -129,9 +157,11 @@ if (nrow(hk)) {
 
 save_csv(assoc, cfg, "4_clinical_screen", "associations_all.csv.gz")
 save_csv(nsig, cfg, "4_clinical_screen", "n_significant_per_parameter.csv")
+save_csv(per_param, cfg, "4_clinical_screen", "per_parameter.csv")
 if (nrow(sanity)) save_csv(sanity, cfg, "4_clinical_screen", "sanity_checks.csv")
 figs_save(F, cfg, "4_clinical_screen", "figures.rds")
-writexl::write_xlsx(list(answers = answers, parameters = pinfo, n_significant = nsig, significant = assoc |> filter(significant | significant_adj),
+writexl::write_xlsx(list(answers = answers, per_parameter = per_param, parameters = pinfo, n_significant = nsig,
+                         significant = assoc |> filter(significant | significant_adj),
                          top10_per_parameter = assoc |> group_by(parameter) |> slice_min(p, n = 10, with_ties = FALSE) |> ungroup(),
                          sanity_checks = sanity) |> keep(\(x) is.data.frame(x) && ncol(x) > 0),
                     out_path(cfg, "4_clinical_screen", "clinical_screen.xlsx"))

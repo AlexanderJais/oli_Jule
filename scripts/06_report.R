@@ -28,7 +28,7 @@ section("Overview", {
             q(S$C_HDL[S$sex_male %in% 1], 2), q(d$elisa[S$sex_male %in% 0], 0), q(d$elisa[S$sex_male %in% 1], 0)) else NULL
   page_text("LEIP cohort: galanin - Olink validation of the ELISA, Olink galanin, galanin and HDL", c(
     "## Questions",
-    "1. Does Olink confirm the galanin ELISA?  2. Olink galanin on its own, the ELISA ignored: 2a which clinical parameters and 2b which other Olink proteins go with it?  3. Is galanin related to HDL - could it bind to HDL particles?  Supplementary: all proteins vs all clinical parameters, with sanity checks.",
+    "1. Does Olink confirm the galanin ELISA?  2. Olink galanin on its own, the ELISA ignored: 2a which clinical parameters and 2b which other Olink proteins go with it?  3. Is galanin related to HDL - could it bind to HDL particles?  4. Which Olink proteins go with each clinical parameter (all parameters), and how much of it is sex and age? With sanity checks.",
     "## Samples",
     sprintf("%d LEIP biobank sera in the Olink data after QC, %d with clinical data: %d women, %d men; age %s years; BMI %s.",
             nrow(S), n_clin, sum(sx == 0, na.rm = TRUE), sum(sx == 1, na.rm = TRUE), q(col_or(S, "age")), q(col_or(S, "BMI"))),
@@ -145,8 +145,20 @@ section("3 Galanin and HDL", {
                                            it |> select(with, analysis, n, slope_low, slope_high, interaction, ci_low, ci_high, p),
                                            note = "Olink GAL ~ ELISA x HDL on standardised ranks (+ sex, Olink plate); slope = agreement at HDL -1 SD (low) and +1 SD (high); interaction < 0: weaker where HDL is high")
 })
-section("Supplementary: proteins vs clinical parameters", {
+section("4 Proteins vs all clinical parameters", {
   if (!is.null(figs[["4_clinical_screen"]]$nsig)) show("4_clinical_screen", "nsig")
+  pp <- out_csv(cfg, "4_clinical_screen", "per_parameter.csv")
+  first_k <- \(x, k = 12) {
+    if (is.na(x) || x == "") return("")
+    v <- strsplit(x, ", ", fixed = TRUE)[[1]]
+    paste0(": ", paste(head(v, k), collapse = ", "), if (length(v) > k) sprintf(", ... (%d more)", length(v) - k) else "")
+  }
+  if (!is.null(pp) && nrow(pp))
+    page_text("4  Proteins at FDR < 0.05 for each clinical parameter",
+              sprintf("%s (n = %d): %d%s. Adjusted for %s: %d%s.", pp$label, pp$n_samples, pp$n_significant, map_chr(pp$proteins, first_k),
+                      covs_label(d$cov), pp$n_significant_adjusted, map_chr(pp$proteins_adjusted, first_k)),
+              subtitle = "strongest first, with Spearman rho (adjusted: partial rho); a covariate is left out when it is the parameter itself; all proteins: 4_clinical_screen/per_parameter.csv",
+              size = 8.5, width = 150)
   if (!is.null(figs[["4_clinical_screen"]]$heatmap)) show("4_clinical_screen", "heatmap")
   san <- out_csv(cfg, "4_clinical_screen", "sanity_checks.csv")
   if (!is.null(san)) page_table("Sanity checks: associations known from population studies",
