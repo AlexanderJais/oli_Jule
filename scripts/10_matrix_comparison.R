@@ -7,6 +7,7 @@
 #      production. Only proteins detected in both matrices are tested; 'enriched' needs FDR < fdr
 #      and a relative difference of at least stats$min_rel_log2 (default 1 = 2-fold).
 #   c) disease signals: are skin effects (dISF models, step 04) mirrored in serum (step 05)?
+#      Serum side: MicroAD only (AD_vs_HC_MicroAD) - RELAD / RELAD2 serum is not used for dISF comparisons.
 #      And, visit by visit, does the lesional-minus-non-lesional ISF difference track serum?
 # Correlation of ISF and serum levels over time is in step 06.
 # Out: output/matrix_comparison/*
@@ -95,9 +96,9 @@ if (file.exists(isf_res) && file.exists(serum_res)) {
   comparisons <- list(
     c(isf_model = "states_all_visits", isf_ct = "AD_L_vs_NL", serum_model = "MicroAD_active_vs_cleared",
       serum_ct = "active_vs_cleared", label = "lesion activity: skin (L vs NL) vs blood (active vs cleared visits)"),
-    c(isf_model = "states_all_visits", isf_ct = "AD_L_vs_HC", serum_model = "AD_vs_HC_in_study",
+    c(isf_model = "states_all_visits", isf_ct = "AD_L_vs_HC", serum_model = "AD_vs_HC_MicroAD",
       serum_ct = "AD_vs_HC", label = "disease: lesional skin vs healthy skin, AD vs healthy serum"),
-    c(isf_model = "states_all_visits", isf_ct = "AD_NL_vs_HC", serum_model = "AD_vs_HC_in_study",
+    c(isf_model = "states_all_visits", isf_ct = "AD_NL_vs_HC", serum_model = "AD_vs_HC_MicroAD",
       serum_ct = "AD_vs_HC", label = "systemic: non-lesional AD skin vs healthy skin, AD vs healthy serum")
   )
   conc <- map(comparisons, \(cp) {

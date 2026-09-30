@@ -113,6 +113,7 @@ summ <- cats |>
   mutate(visit = factor(visit, levels = c(paste0("V", 1:12), "all visits")) |> droplevels()) |>
   arrange(tier, question, isf_site, visit)
 save_csv(summ, cfg, "serum_vs_disf", "overlap_summary.csv")
+saveRDS(cats, out_path(cfg, "data", "serum_vs_disf_results.rds"))      # all proteins, used by step 20
 save_csv(cats |> filter(category != "not significant"), cfg, "serum_vs_disf", "overlap_protein_lists.csv")
 print(summ |> filter(tier == "nominal") |> select(question, visit, isf_site, dISF_significant, serum_significant,
                                                    both_same, dISF_only, dISF_only_not_in_serum, serum_only) |> as.data.frame())

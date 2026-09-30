@@ -4,7 +4,7 @@
 #   Q3  Do TNFRSF9 / TNFSF9 correlate with AD relapse?
 #   Q4  Are TNFRSF9 / TNFSF9 a marker (change with lesion activity) or a predictor (values
 #       before the relapse separate relapsers from non-relapsers) of AD relapse?
-#   Q5  Is dISF superior to serum?
+#   Q5  Is dISF superior to serum? (serum side: MicroAD only, no RELAD / RELAD2)
 # Proteins and markers are set in config.yml (key_questions). All tests are single, pre-specified
 # tests (unadjusted p-values); relapse analyses are exploratory (4 relapsers in MicroAD).
 # Out: output/key_questions/  answers.csv, key_questions.xlsx, figures
@@ -203,8 +203,8 @@ q5_overlap <- if (file.exists(ov_path)) read_csv(ov_path, show_col_types = FALSE
 q5_effects <- map(c(names(kp_oid), q1_ent), \(ent) tibble(entity = ent,
     dISF_lesional_vs_healthy = fmt_e(est_p(ent, "states_all_visits", "AD_L_vs_HC")[["e"]], est_p(ent, "states_all_visits", "AD_L_vs_HC")[["p"]]),
     dISF_p = est_p(ent, "states_all_visits", "AD_L_vs_HC")[["p"]],
-    serum_AD_vs_healthy = fmt_e(est_p(ent, "AD_vs_HC_in_study", "AD_vs_HC")[["e"]], est_p(ent, "AD_vs_HC_in_study", "AD_vs_HC")[["p"]]),
-    serum_p = est_p(ent, "AD_vs_HC_in_study", "AD_vs_HC")[["p"]])) |> bind_rows() |> distinct(entity, .keep_all = TRUE)
+    serum_AD_vs_healthy = fmt_e(est_p(ent, "AD_vs_HC_MicroAD", "AD_vs_HC")[["e"]], est_p(ent, "AD_vs_HC_MicroAD", "AD_vs_HC")[["p"]]),
+    serum_p = est_p(ent, "AD_vs_HC_MicroAD", "AD_vs_HC")[["p"]])) |> bind_rows() |> distinct(entity, .keep_all = TRUE)
 q5_auc <- q4_auc |> filter(str_detect(predictor, "before relapse")) |>
   select(entity, predictor, matrix, AUC, ci_low, ci_high)
 

@@ -6,6 +6,7 @@ paths:
   npx_dir: data/npx                                     # folder with the Olink *.parquet file(s)
   leip_clinical: data/LEIP_clinical_parameters_n35.xlsx # optional; sheet "Key_parameters"
   fixed_lod: data/Explore_HT_Fixed_LOD.csv              # optional; Olink fixed LOD file (";"-separated, version >= 6.0.0)
+  hpa: data/hpa_annotation.tsv                           # optional; Human Protein Atlas annotation (step 20), downloaded here if missing
   severity: data/severity.xlsx                          # optional; columns SubjectID, Visit (V1..V6) + numeric scores (e.g. SCORAD, EASI, NRS)
   output: output
 
@@ -47,3 +48,13 @@ enrichment:
   collections: ["H", "C2:CP:REACTOME", "C5:GO:BP"]
   min_size: 10
   max_size: 500
+
+# Step 19: which proteins correlate with TNFRSF9 (CD137 / 4-1BB) in dISF?
+tnfrsf9:
+  protein: TNFRSF9
+  partners: ["IL33", "IL4", "CSF2", "IL6", "IL18", "CXCL8", "IL1RL1", "KIT", "KITLG", "TPSAB1", "TPSB2", "FCER1A"]
+  highlight: ["IL33", "IL4"]          # scatter plots and their place in the proteome-wide ranking
+
+# Step 20: do serum and dISF carry the same or different signatures? (MicroAD serum only)
+signatures:
+  collections: ["C2:CP:REACTOME", "C5:GO:BP"]   # over-representation, background = assayed panel

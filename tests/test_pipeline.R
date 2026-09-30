@@ -58,7 +58,28 @@ ov15 <- read_csv(file.path(out, "serum_vs_disf/overlap_summary.csv"), show_col_t
 fov  <- read_csv(file.path(out, "focus/focus_overview.csv"), show_col_types = FALSE)
 ex_rl <- read_csv(file.path(out, "export/RELAD2/RELAD2_Serum_NPX_wide.csv"), show_col_types = FALSE)
 kqa <- read_csv(file.path(out, "key_questions/answers.csv"), show_col_types = FALSE)
+md  <- read_csv(file.path(out, "metadata/sample_metadata.csv"), show_col_types = FALSE)
+relad_x <- file.path(out, "relad/RELAD_RELAD2_serum_results.xlsx")
+relad_rl <- rd("relad/RELAD_RELAD2_serum_results.csv") |> filter(model == "relapse RELAD+RELAD2")
+tnf_pw <- read_csv(file.path(out, "tnfrsf9/proteome_wide_lesional_site.csv"), show_col_types = FALSE) |>
+  left_join(truth |> select(OlinkID, role, tnf_coupled), by = "OlinkID")
+tnf_ans <- read_csv(file.path(out, "tnfrsf9/answers.csv"), show_col_types = FALSE)
+sig_ans <- read_csv(file.path(out, "signatures/answers.csv"), show_col_types = FALSE)
+print(tnf_pw |> filter(tnf_coupled | rank <= 8) |> select(rank, Assay, partial_rho, mixed_fdr, role, tnf_coupled) |> as.data.frame(), digits = 2)
 stopifnot(
+  "manifest Ver2 codes not harmonised (step 01)" = any(md$cohort == "RELAD2" & md$relapse %in% "active") &&
+    all(!is.na(md$sex[md$cohort == "MicroAD"])) && any(md$clinical_state %in% "remission") && !any(md$clinical_state %in% "helthy"),
+  "serum AD vs healthy for dISF comparisons must be MicroAD only" =
+    all(ser$n_samples[ser$model == "AD_vs_HC_MicroAD"] < sum(md$cohort == "MicroAD" & md$matrix == "Serum" & md$visit %in% "V1")),
+  "RELAD / RELAD2 workbook incomplete (step 18)" = file.exists(relad_x) &&
+    all(c("summary", "all_results", "NPX_values", "detection", "key_proteins") %in% readxl::excel_sheets(relad_x)) &&
+    mean(relad_rl$significant[relad_rl$role == "Serum_relapse"]) >= 0.7,
+  "TNFRSF9-coupled proteins not found proteome-wide (step 19)" = sum(tnf_pw$tnf_coupled & coalesce(tnf_pw$mixed_fdr, 1) < 0.05) >= 4,
+  "group-driven proteins leak into the adjusted TNFRSF9 ranking (step 19)" = sum(!tnf_pw$tnf_coupled & coalesce(tnf_pw$mixed_fdr, 1) < 0.05) <= 3,
+  "TNFRSF9 - IL33 within-group correlation not found (step 19)" =
+    any(str_detect(tnf_ans$item, "IL33") & str_detect(tnf_ans$verdict, "within groups")),
+  "serum vs dISF signature answers incomplete (step 20)" = all(as.character(1:6) %in% str_extract(sig_ans$question, "^[0-9]")) &&
+    file.exists(file.path(out, "signatures/signatures.xlsx")),
   "key questions incomplete (step 15)" = all(paste0("Q", 1:5) %in% str_extract(kqa$question, "^Q[0-9]")) &&
     any(str_detect(kqa$verdict[str_detect(kqa$question, "^Q1") & kqa$item == "Mast cell score"], "elevated in AD")),
   "export missing or incomplete (step 17)" = nrow(ex_rl) == 76 && all(ex_rl$cohort == "RELAD2") &&

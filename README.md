@@ -91,10 +91,48 @@ are on the first pages of the executive summary. With 4 relapsing patients a rel
 called **possible (exploratory)**; only groups of ≥ 10 (RELAD/RELAD2) can give a firm "predicts
 relapse". Marker lists are set in `config.yml` under `key_questions`.
 
+### `tnfrsf9/` – which proteins correlate with TNFRSF9 (CD137 / 4-1BB) in dISF? (step 19)
+Partners (IL-33, IL-4, CSF2, IL6, IL18, CXCL8, IL1RL1, KIT, KITLG, TPSAB1, TPSB2, FCER1A) are set in
+`config.yml` under `tnfrsf9`. Open `TNFRSF9_correlations.xlsx`; sheet `answers` gives one line per result.
+
+| Analysis | How | Where |
+|---|---|---|
+| Detectability (read first) | % of dISF samples above LOD for TNFRSF9 and each partner, per site and group (and serum). Proteins mostly below LOD are flagged before any correlation. | `LOD_summary.csv`, sheet `LOD_summary` |
+| 1. Targeted | Spearman ρ, p, n: pooled (AD + healthy), within each group (AD, healthy, relapse, non-relapse, lesional / ex-lesional) and per visit. "Pooled only" = driven by group differences. | `targeted_correlations.csv`, `scatter_TNFRSF9_vs_IL33_IL4_dISF.png` |
+| 2. Proteome-wide | TNFRSF9 vs every measured dISF protein, adjusted for skin state, visit and plate (mixed model with subject as random effect; partial Spearman ρ). Ranked with FDR; IL-33 and IL-4 are marked. | `proteome_wide_lesional_site.csv`, `proteome_wide_non-lesional_site.csv`, `proteome_wide_volcano.png` |
+| 3. Longitudinal | Do changes between visits track within the same patient (Δ–Δ, repeated-measures correlation, mixed model on subject-centred values)? | sheet `longitudinal`, `delta_delta_TNFRSF9.png` |
+| 5. Cross-compartment | dISF vs serum TNFRSF9 in the same subject and visit; TNFRSF9 vs the partners in serum (MicroAD only) | sheets `cross_compartment_TNFRSF9`, `serum_partners`, `TNFRSF9_dISF_vs_serum.png` |
+
+Values below LOD are used as measured (Olink's recommendation). Two sensitivity columns repeat
+each correlation with below-LOD values set to the LOD, and with only samples above LOD.
+
+### `signatures/` – do serum and dISF carry the same or different signatures? (step 20)
+MicroAD only: RELAD / RELAD2 and LEIP serum are not used. Open `signatures.xlsx`; sheet `answers`
+gives the key numbers for each part.
+
+| Part | Content | Files |
+|---|---|---|
+| 1 | Effect-size concordance: log2FC serum vs log2FC dISF per comparison and visit; Spearman ρ, slope, % same sign; also only for proteins significant in either. Proteins below LOD in serum are listed separately. | `1_effect_concordance.csv`, `1_concordance_*.png` |
+| 2 | Group × visit models per compartment; temporal profiles of dISF-significant proteins (resolving / persistent / late-rising) and whether serum shows an attenuated copy | `2_time_models_Ftests.csv`, `2_temporal_profiles.png` |
+| 3 | Compartment × group (× visit): which proteins change with disease differently in dISF than in serum | `3_compartment_x_group.csv` |
+| 4 | Paired correlation serum vs dISF: tracks serum (systemic) or not (local) | `4_paired_correlation.csv` |
+| 5 | dISF-only, serum-only, shared-concordant, shared-discordant sets (FDR; p < 0.05 as sensitivity) with protein lists, Reactome / GO enrichment against the assayed panel, and tissue origin (Human Protein Atlas) | `5_signature_protein_lists.csv`, `5_enrichment.csv`, `5_tissue_origin.png` |
+| 6 | Relapse, predictive: dISF at the visit before relapse vs non-relapsers at the same visits | `6_pre_relapse.csv`, `6_pre_relapse_volcano.png` |
+
+The tissue annotation is downloaded once from proteinatlas.org into `data/hpa_annotation.tsv`. Without
+internet, put that file there yourself (or part 5 runs without tissue origin).
+
+### `relad/` – all RELAD and RELAD2 serum results (step 18)
+`RELAD_RELAD2_serum_results.xlsx`: relapse vs non-relapse (pooled, without conflicting labels, each
+cohort alone), AD vs healthy, relapse < 1 week vs > 1 week (RELAD2), time to relapse (RELAD), active
+AD vs remission (RELAD2); every protein with logFC, 95 % CI, p and FDR; detection per cohort and
+group; the key proteins; TNFRSF9 correlations; and the NPX values of all RELAD / RELAD2 samples.
+Volcano plots are in `relad/volcano/`.
+
 ### `metadata/` – the samples (step 01)
 | File | Content |
 |---|---|
-| `sample_metadata.csv` | One row per sample: patient, visit, skin site, skin state, group, relapse, plate, volume … |
+| `sample_metadata.csv` | One row per sample: patient, visit, skin site, skin state, group, relapse, sex, plate, volume … |
 | `data_flags.csv` | Inconsistencies found in the manifest, e.g. contradicting relapse labels or low sample volume. They are **flagged, not corrected**. |
 
 ### `qc/` – quality control (step 02)
@@ -236,7 +274,7 @@ Intermediate files used by the scripts (`.rds`). You don't need to open them.
 | `per_week_xL`, `per_week_NL` | Change per week in ex-lesional / non-lesional skin |
 | `relapse_vs_non` | Patients who relapse vs who don't |
 | `Lsite_vs_HC`, `Lsite_vs_NL`, `NL_vs_HC` (per visit) | At one visit: lesion site vs healthy / vs non-lesional; non-lesional vs healthy |
-| `AD_vs_HC` (serum) | AD patients vs healthy controls of the same studies |
+| `AD_vs_HC` (serum) | AD patients vs healthy controls of the same studies (model `AD_vs_HC_in_study`: MicroAD + RELAD + RELAD2; model `AD_vs_HC_MicroAD`: MicroAD only, used whenever serum is compared with dISF) |
 | `AD_vs_Biobank`, `HC_vs_Biobank` | vs LEIP biobank serum (the latter checks for biobank handling effects) |
 | `active_vs_cleared` (serum) | Serum at visits with an active lesion vs after clearing |
 
@@ -246,6 +284,9 @@ Model names: `states_all_visits` = all visits together; `baseline_V1` = V1 only;
 ---
 
 ## 6. Please keep in mind
+
+- **Serum vs dISF uses MicroAD serum only.** RELAD / RELAD2 serum is analysed on its own (step 18)
+  and never enters a comparison with dISF (steps 06, 10, 14, 15 Q5, 19, 20).
 
 - **Relapse results are exploratory.** There are only 4 relapsing patients in MicroAD.
 - **Few samples per visit** (6–11 patients) make the FDR strict. "Not significant" does **not** mean "no difference".
@@ -261,7 +302,7 @@ Model names: `states_all_visits` = all visits together; `baseline_V1` = V1 only;
 |---|---|
 | `run_all.R` | Runs everything in order |
 | `config.yml` | All settings: file paths, thresholds, focus proteins, CSV separator |
-| `scripts/01_…` to `scripts/17_…` | One script per analysis step. The number is also the step in `start_at`. |
+| `scripts/01_…` to `scripts/20_…` | One script per analysis step. The number is also the step in `start_at`. |
 | `R/` | Shared functions used by the scripts |
 | `data/` | Your input files (not uploaded to GitHub) – see `data/README.md` |
 | `output/` | All results (not uploaded to GitHub) |
@@ -287,6 +328,9 @@ Model names: `states_all_visits` = all visits together; `baseline_V1` = V1 only;
 | 15 | `15_key_questions.R` | Answers to the key questions (mast cells, CD137, relapse, dISF vs serum) |
 | 16 | `16_summary_report.R` | Executive summary PDF |
 | 17 | `17_export_data.R` | CSV export of the data |
+| 18 | `18_relad_serum.R` | All RELAD / RELAD2 serum results in one Excel file |
+| 19 | `19_tnfrsf9_correlations.R` | Which proteins correlate with TNFRSF9 in dISF |
+| 20 | `20_serum_vs_disf_signatures.R` | Same or different signatures in serum and dISF |
 
 ---
 

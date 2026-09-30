@@ -71,6 +71,10 @@ serum_specs <- function(info) {
          samples = ids(cross_sectional, status %in% c("AD", "HC")),
          formula = ~ 0 + status + cohort + plate,
          contrasts = c(AD_vs_HC = "statusAD - statusHC")),
+    list(name = "AD_vs_HC_MicroAD",               # MicroAD only (V1): the serum counterpart of the dISF
+         samples = ids(cross_sectional, cohort == "MicroAD", status %in% c("AD", "HC")),   # comparisons, no RELAD/RELAD2
+         formula = ~ 0 + status + plate,
+         contrasts = c(AD_vs_HC = "statusAD - statusHC")),
     list(name = "AD_vs_Biobank",
          samples = ids(cross_sectional, status %in% c("AD", "Biobank")),
          formula = ~ 0 + status + plate,

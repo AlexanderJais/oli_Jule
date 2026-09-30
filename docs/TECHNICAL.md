@@ -17,6 +17,9 @@ CPUO), plus serum from RELAD / RELAD2 and LEIP biobank controls.
 | **Executive summary of everything** | 16 | `Executive_summary.pdf` |
 | **Data export: all proteins, all samples (CSV); RELAD2 separately** | 17 | `export/` |
 | Focus proteins: CD137 (TNFRSF9), TNFSF9, KITLG, CPA4, FCER1A, TPSAB1, MS4A2, TPSD1, PNOC, POSTN | 12 | `focus/focus_overview.xlsx`, `focus/focus_overview_heatmap.png`, one folder per protein |
+| **All RELAD / RELAD2 serum results** | 18 | `relad/RELAD_RELAD2_serum_results.xlsx` |
+| **Which proteins correlate with TNFRSF9 in dISF** (targeted, proteome-wide, longitudinal, LOD, cross-compartment) | 19 | `tnfrsf9/TNFRSF9_correlations.xlsx` |
+| **Same or different signatures in serum and dISF** (concordance, group × visit, compartment × group, paired correlation, signature sets, pre-relapse) | 20 | `signatures/signatures.xlsx` |
 
 Secondary: relapse (04, 05, 11; exploratory) and RELAD/RELAD2 serum relapse (05).
 
@@ -66,6 +69,9 @@ All settings (thresholds, FDR, number of cores) are in `config.yml`.
 | `14_serum_vs_disf.R` | The same question in dISF and serum, per visit and pooled: AD vs healthy (dISF lesion site or non-lesional skin vs healthy skin; MicroAD serum AD vs healthy) and relapse vs non-relapse (only visits before the relapse). Significant sets (FDR, and p < 0.05 as exploratory) are split into both (same / opposite direction), dISF only, dISF only because the protein isn't measurable in serum, and serum only. Output: Venn diagrams, stacked bars per visit, dISF volcano plots coloured by what serum shows, and dISF vs serum effect plots. | `serum_vs_disf/*` |
 | `17_export_data.R` | CSV export of the Olink data: `samples.csv` (metadata + QC), `proteins.csv` (annotation, LOD, detection), wide tables per matrix (samples × proteins) as delivered (`NPX`) and as analysed (`PCNormalizedNPX`), a long table (`NPX_long.csv.gz`) with LOD and QC flags, and `export/RELAD2/` with the RELAD2 samples only. Values below LOD are kept as measured. For German Excel set `export: sep: ";"` in `config.yml`. | `export/*` |
 | `16_summary_report.R` | Executive summary PDF: data and QC, automatically extracted key findings per aim, all comparisons, visit course, volcano plots, pathways, dISF vs serum, serum, focus proteins, methods and caveats. Each section is skipped with a note if its step did not run. | `Executive_summary.pdf` |
+| `18_relad_serum.R` | RELAD / RELAD2 serum (one sample per person), limma adjusted for plate (pooled models also cohort): relapse vs non-relapse (pooled, unflagged, per cohort), AD vs healthy (pooled, per cohort), RELAD2 relapse < 1 w vs > 1 w, RELAD TimeToRelapse as a number, RELAD2 active AD vs remission. One workbook with all results (approximate 95 % CI from the moderated SE), detection, key proteins, TNFRSF9 correlations and NPX values. | `relad/*` |
+| `19_tnfrsf9_correlations.R` | TNFRSF9 vs the partners in `tnfrsf9$partners`: Spearman pooled / within groups (incl. lesional and ex-lesional separately) / per visit, with repeated-measures correlation; proteome-wide mixed model (dream, `protein ~ TNFRSF9 + state + visit + plate + (1 | subject)`) with partial Spearman ρ; Δ–Δ and subject-centred models; LOD summary with two below-LOD sensitivity analyses; dISF vs serum TNFRSF9 and TNFRSF9 vs partners in MicroAD serum. | `tnfrsf9/*` |
+| `20_serum_vs_disf_signatures.R` | MicroAD only. Effect-size concordance (Spearman, OLS and major-axis slope, % same sign; serum-below-LOD proteins separate); limma + duplicateCorrelation group × visit models per compartment with profile classes; stacked compartment × group (× visit) model with per-compartment variance weights; paired serum–dISF correlation; signature sets with ORA (fgsea::fora, panel as background) and HPA tissue origin; pre-relapse visit vs non-relapsers. Uses the per-protein results of step 14 (`data/serum_vs_disf_results.rds`). | `signatures/*` |
 | `08_leip_reference.R` | For the proteins significant in step 06: LEIP normal range, where AD patients fall in it, clinical associations in LEIP, detectability, and LEIP vs in-study controls. | `leip_reference/*` (incl. `.xlsx`) |
 
 ### Models
@@ -97,8 +103,10 @@ BH FDR is applied within each contrast.
   - Fallback for rows without a match: the Olink negative-control method on the 8 negative controls. OlinkAnalyze normally requires ≥ 10, so this LOD is less precise; in simulation it was off by up to ±0.6 NPX.
   - `qc/lod.csv` gives the LOD source and the per-sample LOD range for each assay.
 - **Relapse in ISF is exploratory.** All four ISF relapsers are on plate 1, and plate 2 holds only non-relapsers.
+- **Serum is compared with dISF on MicroAD samples only.** RELAD / RELAD2 are separate cohorts without dISF; their serum is analysed in steps 05 and 18 but never enters a dISF comparison. Steps 10 and 15 (Q5) therefore use the serum model `AD_vs_HC_MicroAD` (V1, MicroAD only) instead of `AD_vs_HC_in_study` (MicroAD + RELAD + RELAD2).
+- **Manifest Ver2** adds `Sex` (MicroAD; coded M / F like LEIP) and `NoRELAD2`, and uses `activeAD`, `relapse_<1w` / `relapse_>1w` / `non-relapse`, and the spellings `remisison` / `helthy`. All are harmonised in `R/metadata.R`; RELAD2's `ClinicalStateSkin` (remission / active AD) is kept as `clinical_state`.
 - **Metadata issues are flagged, not fixed**, in `metadata/data_flags.csv`. As of manifest v3 this covers the RELAD / RELAD2 label conflicts, 5 low-volume ISF samples, and LEIP_35 without clinical data.
-- **Age and sex** are currently only available for LEIP, so the serum models are not adjusted for them.
+- **Age** is only available for LEIP and **sex** for LEIP and MicroAD, so the models are not adjusted for them.
 
 ## Testing without real data
 

@@ -1,5 +1,5 @@
 # Synthetic stand-in for the O-MicroAD manifest and LEIP clinical file.
-# Same sheet layout and study design as the real submission sheet (344 samples: 128 dISF on
+# Same sheet layout, codes (manifest Ver2) and study design as the real submission sheet (344 samples: 128 dISF on
 # plates 1-2, 216 serum on plates 2-4; MicroAD patients with 2-6 visits, relapse / non-relapse,
 # healthy volunteers, CPUO, RELAD, RELAD2, LEIP) but no real IDs, dates or clinical values.
 # Lets tests/test_pipeline.R run without any study data.
@@ -48,15 +48,21 @@ relad <- tibble(SubjectID = sprintf("RELAD_%02d", 1:35), Study = "RELAD",
                             sample(c("relapse", "non-relapse", "DROPOUT"), 24, TRUE, c(0.45, 0.45, 0.1))))
 relad2 <- tibble(SubjectID = sprintf("RELAD2_%02d", 1:76), Study = "RELAD2",
                  Group = c(rep("AD", 68), rep("H", 8)),
-                 Relapse = c(sample(c("relapse", "non-relapse", "DROPOUT", "active AD"), 68, TRUE, c(0.45, 0.4, 0.07, 0.08)),
+                 Relapse = c(sample(c("relapse", "non-relapse", "DROPOUT", "activeAD"), 68, TRUE, c(0.45, 0.4, 0.07, 0.08)),
                              rep("healthy", 8)))
 leip <- tibble(SubjectID = sprintf("LEIP_%02d", 1:35), Study = "LEIP", Group = E, Relapse = E)
 serum <- bind_rows(serum_micro, relad, relad2, leip) |>
-  mutate(SampleID = sprintf("S%03d", row_number()), SampleType = "Serum", Skin = E, ClinicalStateSkin = E,
+  mutate(SampleID = sprintf("S%03d", row_number()), SampleType = "Serum", Skin = E,
          Visit = coalesce(Visit, E),
-         TimeToRelapse = case_when(Study %in% c("RELAD", "RELAD2") & Relapse == "relapse" ~ sample(c("relapse <1w", "relapse >1w"), n(), TRUE),
-                                   Study %in% c("RELAD", "RELAD2") & Relapse == "non-relapse" ~ "no relapse",
-                                   TRUE ~ E))
+         # coded as in manifest Ver2: RELAD weeks to relapse, RELAD2 relapse_<1w / relapse_>1w / non-relapse
+         TimeToRelapse = case_when(Study == "RELAD" & Relapse == "relapse" ~ as.character(sample(1:9, n(), TRUE)),
+                                   Study == "RELAD2" & Relapse == "relapse" ~ sample(c("relapse_<1w", "relapse_>1w"), n(), TRUE),
+                                   Study %in% c("RELAD", "RELAD2") & Relapse == "non-relapse" ~ "non-relapse",
+                                   Study == "RELAD2" & Relapse %in% c("activeAD", "healthy") ~ Relapse,
+                                   TRUE ~ E),
+         ClinicalStateSkin = case_when(Study != "RELAD2" ~ E, Relapse %in% c("relapse", "non-relapse") ~ "remisison",
+                                       Relapse == "healthy" ~ if_else(SubjectID == "RELAD2_69", "helthy", "healthy"),   # typo as in Ver2
+                                       TRUE ~ Relapse))
 
 # ---- plates: 86 samples + 10 controls each; ISF on plates 1-2, serum on 2-4 --------------------
 ctrl <- tibble(well = c(paste0(LETTERS[1:5], 12), paste0(LETTERS[6:8], 12), "G11", "H11"),
@@ -70,13 +76,17 @@ all$plate <- paste("Plate", rep(1:4, each = 86))
 all <- all |> group_by(plate) |> slice_sample(prop = 1) |> mutate(well = sample_wells) |> ungroup() |>
   mutate(row = str_sub(well, 1, 1), column = paste("Column", str_sub(well, 2)))
 
+# manifest Ver2: sex for MicroAD participants (RELAD, RELAD2, LEIP: EMPTY)
+micro_ids <- unique(all$SubjectID[all$Study == "MicroAD"])
+sex_of <- setNames(sample(c("female", "male"), length(micro_ids), TRUE, c(0.7, 0.3)), micro_ids)
 manifest <- all |>
   arrange(SampleType, SampleID) |>
   transmute(SampleID, SubjectID, Visit, Skin, SampleType, Group, SampleNumber = E, Study,
             Date = if_else(is.na(Date), E, format(Date, "%Y-%m-%d")), SampleName = SubjectID,
             Relapse = coalesce(Relapse, E), TimeToRelapse = coalesce(TimeToRelapse, E),
-            ClinicalStateSkin, plate, column, row, well,
-            Note = if_else(Relapse %in% "DROPOUT", "DROPOUT", E))
+            ClinicalStateSkin, Sex = coalesce(sex_of[SubjectID], E), plate, column, row, well,
+            Note = if_else(Relapse %in% "DROPOUT", "DROPOUT", E),
+            NoRELAD2 = if_else(Study == "RELAD2", str_remove(SubjectID, "^RELAD2_0?"), E))
 
 vol <- manifest |> transmute(SampleID, SubjectID, Visit, SampleType, plate, column, row, well,
                              SampleVolume = if_else(SampleType == "dISF", "20", "40"))

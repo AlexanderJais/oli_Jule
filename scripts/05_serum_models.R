@@ -24,7 +24,7 @@ res <- run_model_specs(specs, expr, info, cfg, "Serum", assay_map)
 # agreement of the two AD-vs-control comparisons
 if (nrow(res) && all(c("AD_vs_HC", "AD_vs_Biobank") %in% res$contrast)) {
   agree <- res |>
-    filter(contrast %in% c("AD_vs_HC", "AD_vs_Biobank")) |>
+    filter(model %in% c("AD_vs_HC_in_study", "AD_vs_Biobank")) |>   # not AD_vs_HC_MicroAD (same contrast name)
     select(OlinkID, Assay, contrast, logFC, adj.P.Val, significant) |>
     pivot_wider(names_from = contrast, values_from = c(logFC, adj.P.Val, significant)) |>
     mutate(agree_both_controls = significant_AD_vs_HC & significant_AD_vs_Biobank &

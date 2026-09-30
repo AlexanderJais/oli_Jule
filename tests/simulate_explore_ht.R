@@ -29,7 +29,8 @@ ht <- readRDS(system.file("extdata", "OlinkID_HT_mapping.rds", package = "OlinkA
 th2 <- c("CCL17", "CCL22", "CCL18", "IL13", "IL4", "POSTN", "CCL26", "IL5", "TSLP", "IL31",
          "CCL11", "CCL13", "CCL24", "IL4R", "IL13RA2", "MMP12", "PI3", "SERPINB4", "S100A7", "S100A8",
          "S100A9", "IL19", "IL22", "IL36G", "TNFRSF9")   # TNFRSF9 = CD137 (focus protein)
-focus_sim <- c("TNFSF9", "KITLG", "CPA4", "FCER1A", "TPSAB1", "TPSD1", "KIT")   # other focus proteins (step 12)
+focus_sim <- c("TNFSF9", "KITLG", "CPA4", "FCER1A", "TPSAB1", "TPSD1", "KIT",   # other focus proteins (step 12)
+               "IL33", "CSF2", "IL6", "IL18", "CXCL8", "IL1RL1")                  # TNFRSF9 partners (step 19)
 ht <- bind_rows(ht |> filter(Gene %in% th2), ht |> filter(Gene %in% focus_sim),
                 ht |> filter(!Gene %in% c(th2, focus_sim)) |> slice_sample(prop = 1))
 assays <- ht |> slice_head(n = n_assays) |>
@@ -49,6 +50,9 @@ role <- case_when(
   TRUE ~ "null"
 )
 assays$role <- role
+# step 19: in dISF, TNFRSF9 shares a sample-level signal with IL33 and five otherwise null proteins
+# (a real protein-protein relation, within groups and over time); IL4 has none beyond the lesional effect
+assays$tnf_coupled <- assays$Assay %in% c("TNFRSF9", "IL33") | eff(150, 154)
 # coupled proteins 46-50 also depend on BMI in the population
 assays$bmi_slope <- if_else(eff(46, 50), 0.12, 0)
 
@@ -78,6 +82,7 @@ u_subj <- list(ISF = matrix(rnorm(length(subj) * n_assays, 0, 0.3), length(subj)
                Serum = matrix(rnorm(length(subj) * n_assays, 0, 0.3), length(subj), dimnames = list(subj, NULL)))
 sv_key <- with(samples, ifelse(is.na(visit), SubjectID, paste(SubjectID, visit)))
 sv <- unique(na.omit(sv_key))
+z_tnf <- rnorm(nrow(samples), 0, 0.7)       # sample-level TNFRSF9 axis (dISF only)
 z_sv <- matrix(rnorm(length(sv) * n_assays, 0, 0.9), length(sv), dimnames = list(sv, NULL))
 plate_off <- matrix(rnorm(4 * n_assays, 0, 0.08), 4, dimnames = list(paste("Plate", 1:4), NULL))
 
@@ -90,6 +95,7 @@ for (i in seq_len(nrow(samples))) {
   isf <- s$matrix == "ISF"
   x <- base + if (isf) isf_off else 0
   x <- x + u_subj[[s$matrix]][s$SubjectID, ] + plate_off[s$plate, ]
+  if (isf) x <- x + z_tnf[i] * assays$tnf_coupled
   if (isf && s$group == "AD") {
     x <- x + 0.8 * (assays$role == "ISF_AD_vs_HC")
     if (identical(s$state, "lesional"))    x <- x + 1.5 * (assays$role == "ISF_lesional") +
@@ -195,7 +201,7 @@ lod <- assays |>
             LODMethod = if_else(idx %% 5 == 0, "lod_count", "lod_npx"), Version = "10.2.0")
 write.table(lod, file.path(sim_dir, "fixed_lod.csv"), sep = ";", row.names = FALSE, quote = FALSE)
 
-write_csv(assays |> mutate(isf_offset = isf_off) |> select(OlinkID, Assay, role, bmi_slope, isf_offset),
+write_csv(assays |> mutate(isf_offset = isf_off) |> select(OlinkID, Assay, role, bmi_slope, isf_offset, tnf_coupled),
           file.path(sim_dir, "truth.csv"))
 
 # clinical severity per AD visit: high when the tracked lesion is active
@@ -207,9 +213,11 @@ yaml::write_yaml(list(
   paths = list(manifest = cfg$paths$manifest, npx_dir = file.path(sim_dir, "npx"),
                severity = file.path(sim_dir, "severity.csv"),
                leip_clinical = cfg$paths$leip_clinical, fixed_lod = file.path(sim_dir, "fixed_lod.csv"),
+               hpa = file.path(sim_dir, "hpa_annotation.tsv"),
                output = "output_sim"),
   npx_column = cfg$npx_column, qc = cfg$qc, stats = cfg$stats, enrichment = cfg$enrichment,
-  focus_proteins = cfg$focus_proteins
+  focus_proteins = cfg$focus_proteins, key_questions = cfg$key_questions, tnfrsf9 = cfg$tnfrsf9,
+  signatures = cfg$signatures, export = cfg$export
 ), file.path(sim_dir, "config_sim.yml"))
 
 msg("Simulated %d samples/controls x %d assays -> %s", nrow(samples), n_assays, sim_dir)

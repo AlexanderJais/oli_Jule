@@ -165,9 +165,9 @@ section("Key findings", {
     for (pr in unique(fov$label)) {
       d <- fov |> filter(label == pr)
       g <- \(cmp) { r <- d |> filter(comparison == cmp); if (!nrow(r)) "n/a" else sprintf("%+.2f (p = %.2g)", r$estimate[1], r$p[1]) }
-      items <- c(items, sprintf("%s: dISF lesional vs non-lesional %s; ex-lesional vs non-lesional %s; non-lesional vs healthy %s; serum AD vs healthy %s.",
+      items <- c(items, sprintf("%s: dISF lesional vs non-lesional %s; ex-lesional vs non-lesional %s; non-lesional vs healthy %s; serum AD vs healthy (MicroAD) %s.",
                                 pr, g("dISF: states_all_visits AD_L_vs_NL"), g("dISF: states_all_visits AD_xL_vs_NL"),
-                                g("dISF: states_all_visits AD_NL_vs_HC"), g("serum: AD_vs_HC_in_study AD_vs_HC")))
+                                g("dISF: states_all_visits AD_NL_vs_HC"), g("serum: AD_vs_HC_MicroAD AD_vs_HC")))
     }
     missing_fp <- setdiff(toupper(unlist(cfg$focus_proteins)), toupper(unique(fov$protein)))
     if (length(missing_fp)) items <- c(items, sprintf("Not measured in this dataset: %s.", paste(missing_fp, collapse = ", ")))
@@ -333,11 +333,13 @@ section("Methods", {
     "All four MicroAD relapsers' dISF samples are on plate 1: dISF relapse results are exploratory.",
     "Per-visit and V1 comparisons have 6-11 patients per visit: absence of significance is not absence of an effect (strict FDR cutoff with few samples).",
     "LEIP biobank serum differs pre-analytically; AD vs biobank differences are only trusted when they agree with the in-study controls.",
-    "Age and sex are only available for LEIP; serum models are not adjusted for them.",
+    "Age is only available for LEIP and sex for LEIP and MicroAD; the models are not adjusted for them.",
+    "dISF vs serum comparisons use MicroAD serum only; RELAD / RELAD2 serum is analysed separately (steps 05 and 18).",
     "## Output folders (all under the output directory)",
     "qc/ - QC tables and plots | models/ - all model results and volcano plots (models/volcano/) | visit_course/ - per-visit analysis and time courses",
     "isf_profile/ - dISF proteome | matrix_comparison/ - dISF vs serum | serum_vs_disf/ - overlap per visit (Venn) | isf_serum/ - correlations",
-    "trajectories/ - disease course | leip_reference/ | enrichment/ | focus/ - focus proteins (overview + one folder per protein)"),
+    "trajectories/ - disease course | leip_reference/ | enrichment/ | focus/ - focus proteins (overview + one folder per protein)",
+    "relad/ - all RELAD / RELAD2 serum results (step 18) | tnfrsf9/ - proteins correlated with TNFRSF9 in dISF (step 19) | signatures/ - serum vs dISF signatures (step 20)"),
     size = 10)
 })
 
