@@ -6,7 +6,9 @@ source("R/utils.R")
 cfg <- load_config()
 clear_outputs(cfg, "enrichment")
 
-files <- list.files(file.path(cfg$paths$output, "models"), pattern = "_results\\.csv$", full.names = TRUE)
+# steps 04/05 only; per-visit results of step 13 (ISF_by_visit_*) would otherwise be picked up on a re-run
+files <- list.files(file.path(cfg$paths$output, "models"), pattern = "^(ISF|Serum)_(results|relapse_delta_results)\\.csv$",
+                    full.names = TRUE)
 if (!length(files)) stop("No model results found - run scripts 04 and 05 first.")
 res <- map(files, \(f) read_csv(f, show_col_types = FALSE) |> mutate(file = basename(f))) |> bind_rows()
 

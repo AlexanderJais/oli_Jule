@@ -86,13 +86,9 @@ for (fp in focus) {
   }) |> ungroup()
 
   sev_tab <- NULL
-  if (!is.null(cfg$paths$severity) && file.exists(cfg$paths$severity)) {
-    sev <- if (str_detect(cfg$paths$severity, "\\.xlsx?$")) readxl::read_excel(cfg$paths$severity) else
-      read_csv(cfg$paths$severity, show_col_types = FALSE)
-    names(sev)[tolower(names(sev)) == "subjectid"] <- "SubjectID"
-    names(sev)[tolower(names(sev)) == "visit"] <- "visit"
-    names(sev) <- make.names(names(sev))
-    scores <- setdiff(names(sev)[vapply(sev, is.numeric, logical(1))], c("SubjectID", "visit"))
+  sev <- read_severity(cfg$paths$severity)
+  if (!is.null(sev)) {
+    scores <- severity_scores(sev)
     si <- micro |> filter(group == "AD") |> left_join(sev, by = c("SubjectID", "visit")) |>
       mutate(series = case_when(matrix == "Serum" ~ "serum", site == "L" ~ "dISF lesional site", TRUE ~ "dISF non-lesional site"))
     sev_tab <- map(scores, \(sc) map(unique(si$series), \(se) {

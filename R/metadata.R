@@ -117,8 +117,10 @@ build_metadata <- function(manifest_path, leip_path = NULL) {
   # --- timing (MicroAD) ---------------------------------------------------------
   meta <- meta |>
     group_by(SubjectID) |>
-    mutate(days_since_v1 = if (all(is.na(date))) NA_real_ else
-      as.numeric(date - min(date[visit_num == min(visit_num, na.rm = TRUE)], na.rm = TRUE))) |>
+    # only for subjects with visit numbers and dates (single-sample cohorts would give -Inf/Inf)
+    mutate(days_since_v1 = if (all(is.na(date)) || all(is.na(visit_num))) NA_real_ else
+      as.numeric(date - suppressWarnings(min(date[visit_num %in% min(visit_num, na.rm = TRUE)], na.rm = TRUE))),
+      days_since_v1 = if_else(is.finite(days_since_v1), days_since_v1, NA_real_)) |>
     ungroup()
 
   # --- relapse visit: first return of 'lesional' at the L site after it had cleared

@@ -55,13 +55,9 @@ results$C <- fit_contrasts(wide$Serum, serum_info, ~ weeks_to_relapse + plate + 
                            c(per_week = "weeks_to_relapse"), "Serum_vs_weeks_to_relapse", cfg$stats$min_group_n)
 
 # ---- D: clinical severity (optional) -------------------------------------------------------------------
-sev_path <- cfg$paths$severity
-if (!is.null(sev_path) && file.exists(sev_path)) {
-  sev <- if (str_detect(sev_path, "\\.xlsx?$")) readxl::read_excel(sev_path) else read_csv(sev_path, show_col_types = FALSE)
-  names(sev)[tolower(names(sev)) == "subjectid"] <- "SubjectID"
-  names(sev)[tolower(names(sev)) == "visit"] <- "visit"
-  names(sev) <- make.names(names(sev))            # e.g. "itch NRS" -> "itch.NRS"
-  scores <- setdiff(names(sev)[vapply(sev, is.numeric, logical(1))], c("SubjectID", "visit"))
+sev <- read_severity(cfg$paths$severity)
+if (!is.null(sev)) {
+  scores <- severity_scores(sev)
   msg("Severity file: %d rows, scores: %s", nrow(sev), paste(scores, collapse = ", "))
   sev_info <- ad |> left_join(sev, by = c("SubjectID", "visit"))
   for (sc in scores) {

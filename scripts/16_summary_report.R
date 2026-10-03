@@ -11,6 +11,14 @@ meta <- read_step(cfg, "metadata", "sample_metadata.rds", step = "scripts/01_met
 clean_path <- file.path(cfg$paths$output, "data", "npx_clean.rds")
 clean <- if (file.exists(clean_path)) readRDS(clean_path) else NULL
 
+# study numbers used in the text (computed, so the text stays right when the data change)
+rel_pat <- meta |> filter(cohort == "MicroAD", group == "AD", relapse %in% c("relapse", "non-relapse")) |> distinct(SubjectID, relapse)
+n_rel <- sum(rel_pat$relapse == "relapse"); n_non <- sum(rel_pat$relapse == "non-relapse")
+rel_txt <- sprintf("%d relapsing vs %d non-relapsing patients in MicroAD", n_rel, n_non)
+rel_plates <- meta |> filter(matrix == "ISF", SubjectID %in% rel_pat$SubjectID[rel_pat$relapse == "relapse"]) |> distinct(plate) |> pull(plate)
+per_visit_n <- meta |> filter(matrix == "ISF", cohort == "MicroAD", group == "AD", !is.na(visit_num)) |>
+  distinct(visit_num, SubjectID) |> count(visit_num) |> pull(n)
+
 # ---- gather results -------------------------------------------------------------------------------------
 sq      <- out_csv(cfg, "qc", "sample_qc.csv")
 lod     <- out_csv(cfg, "qc", "lod.csv")
@@ -74,7 +82,7 @@ section("Overview", {
       sprintf("Metadata issues flagged (not corrected): %s.", if (is.null(flags) || !nrow(flags)) "none" else
         paste(sprintf("%s (%d)", names(table(flags$issue)), table(flags$issue)), collapse = "; ")),
       "## How to read this summary",
-      sprintf("Proteome-wide results use the Benjamini-Hochberg false discovery rate (FDR < %g) within each comparison. Effects are differences in PC-normalised NPX (log2 scale). Focus proteins (e.g. CD137) are pre-specified and judged by their own p-value. Relapse analyses are exploratory (4 relapsers in MicroAD).", fdr),
+      sprintf("Proteome-wide results use the Benjamini-Hochberg false discovery rate (FDR < %g) within each comparison. Effects are differences in PC-normalised NPX (log2 scale). Focus proteins (e.g. CD137) are pre-specified and judged by their own p-value. Relapse analyses are exploratory (%s).", fdr, rel_txt),
       paste("Generated", format(Sys.time(), "%Y-%m-%d %H:%M"), "from", normalizePath(cfg$paths$output))),
     subtitle = "dermal interstitial fluid (dISF) and serum - automatically generated from the pipeline results")
 })
@@ -89,7 +97,7 @@ section("Key questions", {
                                                         paste0(str_to_upper(substr(a$verdict, 1, 1)), substring(a$verdict, 2)))))
   }
   page_text("Key questions - answers", c(items,
-    "## Note", "Single pre-specified tests (p < 0.05, not corrected across questions). Relapse results are exploratory: 4 relapsing vs 6 non-relapsing patients in MicroAD; RELAD/RELAD2 serum provides larger groups. Evidence for every answer: next pages and key_questions/key_questions.xlsx."),
+    "## Note", paste0("Single pre-specified tests (p < 0.05, not corrected across questions). Relapse results are exploratory: ", rel_txt, "; RELAD/RELAD2 serum provides larger groups. Evidence for every answer: next pages and key_questions/key_questions.xlsx.")),
     subtitle = "automatically derived from the tests; please interpret with the evidence tables", size = 9.5)
   page_table("Key questions - evidence", kq_ans |> transmute(question = str_extract(question, "^Q[0-9]"), item, verdict = str_trunc(verdict, 60)),
              rows_per_page = 30, note = "Full evidence text: key_questions/answers.csv")
@@ -115,7 +123,7 @@ section("Key questions", {
       geom_pointrange(aes(xmin = ci_low, xmax = ci_high)) + facet_wrap(~entity) + coord_cartesian(xlim = c(0, 1)) +
       scale_colour_manual(values = c(dISF = "firebrick", serum = "steelblue")) +
       labs(title = "Q4/Q5  Do values BEFORE the relapse separate relapsers from non-relapsers? (dISF vs serum)",
-           subtitle = "AUC with 95% bootstrap CI; 0.5 = no separation; MicroAD n = 4 vs 6 patients (CI unreliable), RELAD/RELAD2 larger",
+           subtitle = sprintf("AUC with 95%% bootstrap CI; 0.5 = no separation; MicroAD n = %d vs %d patients (CI unreliable), RELAD/RELAD2 larger", n_rel, n_non),
            x = "AUC", y = NULL, colour = NULL)
     page_plot(p)
   }
@@ -218,7 +226,7 @@ section("Visit course", {
     if (!nrow(sel)) { page_text(sprintf("Proteins regulated at all visits (%s)", ct_lab), "No protein was significant at every visit."); next }
     top <- sel |> slice_min(max_p, n = 16, with_ties = FALSE)
     d <- vis |> filter(contrast == ct, OlinkID %in% top$OlinkID) |>
-      mutate(se = abs(logFC / t), Assay = factor(Assay, levels = top$Assay))
+      mutate(se = abs(logFC / t), Assay = factor(Assay, levels = unique(top$Assay)))
     p <- ggplot(d, aes(model, logFC, group = 1)) + geom_hline(yintercept = 0, colour = "grey60") +
       geom_errorbar(aes(ymin = logFC - 1.96 * se, ymax = logFC + 1.96 * se), width = 0.2, colour = "grey50") +
       geom_line(colour = "grey40") + geom_point(aes(colour = significant), size = 1.8) +
@@ -342,8 +350,10 @@ section("Methods", {
     "Per-protein models: limma/dream with empirical Bayes moderation; subject as random effect for repeated samples, plate as fixed effect in dISF; cohort and plate in serum. One-term mixed models: limma + duplicateCorrelation.",
     "dISF vs serum: repeated-measures correlation (within patients) and Spearman on patient means (between patients); relative enrichment = centred paired log2 difference.",
     "## Caveats",
-    "All four MicroAD relapsers' dISF samples are on plate 1: dISF relapse results are exploratory.",
-    "Per-visit and V1 comparisons have 6-11 patients per visit: absence of significance is not absence of an effect (strict FDR cutoff with few samples).",
+    if (length(rel_plates) == 1) sprintf("All %d MicroAD relapsers' dISF samples are on %s (relapse and plate cannot be separated): dISF relapse results are exploratory.", n_rel, rel_plates)
+    else sprintf("Relapse analyses compare %s: exploratory.", rel_txt),
+    sprintf("Per-visit and V1 comparisons have %s AD patients per visit: absence of significance is not absence of an effect (strict FDR cutoff with few samples).",
+            if (length(per_visit_n)) paste(unique(range(per_visit_n)), collapse = "-") else "few"),
     "LEIP biobank serum differs pre-analytically; AD vs biobank differences are only trusted when they agree with the in-study controls.",
     "Sex is available for MicroAD (manifest) and LEIP, age only for LEIP; the models are not adjusted for them.",
     "## Output folders (all under the output directory)",
@@ -393,7 +403,7 @@ tabs <- c(list(
 tabs <- tabs[vapply(tabs, nrow, 1L) > 0]
 index <- tibble(sheet = names(tabs), rows = vapply(tabs, nrow, 1L),
                 content = c(lesion_restricted = "proteins detectable only in lesional AD dISF (step 09)",
-                            dISF_L_vs_NL = "significant: lesional vs non-lesional AD skin, all visits (FDR < 0.05)",
+                            dISF_L_vs_NL = sprintf("significant: lesional vs non-lesional AD skin, all visits (FDR < %g)", fdr),
                             dISF_xL_vs_NL = "significant: ex-lesional vs non-lesional, all visits",
                             dISF_L_vs_xL = "significant: lesional vs ex-lesional, all visits",
                             dISF_L_vs_HC = "significant: lesional AD skin vs healthy skin, all visits",

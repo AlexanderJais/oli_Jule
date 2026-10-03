@@ -119,4 +119,18 @@ read_step <- function(cfg, ..., step) {
   readRDS(p)
 }
 
+#' Optional severity scores (paths$severity): one row per SubjectID and visit, numeric score columns.
+#' Visit may be given as "V1" or as 1; SubjectID as text or number. Returns NULL if no file is set.
+read_severity <- function(path) {
+  if (is.null(path) || !file.exists(path)) return(NULL)
+  sev <- if (str_detect(path, "\\.xlsx?$")) readxl::read_excel(path) else read_csv(path, show_col_types = FALSE)
+  names(sev)[tolower(names(sev)) == "subjectid"] <- "SubjectID"
+  names(sev)[tolower(names(sev)) == "visit"] <- "visit"
+  if (!all(c("SubjectID", "visit") %in% names(sev))) stop("Severity file needs columns SubjectID and Visit: ", path)
+  names(sev) <- make.names(names(sev))            # e.g. "itch NRS" -> "itch.NRS"
+  sev |> mutate(SubjectID = as.character(SubjectID),
+                visit = if_else(str_detect(as.character(visit), "^\\d+$"), paste0("V", visit), as.character(visit)))
+}
+severity_scores <- function(sev) setdiff(names(sev)[vapply(sev, is.numeric, logical(1))], c("SubjectID", "visit"))
+
 theme_set(theme_bw(base_size = 11))

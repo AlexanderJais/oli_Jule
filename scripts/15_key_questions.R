@@ -6,7 +6,7 @@
 #       before the relapse separate relapsers from non-relapsers) of AD relapse?
 #   Q5  Is dISF superior to serum?
 # Proteins and markers are set in config.yml (key_questions). All tests are single, pre-specified
-# tests (unadjusted p-values); relapse analyses are exploratory (4 relapsers in MicroAD).
+# tests (unadjusted p-values); relapse analyses are exploratory (few relapsers in MicroAD).
 # Out: output/key_questions/  answers.csv, key_questions.xlsx, figures
 
 source("R/utils.R")
@@ -166,6 +166,9 @@ q4_sets <- function(ent) {
   ser <- ser_base |> inner_join(v, by = "SampleID") |> filter(group == "AD", !is.na(relapse2))
   pr <- isf_delta_pairs(isf_base |> inner_join(v, by = "SampleID"))
   pr$value <- isf$value[match(pr$AD_xL, isf$SampleID)] - isf$value[match(pr$AD_NL, isf$SampleID)]
+  # only visits before the relapse (a lesion can clear again after it relapsed)
+  pr <- pr |> filter(SubjectID %in% isf$SubjectID[is.na(isf$relapse_visit)] |
+                       AD_xL %in% isf$SampleID[isf$pre_relapse %in% TRUE])
   per_patient <- \(d) d |> group_by(SubjectID, relapse2) |> summarise(value = mean(value, na.rm = TRUE), .groups = "drop")
   sets <- list(
     `dISF lesion site at V1 (baseline)` = isf |> filter(site == "L", visit_num == 1) |> per_patient(),
@@ -282,7 +285,7 @@ for (i in seq_len(nrow(q1_verdict))) {
 }
 for (kp in names(kp_oid)) {
   s <- q2 |> filter(protein == kp, partner == "Mast cell score", subset == "all AD dISF")
-  if (!nrow(s)) s <- q2 |> filter(protein == kp, subset == "all AD dISF") |> slice_min(p_rho, n = 1)
+  if (!nrow(s)) s <- q2 |> filter(protein == kp, subset == "all AD dISF") |> slice_min(p_rho, n = 1, with_ties = FALSE)
   pos <- nrow(s) && ((!is.na(s$p_within) && s$p_within < 0.05 && s$r_within > 0) || (!is.na(s$p_rho) && s$p_rho < 0.05 && s$rho > 0))
   neg <- nrow(s) && ((!is.na(s$p_within) && s$p_within < 0.05 && s$r_within < 0) || (!is.na(s$p_rho) && s$p_rho < 0.05 && s$rho < 0))
   mk <- q2 |> filter(protein == kp, partner != "Mast cell score", subset == "all AD dISF", p_rho < 0.05, rho > 0) |> pull(partner)

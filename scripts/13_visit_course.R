@@ -39,9 +39,11 @@ consistency <- res |>
   summarise(n_visits = n(), n_fdr = sum(adj.P.Val < fdr), n_nominal = sum(P.Value < 0.05),
             n_up = sum(logFC > 0), n_down = sum(logFC < 0), mean_logFC = mean(logFC),
             max_p = max(P.Value), .groups = "drop") |>
+  # a protein not modelled at some visit (e.g. too many missing values there) cannot be "regulated at all visits"
+  group_by(contrast) |> mutate(visits_analysed = max(n_visits)) |> ungroup() |>
   mutate(same_direction = n_up == n_visits | n_down == n_visits,
-         all_visits_fdr = same_direction & n_fdr == n_visits,
-         all_visits_nominal = same_direction & n_nominal == n_visits,
+         all_visits_fdr = same_direction & n_fdr == n_visits & n_visits == visits_analysed,
+         all_visits_nominal = same_direction & n_nominal == n_visits & n_visits == visits_analysed,
          direction = if_else(mean_logFC > 0, "up", "down")) |>
   arrange(contrast, desc(all_visits_fdr), desc(all_visits_nominal), max_p)
 save_csv(consistency, cfg, "visit_course", "consistency_across_visits.csv")
@@ -71,7 +73,7 @@ for (ct in unique(res$contrast)) {
   if (!nrow(sel)) next
   top <- sel |> slice_min(max_p, n = 24, with_ties = FALSE)
   d <- res |> filter(contrast == ct, OlinkID %in% top$OlinkID) |>
-    mutate(Assay = factor(Assay, levels = top$Assay))
+    mutate(Assay = factor(Assay, levels = unique(top$Assay)))
   p <- ggplot(d, aes(visit, logFC, group = 1)) + geom_hline(yintercept = 0, colour = "grey60") +
     geom_errorbar(aes(ymin = ci_low, ymax = ci_high), width = 0.2, colour = "grey50") +
     geom_line(colour = "grey40") + geom_point(aes(colour = significant), size = 2) +
@@ -84,7 +86,7 @@ for (ct in unique(res$contrast)) {
 
   hm_ids <- sel |> slice_min(max_p, n = 60, with_ties = FALSE) |> arrange(mean_logFC)
   hm <- res |> filter(contrast == ct, OlinkID %in% hm_ids$OlinkID) |>
-    mutate(Assay = factor(Assay, levels = hm_ids$Assay))
+    mutate(Assay = factor(Assay, levels = unique(hm_ids$Assay)))
   p <- ggplot(hm, aes(visit, Assay, fill = logFC)) + geom_tile() +
     geom_text(aes(label = if_else(significant, "*", "")), size = 3) +
     scale_fill_gradient2(low = "steelblue", high = "firebrick") +
