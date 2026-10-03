@@ -131,7 +131,7 @@ visit_specs <- function(info, min_subjects = 5) {
   list(info = info, specs = specs)
 }
 
-#' All pre-specified single-protein tests (steps 12 and 14): the models of steps 04/05 plus the
+#' All pre-specified single-protein tests (steps 12 and 15): the models of steps 04/05 plus the
 #' xL - NL relapse model, for one value per sample (a protein or a score).
 #' @param isf_info,serum_info isf_design()/serum_design() output joined with a `value` column
 prespecified_tests <- function(isf_info, serum_info, min_group_n = 3) {

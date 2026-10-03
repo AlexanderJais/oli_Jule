@@ -37,7 +37,7 @@ export:                       # step 17: CSV export of the Olink data
   sep: ","                    # use ";" for German Excel (then the decimal mark is ",")
   long_format: true           # also write one long table (all samples x proteins, gzip-compressed)
 
-# Key questions (step 14)
+# Key questions (step 15)
 key_questions:
   mast_cell_markers: ["KITLG", "CPA4", "FCER1A", "TPSAB1", "MS4A2", "TPSD1", "CPA3", "CMA1", "KIT", "HDC"]   # combined into a mast cell score
   proteins: ["TNFRSF9", "TNFSF9"]                                             # CD137 and its ligand

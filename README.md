@@ -91,7 +91,7 @@ workbook. The first sheet, `index`, says what each sheet contains:
 ### `key_questions/` – answers to the key questions (step 15)
 | Question | How it is answered | Where |
 |---|---|---|
-| Q1 Are mast cell markers elevated in AD, or only in relapse vs non-relapse? | Each marker (KITLG, CPA4, FCER1A, TPSAB1, MS4A2, TPSD1, CPA3, CMA1, KIT, HDC – those measured on the panel) and a combined **mast cell score**: AD vs healthy (dISF lesional, non-lesional, serum) and relapse vs non-relapse (dISF, serum MicroAD, RELAD/RELAD2) | `Q1_mast_cell_markers.png`, sheet `Q1_*` |
+| Q1 Are mast cell markers elevated in AD, or only in relapse vs non-relapse? | Each marker (KITLG, CPA4, FCER1A, TPSAB1, MS4A2, TPSD1, CPA3, CMA1, KIT, HDC – those measured on the panel) and a combined **mast cell score**: AD vs healthy (dISF lesional, non-lesional, serum), dISF lesional vs non-lesional, and relapse vs non-relapse (dISF, serum MicroAD, RELAD/RELAD2) | `Q1_mast_cell_markers.png`, sheet `Q1_*` |
 | Q2 Is CD137 (TNFRSF9) or CD137L (TNFSF9) a marker for mast cells in AD? | Correlation with the mast cell score and each marker in AD dISF, within patients over visits and across samples | `Q2_cd137_vs_mast_score.png`, sheet `Q2_correlations` |
 | Q3 Do CD137 / CD137L correlate with relapse? | All relapse tests, plus the trend in the weeks before relapse | sheet `Q3_relapse` |
 | Q4 Marker or predictor of relapse? | *Marker* = changes with lesion activity (lesional vs cleared). *Predictor* = values **before** the relapse separate relapsers from non-relapsers (AUC with 95 % CI) | `Q4_relapse_prediction_auc.png`, sheets `Q4_*` |
@@ -104,7 +104,7 @@ mean of the z-standardised markers measured in a sample. A single marker can be 
 the score is not, if the other markers don't move with it.
 
 `answers.csv` holds one line per answer: the verdict and the numbers behind it. The same answers
-are on the first pages of the executive summary. With 4 relapsing patients a relapse "hit" is
+are on the first pages of the executive summary. With only 4 relapsing patients in MicroAD a relapse "hit" is
 called **possible (exploratory)**; only groups of ≥ 10 (RELAD/RELAD2) can give a firm "predicts
 relapse". Marker lists are set in `config.yml` under `key_questions`.
 
@@ -150,8 +150,8 @@ the plate or the cohort.
 |---|---|
 | `significant_per_visit.png` | Number of significant proteins at each visit |
 | `lesion_site_state_per_visit.csv` | How many lesion sites are lesional vs ex-lesional at each visit |
-| `consistency_across_visits.csv` | For each protein: at how many visits it is significant, and in which direction |
-| `time_course_effects_*.png` | Proteins regulated **at all visits**: difference vs healthy skin at each visit (with 95 % CI) |
+| `consistency_across_visits.csv` | For each protein: at how many visits it is significant, and in which direction. "Regulated at all visits" = significant at **every** analysed visit, same direction |
+| `time_course_effects_*.png` | Proteins regulated **at all visits**: the difference (vs healthy or vs non-lesional skin, see file name) at each visit, with 95 % CI |
 | `time_course_heatmap_*.png` | The same as a heatmap |
 | `time_course_levels.png` | NPX levels over the visits: lesion site, non-lesional skin, and healthy skin (grey band) |
 | `visit_course.xlsx` | All of the above as tables |
@@ -159,7 +159,7 @@ the plate or the cohort.
 Volcano plots for each visit: `models/volcano/ISF_by_visit_V1.png` … `V6.png`.
 
 ### `enrichment/` – pathways (step 07)
-`gsea_results.csv`: for every comparison, which biological pathways (Hallmark, Reactome, GO,
+`gsea_results.csv`: for every comparison of steps 04 and 05, which biological pathways (Hallmark, Reactome, GO,
 Th2 set) are shifted. `NES > 0` = pathway higher in the first group of the comparison;
 significant if `padj < 0.05`.
 
@@ -179,7 +179,7 @@ within the same patient over the visits; `r_between` = between patients.
 | File | Content |
 |---|---|
 | `detection_by_matrix.csv` | Measurable in dISF only, serum only, both, or neither |
-| `relative_enrichment.csv` | Proteins relatively **enriched in skin fluid** compared with blood (candidates for local production in the skin), separately for AD lesional, ex-lesional and non-lesional skin and for healthy skin |
+| `relative_enrichment.csv` | Proteins relatively **enriched in skin fluid** compared with blood (candidates for local production in the skin), separately for AD lesional, ex-lesional and non-lesional skin and for healthy skin. Full lists per skin type are also in `Executive_summary_tables.xlsx` |
 | `disease_signal_concordance.*` | Do disease differences seen in dISF also appear in serum? |
 
 ### `serum_vs_disf/` – overlap and what dISF adds, per visit (step 14)
@@ -202,7 +202,7 @@ more, since the groups per visit are small.
 Does the remaining lesional signal fade after clearing? Does it rise before a relapse? Results
 are in `trajectory_results.csv`, and `plots/` holds one figure per protein showing each patient
 over time (red = lesion site, blue = non-lesional, yellow = serum, dashed line = relapse). If a
-severity file (SCORAD/EASI) is present, the proteins that follow the severity are listed too.
+severity file (SCORAD/EASI; see `data/README.md`) is present, the proteins that follow the severity are listed too.
 
 ### `leip_reference/` – the population reference (step 08)
 For the proteins where skin fluid and blood are correlated: the normal range in the LEIP

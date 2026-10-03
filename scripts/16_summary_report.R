@@ -1,5 +1,6 @@
-# 16 - Executive summary PDF of all findings (runs last)
-# Collects the key numbers, tables and figures of steps 01-13 into output/Executive_summary.pdf.
+# 16 - Executive summary PDF of all findings (step 16; step 17 only exports data)
+# Collects the key numbers, tables and figures of steps 01-15 into output/Executive_summary.pdf,
+# plus Executive_summary_tables.xlsx with the full list behind every shortened list in the PDF.
 # Every section is optional: if an earlier step did not run, its page says so instead of failing.
 
 source("R/utils.R")

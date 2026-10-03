@@ -151,7 +151,7 @@ run_model_specs <- function(specs, expr, info, cfg, prefix, assay_map) {
   invisible(res)
 }
 
-#' Pre-specified test for ONE protein (focus proteins, step 12): same formula and contrasts as the
+#' Pre-specified test for ONE protein or score (steps 12 and 15): same formula and contrasts as the
 #' proteome-wide models, fitted with lmerTest (Satterthwaite df) or lm, without empirical Bayes
 #' moderation. Returns one row per contrast; p is the unadjusted single-protein p-value.
 #' @param df one row per sample with columns `value` and the model variables
