@@ -75,8 +75,13 @@ manifest <- all |>
   transmute(SampleID, SubjectID, Visit, Skin, SampleType, Group, SampleNumber = E, Study,
             Date = if_else(is.na(Date), E, format(Date, "%Y-%m-%d")), SampleName = SubjectID,
             Relapse = coalesce(Relapse, E), TimeToRelapse = coalesce(TimeToRelapse, E),
-            ClinicalStateSkin, plate, column, row, well,
-            Note = if_else(Relapse %in% "DROPOUT", "DROPOUT", E))
+            ClinicalStateSkin = if_else(Study == "RELAD2" & ClinicalStateSkin == E,      # like manifest v4, incl. its spellings
+                                        recode(Relapse, relapse = "remisison", `non-relapse` = "remisison", `active AD` = "activeAD",
+                                               healthy = "helthy", .default = E), ClinicalStateSkin),
+            Sex = if_else(Study == "MicroAD", c("female", "male")[1 + (as.integer(str_extract(SubjectID, "[0-9]+")) %% 3 == 0)], E),
+            plate, column, row, well,
+            Note = if_else(Relapse %in% "DROPOUT", "DROPOUT", E),
+            NoRELAD2 = if_else(Study == "RELAD2" & Relapse != "DROPOUT", as.character(as.integer(str_extract(SubjectID, "[0-9]+$"))), E))
 
 vol <- manifest |> transmute(SampleID, SubjectID, Visit, SampleType, plate, column, row, well,
                              SampleVolume = if_else(SampleType == "dISF", "20", "40"))

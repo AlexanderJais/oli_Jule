@@ -98,7 +98,7 @@ BH FDR is applied within each contrast.
   - `qc/lod.csv` gives the LOD source and the per-sample LOD range for each assay.
 - **Relapse in ISF is exploratory.** All four ISF relapsers are on plate 1, and plate 2 holds only non-relapsers.
 - **Metadata issues are flagged, not fixed**, in `metadata/data_flags.csv`. As of manifest v3 this covers the RELAD / RELAD2 label conflicts, 5 low-volume ISF samples, and LEIP_35 without clinical data.
-- **Age and sex** are currently only available for LEIP, so the serum models are not adjusted for them.
+- **Sex** is available for MicroAD (manifest column `Sex`) and LEIP, **age** only for LEIP; the models are not adjusted for them.
 
 ## Testing without real data
 

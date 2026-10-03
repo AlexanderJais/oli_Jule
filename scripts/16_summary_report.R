@@ -333,7 +333,7 @@ section("Methods", {
     "All four MicroAD relapsers' dISF samples are on plate 1: dISF relapse results are exploratory.",
     "Per-visit and V1 comparisons have 6-11 patients per visit: absence of significance is not absence of an effect (strict FDR cutoff with few samples).",
     "LEIP biobank serum differs pre-analytically; AD vs biobank differences are only trusted when they agree with the in-study controls.",
-    "Age and sex are only available for LEIP; serum models are not adjusted for them.",
+    "Sex is available for MicroAD (manifest) and LEIP, age only for LEIP; the models are not adjusted for them.",
     "## Output folders (all under the output directory)",
     "qc/ - QC tables and plots | models/ - all model results and volcano plots (models/volcano/) | visit_course/ - per-visit analysis and time courses",
     "isf_profile/ - dISF proteome | matrix_comparison/ - dISF vs serum | serum_vs_disf/ - overlap per visit (Venn) | isf_serum/ - correlations",

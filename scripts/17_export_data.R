@@ -28,8 +28,8 @@ write_table <- function(df, ...) {
 clean_ids <- unique(readRDS(file.path(cfg$paths$output, "data", "npx_clean.rds"))$SampleID)
 samples <- meta |>
   select(SampleID, SubjectID, SampleName, matrix, cohort, group, visit, visit_num, date, days_since_v1, site, state,
-         lesion_state, relapse, relapse_raw, time_to_relapse, relapse_visit, dropout, plate, well, volume_ul,
-         any_of(c("age", "sex", "BMI")), flags) |>
+         lesion_state, clinical_state, relapse, relapse_raw, time_to_relapse, relapse_visit, dropout, plate, well, volume_ul,
+         any_of(c("sex", "age", "BMI", "relad2_no")), flags) |>
   left_join(sq |> select(SampleID, SampleQC, qc_outlier = outlier), by = "SampleID") |>
   mutate(in_npx_data = SampleID %in% raw$SampleID, excluded_in_qc = in_npx_data & !SampleID %in% clean_ids)
 write_table(samples, "samples.csv")

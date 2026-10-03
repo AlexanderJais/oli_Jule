@@ -51,7 +51,7 @@ harmonise_relapse <- function(x) {
     x %in% c("non-relapse", "no relapse", "nonrelapse") ~ "non-relapse",
     x == "dropout" ~ "dropout",
     x == "healthy" ~ "healthy",
-    x %in% c("lesional", "active ad") ~ "active",
+    x %in% c("lesional", "active ad", "activead") ~ "active",
     TRUE ~ NA_character_
   )
 }
@@ -61,9 +61,20 @@ harmonise_time_to_relapse <- function(x) {
   case_when(
     str_detect(x, "<\\s*1\\s*w") ~ "<1w",
     str_detect(x, ">\\s*1\\s*w") ~ ">1w",
-    str_detect(x, "no relapse") ~ "no relapse",
+    x %in% c("no relapse", "non-relapse", "nonrelapse") ~ "no relapse",
+    x %in% c("healthy", "dropout", "active ad", "activead") ~ NA_character_,   # not a time: status repeated
     TRUE ~ x
   )
+}
+
+# spelling variants of clinical states (manifest v4: "remisison", "helthy", "activeAD")
+harmonise_state <- function(x) {
+  y <- str_to_lower(str_squish(x))
+  case_when(y %in% c("remisison", "remission") ~ "remission",
+            y %in% c("helthy", "healthy") ~ "healthy",
+            y %in% c("activead", "active ad") ~ "active AD",
+            y == "dropout" ~ NA_character_,
+            TRUE ~ y)
 }
 
 #' Build the clean sample table from the manifest workbook.
@@ -91,7 +102,10 @@ build_metadata <- function(manifest_path, leip_path = NULL) {
       visit_num = suppressWarnings(as.integer(str_remove(Visit, "^V"))),
       date = excel_date(Date),
       site = if_else(SampleType == "dISF", Skin, NA_character_),
-      state = if_else(SampleType == "dISF", ClinicalStateSkin, NA_character_),
+      state = if_else(SampleType == "dISF", harmonise_state(ClinicalStateSkin), NA_character_),
+      clinical_state = harmonise_state(ClinicalStateSkin),            # also filled for serum (e.g. RELAD2)
+      sex = if ("Sex" %in% names(m)) recode(str_to_lower(Sex), female = "F", male = "M", f = "F", m = "M", w = "F") else NA_character_,
+      relad2_no = if ("NoRELAD2" %in% names(m)) NoRELAD2 else NA_character_,
       relapse_raw = Relapse,
       relapse = harmonise_relapse(Relapse),
       time_to_relapse = harmonise_time_to_relapse(TimeToRelapse),
@@ -140,8 +154,9 @@ build_metadata <- function(manifest_path, leip_path = NULL) {
     clin <- readxl::read_excel(leip_path, sheet = "Key_parameters") |>
       rename(SampleID = Olink_SampleID) |>
       select(-any_of(c("SubjectID"))) |>
-      rename(sex = sex_MF)
-    meta <- meta |> left_join(clin, by = "SampleID")
+      rename(sex_leip = sex_MF)
+    meta <- meta |> left_join(clin, by = "SampleID") |>
+      mutate(sex = coalesce(sex, sex_leip)) |> select(-sex_leip)
   }
 
   meta |> arrange(matrix, SampleID)
