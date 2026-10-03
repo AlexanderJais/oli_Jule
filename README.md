@@ -4,7 +4,8 @@ This repository contains the R scripts that analyse the **Olink Explore HT** dat
 study: about 5,400 proteins measured in **dermal interstitial fluid (dISF)** and in **serum** of
 patients with atopic dermatitis (AD) and control persons.
 
-This page tells you what the analysis does, how to run it, and **where to find which result**.
+This page tells you how to run the analysis and **where to find which result**.
+**What each of the 17 steps does, in plain words:** [`docs/STEPS.md`](docs/STEPS.md).
 Technical details (models, design decisions) are in [`docs/TECHNICAL.md`](docs/TECHNICAL.md).
 
 > **Start here:** after a run, open **`output/Executive_summary.pdf`**. It summarises all
@@ -283,7 +284,10 @@ Model names: `states_all_visits` = all visits together; `baseline_V1` = V1 only;
 | `data/` | Your input files (not uploaded to GitHub) – see `data/README.md` |
 | `output/` | All results (not uploaded to GitHub) |
 | `tests/` | Test with invented data |
+| `docs/STEPS.md` | What each step does, in plain words |
 | `docs/TECHNICAL.md` | Statistical methods and design decisions |
+
+Each step is explained in [`docs/STEPS.md`](docs/STEPS.md).
 
 | Step | Script | What it does |
 |---|---|---|

@@ -49,6 +49,8 @@ All settings (thresholds, FDR, focus proteins, mast cell markers, number of core
 
 ## Steps
 
+A plain-language explanation of every step (question, what it does, how to read it) is in [`STEPS.md`](STEPS.md).
+
 `run_all.R` runs the steps in this order; `start_at <- N; source("run_all.R")` resumes at step N.
 
 | script | does | main output |
