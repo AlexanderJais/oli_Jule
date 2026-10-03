@@ -46,8 +46,13 @@ both <- det |> filter(detected_in == "both") |> pull(OlinkID) |>
 mk <- meta |> filter(cohort == "MicroAD")
 serum_ids <- mk |> filter(matrix == "Serum", SampleID %in% colnames(wide$Serum)) |> select(SubjectID, visit, serum_id = SampleID)
 pairs <- mk |> filter(matrix == "ISF", SampleID %in% colnames(wide$ISF)) |>
+  # one enrichment list per skin type (AD lesional, ex-lesional, non-lesional; healthy skin)
   transmute(SubjectID, visit, isf_id = SampleID, group, plate,
-            site = case_when(site == "L" ~ "lesional site", TRUE ~ "non-lesional / healthy skin")) |>
+            site = case_when(group == "AD" & state == "lesional" ~ "AD lesional skin",
+                             group == "AD" & state == "ex-lesional" ~ "AD ex-lesional skin",
+                             group == "AD" & state == "non-lesional" ~ "AD non-lesional skin",
+                             group == "HC" ~ "healthy skin")) |>
+  filter(!is.na(site)) |>
   inner_join(serum_ids, by = c("SubjectID", "visit")) |>
   mutate(SampleID = paste(isf_id, serum_id, sep = "_"), ones = 1)
 
@@ -56,10 +61,12 @@ if (length(both) >= 10 && nrow(pairs) >= 4) {
   delta <- wide$ISF[both, pairs$isf_id, drop = FALSE] - wide$Serum[both, pairs$serum_id, drop = FALSE]
   delta <- sweep(delta, 2, apply(delta, 2, median, na.rm = TRUE))   # centre each pair
   colnames(delta) <- pairs$SampleID
-  enrich <- map(unique(pairs$site), \(st) {
+  enrich <- map(c("AD lesional skin", "AD ex-lesional skin", "AD non-lesional skin", "healthy skin"), \(st) {
     pp <- pairs |> filter(site == st)
-    fit_contrasts(delta, pp, ~ 0 + ones + (1 | SubjectID), c(isf_vs_serum = "ones"),
-                  paste("relative enrichment,", st), cfg$stats$min_group_n)
+    if (nrow(pp) < 4) return(NULL)
+    # subject random effect only where people contribute several pairs (healthy skin: one each)
+    form <- if (anyDuplicated(pp$SubjectID)) ~ 0 + ones + (1 | SubjectID) else ~ 0 + ones
+    fit_contrasts(delta, pp, form, c(isf_vs_serum = "ones"), paste("relative enrichment,", st), cfg$stats$min_group_n)
   }) |> bind_rows()
 }
 if (!is.null(enrich) && nrow(enrich)) {

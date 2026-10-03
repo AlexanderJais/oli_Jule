@@ -74,8 +74,19 @@ Each script writes into its own folder. Most folders contain an **`.xlsx` file**
 all their tables. Open that one first.
 
 ### `Executive_summary.pdf` – the overview (step 16)
-Key numbers and findings for each aim, all comparisons in one table, the most important figures,
-and the methods and caveats. **Read this first.**
+The answers to the key questions with the data behind them, key numbers and findings for each
+aim, all comparisons in one table, the most important figures, and the methods and caveats.
+**Read this first.**
+
+### `Executive_summary_tables.xlsx` – the full lists behind the summary (step 16)
+Wherever the PDF shows a shortened list ("up: TNC, LAIR2 …"), the complete list is in this
+workbook. The first sheet, `index`, says what each sheet contains:
+- proteins detectable only in lesional skin;
+- all significant proteins for lesional / ex-lesional / non-lesional / healthy comparisons;
+- proteins regulated at every visit, with per-visit values;
+- all proteins per visit for lesion site vs non-lesional skin and vs healthy skin;
+- dISF-vs-serum enrichment for each skin type;
+- serum lists, key-question answers and focus proteins.
 
 ### `key_questions/` – answers to the key questions (step 15)
 | Question | How it is answered | Where |
@@ -85,6 +96,12 @@ and the methods and caveats. **Read this first.**
 | Q3 Do CD137 / CD137L correlate with relapse? | All relapse tests, plus the trend in the weeks before relapse | sheet `Q3_relapse` |
 | Q4 Marker or predictor of relapse? | *Marker* = changes with lesion activity (lesional vs cleared). *Predictor* = values **before** the relapse separate relapsers from non-relapsers (AUC with 95 % CI) | `Q4_relapse_prediction_auc.png`, sheets `Q4_*` |
 | Q5 Is dISF superior to serum? | Measurable proteins; significant proteins in dISF vs serum for the same question (step 14); key-protein effects; relapse AUC in dISF vs serum for the same patients | sheets `Q5_*` |
+
+`evidence/<protein>.png` shows, for each mast cell marker, the mast cell score, CD137 and CD137L,
+the data behind the statement: dISF by skin state, serum AD vs controls, and values before relapse
+in relapsers vs non-relapsers. The test results are in the subtitle. The **mast cell score** is the
+mean of the z-standardised markers measured in a sample. A single marker can be significant while
+the score is not, if the other markers don't move with it.
 
 `answers.csv` holds one line per answer: the verdict and the numbers behind it. The same answers
 are on the first pages of the executive summary. With 4 relapsing patients a relapse "hit" is
@@ -162,7 +179,7 @@ within the same patient over the visits; `r_between` = between patients.
 | File | Content |
 |---|---|
 | `detection_by_matrix.csv` | Measurable in dISF only, serum only, both, or neither |
-| `relative_enrichment.csv` | Proteins relatively **enriched in skin fluid** compared with blood, i.e. candidates for local production in the skin |
+| `relative_enrichment.csv` | Proteins relatively **enriched in skin fluid** compared with blood (candidates for local production in the skin), separately for AD lesional, ex-lesional and non-lesional skin and for healthy skin |
 | `disease_signal_concordance.*` | Do disease differences seen in dISF also appear in serum? |
 
 ### `serum_vs_disf/` – overlap and what dISF adds, per visit (step 14)

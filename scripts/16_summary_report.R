@@ -93,6 +93,12 @@ section("Key questions", {
     subtitle = "automatically derived from the tests; please interpret with the evidence tables", size = 9.5)
   page_table("Key questions - evidence", kq_ans |> transmute(question = str_extract(question, "^Q[0-9]"), item, verdict = str_trunc(verdict, 60)),
              rows_per_page = 30, note = "Full evidence text: key_questions/answers.csv")
+  defn <- kq_ans |> filter(str_detect(item, "mast cell score - definition|markers used"))
+  if (nrow(defn)) page_text("How the mast cell score is computed", c(
+    paste(defn$verdict, defn$evidence, sep = ": "),
+    "Why the score and single markers can disagree: the score averages the markers. If one marker (e.g. a tryptase) differs between groups but the others do not, or move in the opposite direction, the single marker can be significant while the score is not. The evidence pages that follow show each marker and the score separately."))
+  ev_path <- file.path(cfg$paths$output, "key_questions", "evidence_plots.rds")
+  if (file.exists(ev_path)) for (pl in readRDS(ev_path)) page_plot(pl)
   if (!is.null(kq_q1)) {
     ents <- unique(kq_q1$entity)
     p <- ggplot(kq_q1, aes(label, factor(entity, levels = rev(ents)), fill = estimate)) + geom_tile() +
@@ -124,13 +130,13 @@ section("Key findings", {
     if (!is.null(prof)) sprintf("%d proteins are detectable in dISF (>= %d%% of samples above LOD); %d robustly (>= 90%%). %d are detectable only in lesional AD skin: %s.",
                                 sum(prof$frac_detected >= cfg$qc$min_detect_frac, na.rm = TRUE), round(100 * cfg$qc$min_detect_frac),
                                 sum(prof$frac_detected >= 0.9, na.rm = TRUE), sum(prof$lesion_restricted, na.rm = TRUE),
-                                top_names(prof |> filter(lesion_restricted))) else "dISF profile: n/a",
-    sprintf("Lesional vs non-lesional AD skin (all visits): %s proteins (up: %s ...; down: %s ...).",
+                                paste(top_names(prof |> filter(lesion_restricted)), "... (full list: Executive_summary_tables.xlsx, sheet lesion_restricted)")) else "dISF profile: n/a",
+    sprintf("Lesional vs non-lesional AD skin (all visits): %s proteins (up: %s ...; down: %s ...; full list: sheet dISF_L_vs_NL).",
             na_txt(n_sig(isf, "states_all_visits", "AD_L_vs_NL")), sig_names(isf, "states_all_visits", "AD_L_vs_NL", "up", 8),
             sig_names(isf, "states_all_visits", "AD_L_vs_NL", "down", 5)),
-    sprintf("Ex-lesional vs non-lesional (residual signature after clearing): %s proteins; lesional vs ex-lesional: %s.",
+    sprintf("Ex-lesional vs non-lesional (residual signature after clearing): %s proteins (sheet dISF_xL_vs_NL); lesional vs ex-lesional: %s (sheet dISF_L_vs_xL).",
             na_txt(n_sig(isf, "states_all_visits", "AD_xL_vs_NL")), na_txt(n_sig(isf, "states_all_visits", "AD_L_vs_xL"))),
-    sprintf("Lesional AD skin vs healthy skin: %s proteins; non-lesional AD vs healthy skin: %s.",
+    sprintf("Lesional AD skin vs healthy skin: %s proteins (sheet dISF_L_vs_HC); non-lesional AD vs healthy skin: %s (sheet dISF_NL_vs_HC).",
             na_txt(n_sig(isf, "states_all_visits", "AD_L_vs_HC")), na_txt(n_sig(isf, "states_all_visits", "AD_NL_vs_HC"))),
     "## Visit by visit (lesion site vs healthy skin)",
     if (!is.null(vis_sum)) paste(vis_sum |> filter(contrast == "Lsite_vs_HC") |>
@@ -140,9 +146,10 @@ section("Key findings", {
     "## Aim 2 - dISF vs blood",
     if (!is.null(det_mx)) sprintf("Detected in both matrices: %d; dISF only: %d; serum only: %d.",
                                   sum(det_mx$detected_in == "both"), sum(det_mx$detected_in == "dISF only"), sum(det_mx$detected_in == "serum only")) else "n/a",
-    if (!is.null(enr)) sprintf("Relatively enriched in dISF (>= 2-fold vs the typical protein, non-lesional skin): %d, e.g. %s.",
-                               sum(enr$direction == "enriched in dISF" & str_detect(enr$model, "non-lesional")),
-                               top_names(enr |> filter(direction == "enriched in dISF", str_detect(model, "non-lesional")) |> arrange(desc(rel_log2_isf_vs_serum)), 8)) else "n/a",
+    if (!is.null(enr)) paste(map_chr(unique(enr$model), \(md) sprintf("Relatively enriched in dISF vs serum (>= 2-fold vs the typical protein), %s: %d, e.g. %s.",
+                               str_remove(md, "relative enrichment, "), sum(enr$direction == "enriched in dISF" & enr$model == md),
+                               top_names(enr |> filter(direction == "enriched in dISF", model == md) |> arrange(desc(rel_log2_isf_vs_serum)), 6))),
+                             collapse = " ") else "n/a",
     if (!is.null(corr)) sprintf("dISF and serum levels move together within patients over visits for %d (lesion site) and %d (non-lesional skin) proteins; between-patient correlation: %d / %d.",
                                 sum(corr$fdr_within < fdr & corr$site == "L", na.rm = TRUE), sum(corr$fdr_within < fdr & corr$site == "NL", na.rm = TRUE),
                                 sum(corr$fdr_between < fdr & corr$site == "L", na.rm = TRUE), sum(corr$fdr_between < fdr & corr$site == "NL", na.rm = TRUE)) else "n/a",
@@ -202,26 +209,30 @@ section("Visit course", {
          x = NULL, y = "proteins (down < 0 < up)", fill = NULL)
   page_plot(p)
   if (!is.null(lstate)) page_table("State of the tracked lesion site per visit", lstate)
-  cs <- cons |> filter(contrast == "Lsite_vs_HC")
-  sel <- cs |> filter(all_visits_fdr); tier <- sprintf("FDR < %g at every visit", fdr)
-  if (!nrow(sel)) { sel <- cs |> filter(all_visits_nominal); tier <- "p < 0.05 at every visit" }
-  if (nrow(sel)) {
+  for (ct in c("Lsite_vs_HC", "Lsite_vs_NL")) {
+    ct_lab <- c(Lsite_vs_HC = "lesion site vs healthy skin", Lsite_vs_NL = "lesion site vs non-lesional skin")[[ct]]
+    sheet <- c(Lsite_vs_HC = "all_visits_Lsite_vs_HC", Lsite_vs_NL = "all_visits_Lsite_vs_NL")[[ct]]
+    cs <- cons |> filter(contrast == ct)
+    sel <- cs |> filter(all_visits_fdr); tier <- sprintf("FDR < %g at every visit", fdr)
+    if (!nrow(sel)) { sel <- cs |> filter(all_visits_nominal); tier <- "p < 0.05 at every visit" }
+    if (!nrow(sel)) { page_text(sprintf("Proteins regulated at all visits (%s)", ct_lab), "No protein was significant at every visit."); next }
     top <- sel |> slice_min(max_p, n = 16, with_ties = FALSE)
-    d <- vis |> filter(contrast == "Lsite_vs_HC", OlinkID %in% top$OlinkID) |>
+    d <- vis |> filter(contrast == ct, OlinkID %in% top$OlinkID) |>
       mutate(se = abs(logFC / t), Assay = factor(Assay, levels = top$Assay))
     p <- ggplot(d, aes(model, logFC, group = 1)) + geom_hline(yintercept = 0, colour = "grey60") +
       geom_errorbar(aes(ymin = logFC - 1.96 * se, ymax = logFC + 1.96 * se), width = 0.2, colour = "grey50") +
       geom_line(colour = "grey40") + geom_point(aes(colour = significant), size = 1.8) +
       scale_colour_manual(values = c(`FALSE` = "grey60", `TRUE` = "firebrick"), labels = c(`FALSE` = "n.s.", `TRUE` = "FDR sig.")) +
       facet_wrap(~Assay, scales = "free_y") +
-      labs(title = sprintf("Time course: lesion site vs healthy skin, proteins regulated at all visits (%s)", tier),
-           subtitle = sprintf("top %d of %d; full list: visit_course/consistency_across_visits.csv", nrow(top), nrow(sel)),
+      labs(title = sprintf("Time course: %s, proteins regulated at all visits (%s)", ct_lab, tier),
+           subtitle = sprintf("top %d of %d; full list and per-visit data: Executive_summary_tables.xlsx, sheet %s", nrow(top), nrow(sel), sheet),
            x = NULL, y = "difference in NPX (log2, 95% CI)", colour = NULL)
     page_plot(p)
-    page_table(sprintf("Proteins regulated at all visits (lesion site vs healthy skin, %s)", tier),
+    page_table(sprintf("Proteins regulated at all visits (%s, %s)", ct_lab, tier),
                sel |> slice_min(max_p, n = 60, with_ties = FALSE) |>
-                 select(Assay, direction, mean_logFC, visits = n_visits, `FDR-sig visits` = n_fdr, max_p))
-  } else page_text("Proteins regulated at all visits", "No protein was significant at every visit.")
+                 select(Assay, direction, mean_logFC, visits = n_visits, `FDR-sig visits` = n_fdr, max_p),
+               note = sprintf("Full list: Executive_summary_tables.xlsx, sheet %s", sheet))
+  }
 })
 
 # ---- 5. volcano plots, all visits ---------------------------------------------------------------------------------
@@ -249,11 +260,12 @@ section("dISF vs serum", {
       labs(title = "Where are proteins detectable? (MicroAD samples)", x = NULL, y = "proteins")
     page_plot(p)
   }
-  if (!is.null(enr)) page_table("Proteins most enriched in dISF relative to serum (non-lesional / healthy skin)",
-                                enr |> filter(str_detect(model, "non-lesional"), direction == "enriched in dISF") |>
-                                  arrange(desc(rel_log2_isf_vs_serum)) |> head(25) |>
-                                  select(Assay, rel_log2_isf_vs_serum, adj.P.Val),
-                                note = "relative log2 ratio centred on the typical protein; candidates for local (skin) production")
+  if (!is.null(enr)) for (md in unique(enr$model))
+    page_table(sprintf("Proteins most enriched in dISF relative to serum - %s", str_remove(md, "relative enrichment, ")),
+               enr |> filter(model == md, direction == "enriched in dISF") |>
+                 arrange(desc(rel_log2_isf_vs_serum)) |> head(25) |>
+                 select(Assay, rel_log2_isf_vs_serum, adj.P.Val, n_samples, n_subjects),
+               note = "relative log2 ratio centred on the typical protein; candidates for local (skin) production. Full lists: Executive_summary_tables.xlsx")
   if (!is.null(corr)) page_table("Proteins whose dISF and serum levels move together within patients",
                                  corr |> filter(fdr_within < fdr) |> arrange(fdr_within) |> head(25) |>
                                    select(Assay, site, n_pairs, r_within, fdr_within, r_between, fdr_between))
@@ -342,4 +354,65 @@ section("Methods", {
 })
 
 grDevices::dev.off()
+
+# ---- companion workbook: the full lists behind the summary ---------------------------------------------------------------
+sig_list <- \(r, mdl, ct) if (is.null(r)) NULL else r |> filter(model == mdl, contrast == ct, significant) |>
+  transmute(Assay, OlinkID, direction = if_else(logFC > 0, "up", "down"), logFC, P.Value, FDR = adj.P.Val, n_samples, n_subjects) |>
+  arrange(P.Value)
+per_visit_wide <- \(ct) if (is.null(vis)) NULL else vis |> filter(contrast == ct) |>
+  select(Assay, OlinkID, visit = model, logFC, FDR = adj.P.Val) |>
+  pivot_wider(names_from = visit, values_from = c(logFC, FDR), names_glue = "{visit}_{.value}")
+all_vis <- \(ct) if (is.null(cons)) NULL else cons |> filter(contrast == ct, all_visits_fdr | all_visits_nominal) |>
+  transmute(Assay, OlinkID, tier = if_else(all_visits_fdr, "FDR at every visit", "p < 0.05 at every visit"), direction, mean_logFC,
+            visits = n_visits, fdr_sig_visits = n_fdr, max_p) |>
+  left_join(per_visit_wide(ct) |> select(-Assay), by = "OlinkID") |> arrange(desc(tier == "FDR at every visit"), max_p)
+enr_sheets <- if (is.null(enr)) list() else
+  map(split(enr, enr$model), \(d) d |> filter(direction != "not different") |>
+        transmute(Assay, OlinkID, direction, rel_log2_isf_vs_serum, P.Value, FDR = adj.P.Val, n_samples, n_subjects) |>
+        arrange(desc(rel_log2_isf_vs_serum))) |>
+  setNames(paste0("dISF_vs_serum_", c(`relative enrichment, AD lesional skin` = "lesional", `relative enrichment, AD ex-lesional skin` = "ex_lesional",
+                                      `relative enrichment, AD non-lesional skin` = "non_lesional", `relative enrichment, healthy skin` = "healthy")[names(split(enr, enr$model))]))
+tabs <- c(list(
+  lesion_restricted = if (!is.null(prof)) prof |> filter(lesion_restricted) |> select(-any_of("lesion_restricted")) else NULL,
+  dISF_L_vs_NL = sig_list(isf, "states_all_visits", "AD_L_vs_NL"),
+  dISF_xL_vs_NL = sig_list(isf, "states_all_visits", "AD_xL_vs_NL"),
+  dISF_L_vs_xL = sig_list(isf, "states_all_visits", "AD_L_vs_xL"),
+  dISF_L_vs_HC = sig_list(isf, "states_all_visits", "AD_L_vs_HC"),
+  dISF_NL_vs_HC = sig_list(isf, "states_all_visits", "AD_NL_vs_HC"),
+  dISF_V1_L_vs_NL = sig_list(isf, "baseline_V1", "AD_L_vs_NL"),
+  dISF_V1_L_vs_HC = sig_list(isf, "baseline_V1", "AD_L_vs_HC"),
+  all_visits_Lsite_vs_HC = all_vis("Lsite_vs_HC"),
+  all_visits_Lsite_vs_NL = all_vis("Lsite_vs_NL"),
+  all_visits_NL_vs_HC = all_vis("NL_vs_HC"),
+  per_visit_Lsite_vs_NL_all = per_visit_wide("Lsite_vs_NL"),
+  per_visit_Lsite_vs_HC_all = per_visit_wide("Lsite_vs_HC")),
+  enr_sheets,
+  list(serum_AD_vs_HC = sig_list(ser, "AD_vs_HC_in_study", "AD_vs_HC"),
+       serum_AD_both_controls = if (!is.null(agree)) agree |> filter(agree_both_controls) else NULL,
+       key_questions = kq_ans, focus_proteins = fov)) |> compact()
+tabs <- tabs[vapply(tabs, nrow, 1L) > 0]
+index <- tibble(sheet = names(tabs), rows = vapply(tabs, nrow, 1L),
+                content = c(lesion_restricted = "proteins detectable only in lesional AD dISF (step 09)",
+                            dISF_L_vs_NL = "significant: lesional vs non-lesional AD skin, all visits (FDR < 0.05)",
+                            dISF_xL_vs_NL = "significant: ex-lesional vs non-lesional, all visits",
+                            dISF_L_vs_xL = "significant: lesional vs ex-lesional, all visits",
+                            dISF_L_vs_HC = "significant: lesional AD skin vs healthy skin, all visits",
+                            dISF_NL_vs_HC = "significant: non-lesional AD skin vs healthy skin, all visits",
+                            dISF_V1_L_vs_NL = "significant: lesional vs non-lesional at V1",
+                            dISF_V1_L_vs_HC = "significant: lesional vs healthy at V1",
+                            all_visits_Lsite_vs_HC = "regulated at every visit, lesion site vs healthy skin, with per-visit logFC/FDR",
+                            all_visits_Lsite_vs_NL = "regulated at every visit, lesion site vs non-lesional skin, with per-visit logFC/FDR",
+                            all_visits_NL_vs_HC = "regulated at every visit, non-lesional vs healthy skin",
+                            per_visit_Lsite_vs_NL_all = "ALL proteins: lesion site vs non-lesional per visit (logFC, FDR)",
+                            per_visit_Lsite_vs_HC_all = "ALL proteins: lesion site vs healthy skin per visit (logFC, FDR)",
+                            dISF_vs_serum_lesional = "relatively enriched in dISF (or serum) - AD lesional skin vs serum",
+                            dISF_vs_serum_ex_lesional = "relatively enriched in dISF (or serum) - AD ex-lesional skin vs serum",
+                            dISF_vs_serum_non_lesional = "relatively enriched in dISF (or serum) - AD non-lesional skin vs serum",
+                            dISF_vs_serum_healthy = "relatively enriched in dISF (or serum) - healthy skin vs serum",
+                            serum_AD_vs_HC = "significant: serum AD vs in-study healthy controls",
+                            serum_AD_both_controls = "serum AD vs controls: significant against in-study AND biobank controls",
+                            key_questions = "answers and evidence for the key questions",
+                            focus_proteins = "focus proteins: key single-protein tests")[names(tabs)])
+writexl::write_xlsx(c(list(index = index), tabs), out_path(cfg, "Executive_summary_tables.xlsx"))
+msg("Full lists: %s", out_path(cfg, "Executive_summary_tables.xlsx"))
 msg("Executive summary: %s", out_file)

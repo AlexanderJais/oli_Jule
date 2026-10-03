@@ -61,6 +61,7 @@ est_p <- \(ent, mdl, ct) { r <- tt(ent, mdl, ct); c(e = r$estimate %||% NA_real_
 q1_cmp <- tribble(
   ~label,                               ~model,                      ~contrast,        ~type,
   "dISF lesional vs healthy",           "states_all_visits",         "AD_L_vs_HC",     "AD",
+  "dISF lesional vs non-lesional",      "states_all_visits",         "AD_L_vs_NL",     "lesion",
   "dISF non-lesional vs healthy",       "states_all_visits",         "AD_NL_vs_HC",    "AD",
   "serum AD vs healthy",                "AD_vs_HC_in_study",         "AD_vs_HC",       "AD",
   "dISF relapse (ex-lesional)",         "relapse_ex_lesional",       "relapse_vs_non", "relapse",
@@ -75,11 +76,14 @@ q1_verdict <- q1 |> group_by(entity) |>
   summarise(in_AD = any(type == "AD" & p < 0.05 & estimate > 0, na.rm = TRUE),
             where_AD = paste(label[type == "AD" & p < 0.05 & estimate > 0 & !is.na(p)], collapse = "; "),
             in_relapse = any(type == "relapse" & p < 0.05, na.rm = TRUE),
-            where_relapse = paste(label[type == "relapse" & p < 0.05 & !is.na(p)], collapse = "; "), .groups = "drop") |>
-  mutate(answer = case_when(in_AD & in_relapse ~ "elevated in AD AND associated with relapse",
-                            in_AD ~ "elevated in AD, not associated with relapse",
-                            in_relapse ~ "associated with relapse only, not elevated in AD",
-                            TRUE ~ "neither elevated in AD nor associated with relapse"))
+            where_relapse = paste(label[type == "relapse" & p < 0.05 & !is.na(p)], collapse = "; "),
+            lesion = case_when(any(type == "lesion" & p < 0.05 & estimate > 0, na.rm = TRUE) ~ "; higher in lesional than non-lesional skin",
+                               any(type == "lesion" & p < 0.05 & estimate < 0, na.rm = TRUE) ~ "; lower in lesional than non-lesional skin",
+                               TRUE ~ ""), .groups = "drop") |>
+  mutate(answer = paste0(case_when(in_AD & in_relapse ~ "elevated in AD AND associated with relapse",
+                                   in_AD ~ "elevated in AD, not associated with relapse",
+                                   in_relapse ~ "associated with relapse only, not elevated in AD",
+                                   TRUE ~ "neither elevated in AD nor associated with relapse"), lesion))
 p <- ggplot(q1, aes(label, factor(entity, levels = rev(q1_ent)), fill = estimate)) + geom_tile() +
   geom_text(aes(label = case_when(p < 0.001 ~ "***", p < 0.01 ~ "**", p < 0.05 ~ "*", TRUE ~ "")), size = 4) +
   scale_fill_gradient2(low = "steelblue", high = "firebrick") + facet_grid(~type, scales = "free_x", space = "free_x") +
@@ -208,6 +212,54 @@ q5_effects <- map(c(names(kp_oid), q1_ent), \(ent) tibble(entity = ent,
 q5_auc <- q4_auc |> filter(str_detect(predictor, "before relapse")) |>
   select(entity, predictor, matrix, AUC, ci_low, ci_high)
 
+# ---- evidence figures: the data behind each statement ----------------------------------------------------------------
+cond_lab <- c(HC = "healthy skin", AD_NL = "AD non-lesional", AD_xL = "AD ex-lesional", AD_L = "AD lesional",
+              CPUO_NL = "CPUO non-lesional", CPUO_L = "CPUO lesional")
+evidence_plot <- function(ent) {
+  v <- entities[[ent]] |> select(SampleID, value)
+  isf <- isf_base |> inner_join(v, by = "SampleID")
+  ser <- ser_base |> inner_join(v, by = "SampleID")
+  per_patient <- \(d) d |> group_by(SubjectID, relapse2) |> summarise(value = mean(value, na.rm = TRUE), .groups = "drop")
+  d <- bind_rows(
+    isf |> filter(!is.na(cond)) |> transmute(panel = "1  dISF by skin state (all visits)", x = cond_lab[cond], value),
+    ser |> filter(cross_sectional, !is.na(status)) |>
+      transmute(panel = "2  serum (one sample per person)",
+                x = recode(status, HC = "healthy (in-study)", AD = "AD", Biobank = "LEIP biobank"), value),
+    isf |> filter(group == "AD", state == "ex-lesional", !is.na(relapse2), pre_relapse | is.na(relapse_visit)) |> per_patient() |>
+      transmute(panel = "3  relapse: before relapse, per patient / sample", x = paste("dISF ex-lesional:", sub("_", "-", relapse2)), value),
+    ser |> filter(cohort == "MicroAD", group == "AD", lesion_state %in% "cleared", !is.na(relapse2), pre_relapse | is.na(relapse_visit)) |>
+      per_patient() |> transmute(panel = "3  relapse: before relapse, per patient / sample", x = paste("serum MicroAD:", sub("_", "-", relapse2)), value),
+    ser |> filter(cohort %in% c("RELAD", "RELAD2"), group == "AD", !is.na(relapse2)) |>
+      transmute(panel = "3  relapse: before relapse, per patient / sample", x = paste("serum RELAD:", sub("_", "-", relapse2)), value)) |>
+    filter(!is.na(value)) |>
+    group_by(panel, x) |> mutate(x = sprintf("%s\n(n = %d)", x, n())) |> ungroup()
+  lv <- unique(d$x[order(match(sub("\n.*", "", d$x), c(cond_lab, "healthy (in-study)", "AD", "LEIP biobank")), d$x)])
+  d$x <- factor(d$x, levels = lv)
+  t <- \(lab, mdl, ct) { ep <- est_p(ent, mdl, ct); sprintf("%s %s", lab, fmt_e(ep[["e"]], ep[["p"]])) }
+  sub1 <- paste(t("L vs HC", "states_all_visits", "AD_L_vs_HC"), t("L vs NL", "states_all_visits", "AD_L_vs_NL"),
+                t("NL vs HC", "states_all_visits", "AD_NL_vs_HC"), t("L vs xL", "states_all_visits", "AD_L_vs_xL"),
+                t("| serum AD vs HC", "AD_vs_HC_in_study", "AD_vs_HC"), sep = "; ")
+  sub2 <- paste("relapse vs non-relapse:", t("dISF xL", "relapse_ex_lesional", "relapse_vs_non"),
+                t("; dISF xL-NL", "relapse_delta_xL_minus_NL", "relapse_vs_non"), t("; serum MicroAD", "MicroAD_relapse", "relapse_vs_non"),
+                t("; serum RELAD", "RELAD_relapse", "relapse_vs_non"))
+  ver <- answers_for(ent)
+  ggplot(d, aes(x, value)) + geom_boxplot(outlier.shape = NA, fill = "grey92") +
+    geom_jitter(width = 0.15, size = 0.9, alpha = 0.7) +
+    facet_wrap(~panel, scales = "free", nrow = 1) +
+    labs(title = sprintf("%s%s", ent, if (nchar(ver)) paste0("  -  ", ver) else ""),
+         subtitle = paste(strwrap(paste0(sub1, "\n"), 190), collapse = "\n") |> paste0("\n", paste(strwrap(sub2, 190), collapse = "\n")),
+         caption = paste("Effects: log2 difference (score units for the mast cell score) with single-test p-values from the models (subject and plate accounted for);",
+                         "boxes show the raw values. Relapse panels: values before the relapse."),
+         x = NULL, y = if (ent == "Mast cell score") "mast cell score (mean z)" else "NPX") +
+    theme(axis.text.x = element_text(angle = 30, hjust = 1, size = 7.5), plot.subtitle = element_text(size = 8),
+          plot.caption = element_text(size = 7), strip.text = element_text(size = 8))
+}
+answers_for <- \(ent) { v <- q1_verdict$answer[q1_verdict$entity == ent]; if (length(v)) v else "" }
+ev_ents <- unique(c(names(kp_oid), if (!is.null(score)) "Mast cell score", names(mast_oid)))
+evidence <- map(setNames(ev_ents, ev_ents), \(e) tryCatch(evidence_plot(e), error = \(err) { msg("evidence plot %s: %s", e, conditionMessage(err)); NULL })) |> compact()
+iwalk(evidence, \(p, e) save_plot(p, cfg, "key_questions", "evidence", paste0(str_replace_all(e, "[^A-Za-z0-9]+", "_"), ".png"), width = 14, height = 6.5))
+saveRDS(evidence, out_path(cfg, "key_questions", "evidence_plots.rds"))
+
 # ---- answers ------------------------------------------------------------------------------------------------------------
 ans <- list()
 add <- \(q, item, verdict, evidence) ans[[length(ans) + 1]] <<- tibble(question = q, item = item, verdict = verdict, evidence = evidence)
@@ -216,6 +268,11 @@ Q <- c(Q1 = "Q1 Are mast cell markers elevated in AD, or only in relapse vs non-
        Q3 = "Q3 Do TNFRSF9 / TNFSF9 correlate with AD relapse?",
        Q4 = "Q4 Are TNFRSF9 / TNFSF9 a marker or predictor of AD relapse?",
        Q5 = "Q5 Is dISF superior to serum?")
+add(Q[["Q1"]], "mast cell score - definition",
+    "mean z-score of the measured mast cell markers per sample",
+    paste("Each marker is standardised within its matrix (z = (NPX - mean) / SD over all dISF, or all serum, samples);",
+          "a sample's score is the mean z of its markers (at least 2 measured). 0 = average; +1 = markers on average 1 SD above",
+          "the average. Markers that move in opposite directions cancel out, so a single marker can be significant while the score is not."))
 add(Q[["Q1"]], "markers used", sprintf("mast cell score from %d markers: %s", length(mast_oid), paste(names(mast_oid), collapse = ", ")),
     if (length(mast_missing)) paste("not measured in this dataset:", paste(mast_missing, collapse = ", ")) else "all listed markers measured")
 for (i in seq_len(nrow(q1_verdict))) {

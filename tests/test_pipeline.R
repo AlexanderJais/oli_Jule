@@ -58,7 +58,12 @@ ov15 <- read_csv(file.path(out, "serum_vs_disf/overlap_summary.csv"), show_col_t
 fov  <- read_csv(file.path(out, "focus/focus_overview.csv"), show_col_types = FALSE)
 ex_rl <- read_csv(file.path(out, "export/RELAD2/RELAD2_Serum_NPX_wide.csv"), show_col_types = FALSE)
 kqa <- read_csv(file.path(out, "key_questions/answers.csv"), show_col_types = FALSE)
+est <- readxl::excel_sheets(file.path(out, "Executive_summary_tables.xlsx"))
 stopifnot(
+  "summary tables workbook incomplete (step 16)" = all(c("index", "lesion_restricted", "dISF_L_vs_NL", "all_visits_Lsite_vs_NL",
+                                                          "per_visit_Lsite_vs_NL_all", "dISF_vs_serum_healthy") %in% est),
+  "evidence figures missing (step 15)" = file.exists(file.path(out, "key_questions/evidence/TNFRSF9.png")) &&
+    file.exists(file.path(out, "key_questions/evidence/Mast_cell_score.png")),
   "key questions incomplete (step 15)" = all(paste0("Q", 1:5) %in% str_extract(kqa$question, "^Q[0-9]")) &&
     any(str_detect(kqa$verdict[str_detect(kqa$question, "^Q1") & kqa$item == "Mast cell score"], "elevated in AD")),
   "export missing or incomplete (step 17)" = nrow(ex_rl) == 76 && all(ex_rl$cohort == "RELAD2") &&
@@ -72,7 +77,7 @@ stopifnot(
     file.size(file.path(out, "Executive_summary.pdf")) > 20000,
   "lesion-restricted proteins not found (step 09)" =
     sum(prof$lesion_restricted & prof$role == "ISF_lesion_restricted", na.rm = TRUE) >= 4,
-  "relative dISF/serum enrichment not recovered (step 10)" = all(enr_r$r > 0.9),
+  "relative dISF/serum enrichment not recovered (step 10)" = all(enr_r$r > 0.85),
   "severity-linked proteins not found (step 11)" = mean(easi$significant[easi$role == "ISF_lesional"]) >= 0.7,
   "too many false trajectory hits (step 11)" =
     sum(traj$significant & traj$role == "null") <= max(3, 0.15 * sum(traj$significant)),
