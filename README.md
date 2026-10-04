@@ -6,7 +6,8 @@ patients with atopic dermatitis (AD) and control persons.
 
 This page tells you how to run the analysis and **where to find which result**. Two more pages:
 - [`docs/STEPS.md`](docs/STEPS.md) – what each of the 19 steps does, in plain words;
-- [`docs/TECHNICAL.md`](docs/TECHNICAL.md) – technical details (models, design decisions).
+- [`docs/TECHNICAL.md`](docs/TECHNICAL.md) – technical details (models, design decisions);
+- [`docs/CHANGES.md`](docs/CHANGES.md) – what changed in each version and which steps to rerun.
 
 > **Start here:** after a run, open **`output/Executive_summary.pdf`**. It summarises all
 > results (the answers to the key questions come right after the overview page) and tells you
@@ -87,6 +88,10 @@ only, takes about 15 minutes, and must end with "All pipeline checks passed". It
 `output_sim/` and are **invented**: never use them as study results. **Afterwards restart R**
 (RStudio: Session → Restart R) before you run the real analysis; otherwise `run_all.R` keeps using
 the test settings.
+
+### Updating to a new version
+Pull the new version (RStudio: **Git** tab → **Pull**), then check [`docs/CHANGES.md`](docs/CHANGES.md):
+it says whether new packages are needed (`source("install_packages.R")`) and from which step to rerun.
 
 ---
 
@@ -393,6 +398,7 @@ used when dISF is compared with serum) and `RELAD_AD_vs_HC` (RELAD/RELAD2). Rela
 | `output/` | All results (not uploaded to GitHub) |
 | `tests/` | Test with invented data |
 | `docs/STEPS.md` | What each step does, in plain words |
+| `docs/CHANGES.md` | What changed, and what to rerun after an update |
 | `docs/TECHNICAL.md` | Statistical methods and design decisions |
 
 | Step | Script | What it does | Output (in `output/`) |
@@ -428,6 +434,7 @@ used when dISF is compared with serum) and `RELAD_AD_vs_HC` (RELAD/RELAD2). Rela
 | `[--] Olink fixed LOD file` at the start, or `WARNING: no Olink fixed LOD file` in step 02 | The Olink fixed LOD file was not found, so the LOD comes from the negative controls (less precise). Put it in `data/` as `Explore_HT_Fixed_LOD.csv`, or keep Olink's own name (e.g. `Explore HT_Fixed LOD.csv`): it must contain "Fixed LOD" or "Fixed_LOD", end in `.csv`, and be the only such file in the folder. |
 | A step fails | Read the last lines of the message, fix the problem, and restart from that step with `start_at <- N; source("run_all.R")` |
 | The run skips steps you wanted, or writes to `output_sim/` | `start_at` or the test settings are still set from earlier: restart R (RStudio: Session → Restart R) and run again |
+| `there is no package called '…'` | A new version needs a new package: run `source("install_packages.R")`, restart R, run again |
 | Package error | Run `source("install_packages.R")` again. It only installs missing packages; to update an old one, use `install.packages("name")` or `BiocManager::install("name")`. |
 
 When asking for help, send the error message and the names of files, columns or samples,
