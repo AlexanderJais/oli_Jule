@@ -6,6 +6,7 @@ with `source("run_all.R")`.
 
 | Date | Change | Rerun from | New packages? |
 |---|---|---|---|
+| 2026-10-04 | **Easier navigation.** `output/00_FOLDER_GUIDE.pdf` (one page: what is in each folder). Model results also as Excel with one sheet per volcano panel: `models/ISF_results.xlsx`, `Serum_results.xlsx`, `ISF_by_visit_results.xlsx`. Heatmaps without plate bar. | 04 | – |
 | 2026-10-04 | **Third code audit.** Step 12 no longer shows CPUO serum as AD; step 16 serum correlations exclude CPUO; step 17 uses only proteins detected in MicroAD serum for serum effects and compares relapsers only at cleared visits; Q3 counts each relapse data set once; RELAD workbook robust to duplicate assay names; summary tables add `serum_MicroAD_AD_vs_HC`. `start_at` is now removed after a successful run, and the test no longer leaves its settings active. | 05 | – |
 | 2026-10-04 | **Step 09 heatmaps.** The most-variable-proteins heatmap is now clustered, with colour bars for skin state, patient and visit. There is a new heatmap of the strongest lesional vs non-lesional proteins. The numbers behind both are in `isf_profile.xlsx` (sheets `variable_*`, `lesional_*`). | 09 | `pheatmap` |
 | 2026-10-04 | **New step 16: proteins correlating with TNFRSF9 (CD137)** in dISF, including IL-33, IL-4, CSF2, IL6, IL18, CXCL8, IL1RL1, KIT, KITLG, TPSAB1 and FCER1A → `tnfrsf9_correlation/`. | 01 (full run) | – |

@@ -78,3 +78,53 @@ out_csv <- function(cfg, ...) {
 }
 
 top_names <- function(df, n = 10) if (is.null(df) || !nrow(df)) "none" else paste(head(unique(df$Assay), n), collapse = ", ")
+
+#' One-page guide to the output folder (output/00_FOLDER_GUIDE.pdf): what each folder contains and what to
+#' open first. Only folders that exist are listed. Written at the end of the run (step 19).
+write_output_guide <- function(cfg) {
+  g <- tribble(
+    ~folder,               ~step, ~content,                                                                   ~open_first,
+    "(top level)",         "18",  "Executive summary of all results and the full lists behind it",           "Executive_summary.pdf",
+    "metadata",            "01",  "Sample list from the manifest; flagged inconsistencies",                  "data_flags.csv",
+    "qc",                  "02",  "Quality control: samples, LOD, which proteins are detectable",            "assay_detection.csv",
+    "explore",             "03",  "PCA plots and sources of variation",                                      "pca_*.png",
+    "models",              "4,5,13", "Group comparisons per protein (dISF, serum, per visit); volcano/", "*_results.xlsx (one sheet per volcano)",
+    "relad",               "05",  "All RELAD / RELAD2 serum results",                                        "RELAD_RELAD2_serum_results.xlsx",
+    "isf_serum",           "06",  "Do dISF and serum levels go together (per patient)?",                     "isf_serum_correlation.csv",
+    "enrichment",          "07",  "Pathways behind the group differences",                                   "gsea_results.csv",
+    "leip_reference",      "08",  "Population reference (LEIP biobank) for dISF-serum linked proteins",      "leip_reference.xlsx",
+    "isf_profile",         "09",  "What is measurable in dISF; heatmaps",                                    "isf_profile.xlsx, *_heatmap.png",
+    "matrix_comparison",   "10",  "dISF vs serum proteome: detection, enrichment in dISF, shared signals",   "matrix_comparison.xlsx",
+    "trajectories",        "11",  "Disease course: after clearing, before relapse; per-patient plots",       "trajectory_results.csv, plots/",
+    "focus",               "12",  "Pre-specified proteins (CD137, mast cell markers ...), one folder each",  "focus_overview.xlsx",
+    "visit_course",        "13",  "Visit by visit; proteins changed at all visits",                          "visit_course.xlsx",
+    "serum_vs_disf",       "14",  "Overlap of dISF and serum findings per visit (Venn)",                     "serum_vs_disf.xlsx",
+    "key_questions",       "15",  "Answers to the key questions with evidence plots",                        "answers.csv, evidence/",
+    "tnfrsf9_correlation", "16",  "Proteins correlating with TNFRSF9 (CD137) in dISF",                       "TNFRSF9_correlation.xlsx",
+    "signatures",          "17",  "Same or different biology in serum and dISF? (MicroAD)",                  "signatures.xlsx",
+    "export",              "19",  "All Olink data as CSV (for Excel, Prism ...); RELAD2 separately",         "ISF_NPX_wide.csv, Serum_NPX_wide.csv",
+    "data",                "02",  "Internal files used by the scripts - no need to open",                    "-")
+  g <- g |> filter(folder == "(top level)" | dir.exists(file.path(cfg$paths$output, folder)))
+  f <- out_path(cfg, "00_FOLDER_GUIDE.pdf")
+  pdf_open(f)
+  grid.newpage()
+  page_header("What is in the output folder?",
+              sprintf("Start with Executive_summary.pdf. Step = script number (scripts/NN_*.R). Generated %s.", format(Sys.Date())))
+  x <- c(0.04, 0.215, 0.255, 0.62); y <- 0.855; h <- 0.0375
+  hd <- c("folder", "step", "what is in it", "open first")
+  for (j in 1:4) grid.text(hd[j], x[j], y, just = "left", gp = gpar(fontsize = 10, fontface = "bold"))
+  grid.lines(c(0.04, 0.96), c(y - 0.015, y - 0.015), gp = gpar(col = "grey60"))
+  for (i in seq_len(nrow(g))) {
+    yy <- y - i * h
+    if (i %% 2 == 0) grid.rect(0.5, yy, 0.92, h, gp = gpar(fill = "grey95", col = NA))
+    grid.text(paste0(g$folder[i], if (g$folder[i] != "(top level)") "/" else ""), x[1], yy, just = "left",
+              gp = gpar(fontsize = 9, fontface = "bold", fontfamily = "mono"))
+    grid.text(g$step[i], x[2], yy, just = "left", gp = gpar(fontsize = 8.5, col = "grey35"))
+    grid.text(g$content[i], x[3], yy, just = "left", gp = gpar(fontsize = 9))
+    grid.text(g$open_first[i], x[4], yy, just = "left", gp = gpar(fontsize = 8.5, fontfamily = "mono", col = "grey20"))
+  }
+  grid.text("Each .xlsx starts with an 'index' or 'README' sheet where available. Details: README.md and docs/STEPS.md in the repository.",
+            0.04, 0.03, just = "left", gp = gpar(fontsize = 8.5, col = "grey35"))
+  grDevices::dev.off()
+  invisible(f)
+}

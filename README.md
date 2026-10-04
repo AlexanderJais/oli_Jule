@@ -9,6 +9,8 @@ This page tells you how to run the analysis and **where to find which result**. 
 - [`docs/TECHNICAL.md`](docs/TECHNICAL.md) – technical details (models, design decisions);
 - [`docs/CHANGES.md`](docs/CHANGES.md) – what changed in each version and which steps to rerun.
 
+> **Lost in the output folder?** Open **`output/00_FOLDER_GUIDE.pdf`**: one page, one line per folder.
+>
 > **Start here:** after a run, open **`output/Executive_summary.pdf`**. It summarises all
 > results (the answers to the key questions come right after the overview page) and tells you
 > which folder holds the details.
@@ -216,6 +218,7 @@ cohort and the plate (serum).
 ### `models/` – the main group comparisons (steps 04, 05, 13)
 | File | Content |
 |---|---|
+| `ISF_results.xlsx`, `Serum_results.xlsx`, `ISF_by_visit_results.xlsx` | **The same results in Excel: one sheet per volcano panel** (e.g. `V1 Lsite_vs_HC`), all proteins sorted by p-value; the `index` sheet lists all sheets with the number of significant proteins |
 | `ISF_results.csv` | dISF: every protein × every comparison (see the list of comparison names below) |
 | `ISF_by_visit_results.csv` | dISF comparisons **separately for each visit** V1–V6 |
 | `ISF_relapse_delta_results.csv` | Relapse test on the difference ex-lesional minus non-lesional skin |

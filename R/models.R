@@ -127,6 +127,26 @@ volcano <- function(res, title, fdr = 0.05) {
     theme(legend.position = "bottom")
 }
 
+#' Excel version of the results: an index sheet plus one sheet per volcano panel (model x contrast),
+#' all proteins, sorted by p-value. Sheet names are shortened to Excel's 31 characters where needed.
+write_results_xlsx <- function(res, summ, cfg, prefix) {
+  keys <- summ |> distinct(model, contrast) |>
+    group_by(model) |> mutate(one = n() == 1) |> ungroup() |>
+    # single-comparison models: the model name; otherwise a shortened model name plus the comparison
+    mutate(sheet = if_else(one, model, paste(recode(model, states_all_visits = "all_visits", baseline_V1 = "V1"), contrast)),
+           sheet = str_trunc(str_replace_all(sheet, "[\\[\\]:*?/\\\\]", "_"), 31, ellipsis = ""),
+           sheet = make.unique(sheet, sep = "_"))
+  tabs <- map(seq_len(nrow(keys)), \(i) res |>
+                filter(model == keys$model[i], contrast == keys$contrast[i]) |> arrange(P.Value) |>
+                transmute(Assay, OlinkID, logFC, P.Value, FDR = adj.P.Val, significant, direction = if_else(logFC > 0, "up", "down"),
+                          AveExpr, n_samples, n_subjects, method)) |> setNames(keys$sheet)
+  index <- summ |> left_join(keys, by = c("model", "contrast")) |>
+    transmute(sheet, model, contrast, samples = n_samples, subjects = n_subjects, proteins = n_assays,
+              significant = n_sig, up = n_up, down = n_down,
+              note = sprintf("logFC = first group minus second group (log2 NPX); significant = FDR < %g", cfg$stats$fdr))
+  writexl::write_xlsx(c(list(index = index), tabs), out_path(cfg, "models", paste0(prefix, "_results.xlsx")))
+}
+
 #' Run a list of model specifications and write results + volcano plots.
 #' Each spec: list(name, samples (character SampleIDs), formula, contrasts)
 run_model_specs <- function(specs, expr, info, cfg, prefix, assay_map) {
@@ -143,6 +163,7 @@ run_model_specs <- function(specs, expr, info, cfg, prefix, assay_map) {
               n_down = sum(significant & logFC < 0), .groups = "drop")
   save_csv(summ, cfg, "models", paste0(prefix, "_summary.csv"))
   print(as.data.frame(summ))
+  write_results_xlsx(res, summ, cfg, prefix)
   for (mdl in unique(res$model)) {
     r <- res |> filter(model == mdl)
     save_plot(volcano(r, paste(prefix, mdl), cfg$stats$fdr), cfg, "models", "volcano", paste0(prefix, "_", mdl, ".png"),

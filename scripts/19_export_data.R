@@ -10,6 +10,7 @@
 # Proteins Olink excluded (no values) are listed in proteins.csv but have no data columns.
 
 source("R/utils.R")
+source("R/report.R")
 cfg  <- load_config()
 meta <- read_step(cfg, "metadata", "sample_metadata.rds", step = "scripts/01_metadata.R")
 raw  <- read_step(cfg, "data", "npx_all_samples.rds", step = "scripts/02_import_qc.R")
@@ -78,3 +79,5 @@ write_table(rl, "RELAD2", "RELAD2_samples.csv")
 d <- raw_m |> filter(cohort == "RELAD2")
 if (nrow(d)) for (v in c("NPX", "PCNormalizedNPX")) write_table(wide_of(d, v), "RELAD2", sprintf("RELAD2_Serum_%s_wide.csv", v))
 msg("Export done: %s (%d RELAD2 samples)", file.path(cfg$paths$output, "export"), nrow(rl))
+write_output_guide(cfg)
+msg("Folder guide: %s", out_path(cfg, "00_FOLDER_GUIDE.pdf"))
