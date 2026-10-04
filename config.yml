@@ -6,6 +6,7 @@ paths:
   npx_dir: data/npx                                     # folder with the Olink *.parquet file(s)
   leip_clinical: data/LEIP_clinical_parameters_n35.xlsx # optional; sheet "Key_parameters"
   fixed_lod: data/Explore_HT_Fixed_LOD.csv              # optional; Olink fixed LOD file (";"-separated, version >= 6.0.0)
+  hpa: data/reference/proteinatlas.tsv.zip              # optional; Human Protein Atlas download for tissue origin (step 17) - see tools/download_hpa.R
   severity: data/severity.xlsx                          # optional; columns SubjectID, Visit (V1..V6 or 1..6) + numeric scores (e.g. SCORAD, EASI, NRS)
   output: output
 
@@ -33,7 +34,7 @@ stats:
 # OlinkID or UniProt. CD137 / 4-1BB = TNFRSF9; its ligand 4-1BBL = TNFSF9 can be added.
 focus_proteins: ["TNFRSF9", "TNFSF9", "KITLG", "CPA4", "FCER1A", "TPSAB1", "MS4A2", "TPSD1", "PNOC", "POSTN"]
 
-export:                       # step 17: CSV export of the Olink data
+export:                       # step 19: CSV export of the Olink data
   sep: ","                    # use ";" for German Excel (then the decimal mark is ",")
   long_format: true           # also write one long table (all samples x proteins, gzip-compressed)
 
@@ -47,3 +48,15 @@ enrichment:
   collections: ["H", "C2:CP:REACTOME", "C5:GO:BP"]
   min_size: 10
   max_size: 500
+
+# Step 16: which proteins correlate with TNFRSF9 (4-1BB / CD137) in dISF?
+tnfrsf9_correlation:
+  anchor: TNFRSF9
+  targets: ["IL33", "IL4", "CSF2", "IL6", "IL18", "CXCL8", "IL1RL1", "KIT", "KITLG", "TPSAB1", "TPSB2", "FCER1A"]
+  main_targets: ["IL33", "IL4"]   # scatter plots and highlighted in the summary
+  min_n: 5                        # minimum number of sample pairs for a correlation
+
+# Step 17: do serum and dISF carry the same or different signatures? (MicroAD only; RELAD/RELAD2/LEIP not used)
+signatures:
+  collections: ["C2:CP:REACTOME", "C5:GO:BP"]   # over-representation against the assayed panel
+  min_size: 5

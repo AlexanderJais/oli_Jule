@@ -63,7 +63,8 @@ q1_cmp <- tribble(
   "dISF lesional vs healthy",           "states_all_visits",         "AD_L_vs_HC",     "AD",
   "dISF lesional vs non-lesional",      "states_all_visits",         "AD_L_vs_NL",     "lesion",
   "dISF non-lesional vs healthy",       "states_all_visits",         "AD_NL_vs_HC",    "AD",
-  "serum AD vs healthy",                "AD_vs_HC_in_study",         "AD_vs_HC",       "AD",
+  "serum AD vs healthy (MicroAD)",      "MicroAD_AD_vs_HC",          "AD_vs_HC",       "AD",
+  "serum AD vs healthy (RELAD/RELAD2)", "RELAD_AD_vs_HC",            "AD_vs_HC",       "AD",
   "dISF relapse (ex-lesional)",         "relapse_ex_lesional",       "relapse_vs_non", "relapse",
   "dISF relapse (xL - NL)",             "relapse_delta_xL_minus_NL", "relapse_vs_non", "relapse",
   "serum relapse (MicroAD)",            "MicroAD_relapse",           "relapse_vs_non", "relapse",
@@ -210,8 +211,8 @@ q5_overlap <- if (file.exists(ov_path)) read_csv(ov_path, show_col_types = FALSE
 q5_effects <- map(c(names(kp_oid), q1_ent), \(ent) tibble(entity = ent,
     dISF_lesional_vs_healthy = fmt_e(est_p(ent, "states_all_visits", "AD_L_vs_HC")[["e"]], est_p(ent, "states_all_visits", "AD_L_vs_HC")[["p"]]),
     dISF_p = est_p(ent, "states_all_visits", "AD_L_vs_HC")[["p"]],
-    serum_AD_vs_healthy = fmt_e(est_p(ent, "AD_vs_HC_in_study", "AD_vs_HC")[["e"]], est_p(ent, "AD_vs_HC_in_study", "AD_vs_HC")[["p"]]),
-    serum_p = est_p(ent, "AD_vs_HC_in_study", "AD_vs_HC")[["p"]])) |> bind_rows() |> distinct(entity, .keep_all = TRUE)
+    serum_AD_vs_healthy = fmt_e(est_p(ent, "MicroAD_AD_vs_HC", "AD_vs_HC")[["e"]], est_p(ent, "MicroAD_AD_vs_HC", "AD_vs_HC")[["p"]]),
+    serum_p = est_p(ent, "MicroAD_AD_vs_HC", "AD_vs_HC")[["p"]])) |> bind_rows() |> distinct(entity, .keep_all = TRUE)
 q5_auc <- q4_auc |> filter(str_detect(predictor, "before relapse")) |>
   select(entity, predictor, matrix, AUC, ci_low, ci_high)
 
@@ -227,7 +228,8 @@ evidence_plot <- function(ent) {
     isf |> filter(!is.na(cond)) |> transmute(panel = "1  dISF by skin state (all visits)", x = cond_lab[cond], value),
     ser |> filter(cross_sectional, !is.na(status)) |>
       transmute(panel = "2  serum (one sample per person)",
-                x = recode(status, HC = "healthy (in-study)", AD = "AD", Biobank = "LEIP biobank"), value),
+                x = case_when(status == "Biobank" ~ "LEIP biobank", cohort == "MicroAD" ~ paste(recode(status, HC = "healthy"), "MicroAD"),
+                              TRUE ~ paste(recode(status, HC = "healthy"), "RELAD/RELAD2")), value),
     isf |> filter(group == "AD", state == "ex-lesional", !is.na(relapse2), pre_relapse | is.na(relapse_visit)) |> per_patient() |>
       transmute(panel = "3  relapse: before relapse, per patient / sample", x = paste("dISF ex-lesional:", sub("_", "-", relapse2)), value),
     ser |> filter(cohort == "MicroAD", group == "AD", lesion_state %in% "cleared", !is.na(relapse2), pre_relapse | is.na(relapse_visit)) |>
@@ -236,12 +238,12 @@ evidence_plot <- function(ent) {
       transmute(panel = "3  relapse: before relapse, per patient / sample", x = paste("serum RELAD:", sub("_", "-", relapse2)), value)) |>
     filter(!is.na(value)) |>
     group_by(panel, x) |> mutate(x = sprintf("%s\n(n = %d)", x, n())) |> ungroup()
-  lv <- unique(d$x[order(match(sub("\n.*", "", d$x), c(cond_lab, "healthy (in-study)", "AD", "LEIP biobank")), d$x)])
+  lv <- unique(d$x[order(match(sub("\n.*", "", d$x), c(cond_lab, "healthy MicroAD", "AD MicroAD", "healthy RELAD/RELAD2", "AD RELAD/RELAD2", "LEIP biobank")), d$x)])
   d$x <- factor(d$x, levels = lv)
   t <- \(lab, mdl, ct) { ep <- est_p(ent, mdl, ct); sprintf("%s %s", lab, fmt_e(ep[["e"]], ep[["p"]])) }
   sub1 <- paste(t("L vs HC", "states_all_visits", "AD_L_vs_HC"), t("L vs NL", "states_all_visits", "AD_L_vs_NL"),
                 t("NL vs HC", "states_all_visits", "AD_NL_vs_HC"), t("L vs xL", "states_all_visits", "AD_L_vs_xL"),
-                t("| serum AD vs HC", "AD_vs_HC_in_study", "AD_vs_HC"), sep = "; ")
+                t("| serum AD vs HC (MicroAD)", "MicroAD_AD_vs_HC", "AD_vs_HC"), t("RELAD", "RELAD_AD_vs_HC", "AD_vs_HC"), sep = "; ")
   sub2 <- paste("relapse vs non-relapse:", t("dISF xL", "relapse_ex_lesional", "relapse_vs_non"),
                 t("; dISF xL-NL", "relapse_delta_xL_minus_NL", "relapse_vs_non"), t("; serum MicroAD", "MicroAD_relapse", "relapse_vs_non"),
                 t("; serum RELAD", "RELAD_relapse", "relapse_vs_non"))

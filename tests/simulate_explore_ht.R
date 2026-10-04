@@ -29,7 +29,8 @@ ht <- readRDS(system.file("extdata", "OlinkID_HT_mapping.rds", package = "OlinkA
 th2 <- c("CCL17", "CCL22", "CCL18", "IL13", "IL4", "POSTN", "CCL26", "IL5", "TSLP", "IL31",
          "CCL11", "CCL13", "CCL24", "IL4R", "IL13RA2", "MMP12", "PI3", "SERPINB4", "S100A7", "S100A8",
          "S100A9", "IL19", "IL22", "IL36G", "TNFRSF9")   # TNFRSF9 = CD137 (focus protein)
-focus_sim <- c("TNFSF9", "KITLG", "CPA4", "FCER1A", "TPSAB1", "TPSD1", "KIT")   # other focus proteins (step 12)
+focus_sim <- c("TNFSF9", "KITLG", "CPA4", "FCER1A", "TPSAB1", "TPSD1", "KIT",   # other focus proteins (step 12)
+               "IL33", "CSF2", "IL6", "IL18", "CXCL8", "IL1RL1")                  # TNFRSF9 correlation targets (step 16)
 ht <- bind_rows(ht |> filter(Gene %in% th2), ht |> filter(Gene %in% focus_sim),
                 ht |> filter(!Gene %in% c(th2, focus_sim)) |> slice_sample(prop = 1))
 assays <- ht |> slice_head(n = n_assays) |>
@@ -57,6 +58,7 @@ isf_off <- rnorm(n_assays, -1.2, 0.8)      # ISF relative to serum
 isf_off[assays$role == "ISF_undetected"] <- -6
 isf_off[assays$role == "ISF_lesion_restricted"] <- -6.5
 isf_off[eff(101, 110)] <- 2        # clearly enriched in ISF relative to serum
+isf_off[assays$Assay == "IL4"] <- -5   # IL4 mostly below LOD in dISF (step 16 detectability check)
 nc_lvl <- base - 5.5                       # negative control background
 
 # ---- samples and controls ------------------------------------------------------------
@@ -80,6 +82,10 @@ sv_key <- with(samples, ifelse(is.na(visit), SubjectID, paste(SubjectID, visit))
 sv <- unique(na.omit(sv_key))
 z_sv <- matrix(rnorm(length(sv) * n_assays, 0, 0.9), length(sv), dimnames = list(sv, NULL))
 plate_off <- matrix(rnorm(4 * n_assays, 0, 0.08), 4, dimnames = list(paste("Plate", 1:4), NULL))
+# step 16 truth: TNFRSF9 and IL33 share a sample-level signal in dISF (a real protein-protein relationship,
+# present within every group); IL4 only shares the lesional effect (pooled correlation driven by skin state)
+w_cd137 <- rnorm(nrow(samples), 0, 0.7)
+is_cd137 <- assays$Assay == "TNFRSF9"; is_il33 <- assays$Assay == "IL33"
 
 npx <- matrix(NA_real_, nrow(samples), n_assays)
 for (i in seq_len(nrow(samples))) {
@@ -100,6 +106,7 @@ for (i in seq_len(nrow(samples))) {
     }
   }
   if (!is.na(s$visit) && s$cohort == "MicroAD") x <- x + z_sv[sv_key[i], ] * (assays$role == "ISF_serum_coupled")
+  if (isf) x <- x + w_cd137[i] * (is_cd137 | is_il33)
   if (!isf) {
     if (s$group == "AD") x <- x + 0.7 * (assays$role == "Serum_AD_vs_HC")
     if (s$cohort %in% c("RELAD", "RELAD2") && identical(s$relapse, "relapse"))
@@ -209,7 +216,8 @@ yaml::write_yaml(list(
                leip_clinical = cfg$paths$leip_clinical, fixed_lod = file.path(sim_dir, "fixed_lod.csv"),
                output = "output_sim"),
   npx_column = cfg$npx_column, qc = cfg$qc, stats = cfg$stats, enrichment = cfg$enrichment,
-  focus_proteins = cfg$focus_proteins
+  focus_proteins = cfg$focus_proteins, key_questions = cfg$key_questions, export = cfg$export,
+  tnfrsf9_correlation = cfg$tnfrsf9_correlation, signatures = cfg$signatures
 ), file.path(sim_dir, "config_sim.yml"))
 
 msg("Simulated %d samples/controls x %d assays -> %s", nrow(samples), n_assays, sim_dir)

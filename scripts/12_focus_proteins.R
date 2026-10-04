@@ -207,7 +207,7 @@ for (fp in focus) {
 if (length(overview)) {
   ov_tests <- map(overview, "tests") |> bind_rows()
   key <- c("states_all_visits AD_L_vs_NL", "states_all_visits AD_xL_vs_NL", "states_all_visits AD_L_vs_HC",
-           "states_all_visits AD_NL_vs_HC", "AD_vs_HC_in_study AD_vs_HC", "MicroAD_active_vs_cleared active_vs_cleared",
+           "states_all_visits AD_NL_vs_HC", "AD_vs_HC_in_study AD_vs_HC", "MicroAD_AD_vs_HC AD_vs_HC", "MicroAD_active_vs_cleared active_vs_cleared",
            "relapse_delta_xL_minus_NL relapse_vs_non", "MicroAD_relapse relapse_vs_non")
   ov <- ov_tests |> filter(paste(model, contrast) %in% key) |>
     transmute(protein, label, matrix, comparison = paste0(matrix, ": ", model, " ", contrast), estimate, ci_low, ci_high, p,

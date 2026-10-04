@@ -1,5 +1,5 @@
-# 16 - Executive summary PDF of all findings (step 16; step 17 only exports data)
-# Collects the key numbers, tables and figures of steps 01-15 into output/Executive_summary.pdf,
+# 18 - Executive summary PDF of all findings (step 19 only exports data)
+# Collects the key numbers, tables and figures of steps 01-17 into output/Executive_summary.pdf,
 # plus Executive_summary_tables.xlsx with the full list behind every shortened list in the PDF.
 # Every section is optional: if an earlier step did not run, its page says so instead of failing.
 
@@ -50,6 +50,12 @@ kq_ans  <- out_csv(cfg, "key_questions", "answers.csv")
 kq_q1   <- out_csv(cfg, "key_questions", "Q1_tests.csv")
 kq_auc  <- out_csv(cfg, "key_questions", "Q4_auc.csv")
 ov15    <- out_csv(cfg, "serum_vs_disf", "overlap_summary.csv")
+rds_or_null <- \(...) { p <- file.path(cfg$paths$output, ...); if (file.exists(p)) readRDS(p) else NULL }
+tc_sum  <- rds_or_null("tnfrsf9_correlation", "summary.rds")
+sg_sum  <- rds_or_null("signatures", "summary.rds")
+tc_rank <- out_csv(cfg, "tnfrsf9_correlation", "proteome_wide_correlation.csv")
+tc_targ <- out_csv(cfg, "tnfrsf9_correlation", "targeted_correlations.csv")
+fp <- \(p) ifelse(is.na(p), "n/a", ifelse(p < 0.001, formatC(p, format = "e", digits = 1), sprintf("%.3f", p)))
 
 n_sig <- \(r, mdl, ct) if (is.null(r)) NA else sum(r$significant[r$model == mdl & r$contrast == ct], na.rm = TRUE)
 sig_names <- \(r, mdl, ct, dir, n = 10) {
@@ -130,6 +136,82 @@ section("Key questions", {
   }
 })
 
+
+# ---- 1c. TNFRSF9 correlations (step 16) ---------------------------------------------------------------------------------
+section("TNFRSF9 correlations", {
+  if (is.null(tc_sum)) stop("step 16 results not found")
+  a <- tc_sum$anchor; mains <- tc_sum$mains
+  fl <- tc_sum$flag |> filter(target %in% mains)
+  wh <- tc_sum$where |> filter(Assay %in% mains)
+  lg <- tc_sum$longit |> filter(target %in% mains)
+  cr <- tc_sum$cross |> filter(!is.na(rho))
+  se <- tc_sum$serum |> filter(target %in% mains, group == "pooled")
+  top <- tc_sum$top |> group_by(site) |> summarise(t = paste(head(Assay, 12), collapse = ", "), n = n(), .groups = "drop")
+  page_text(sprintf("Which proteins correlate with %s (4-1BB / CD137) in dISF?", a), c(
+    "## Detectability - read first", tc_sum$notes,
+    "## Targeted correlations (Spearman; pooled vs within groups)",
+    sprintf("%s vs %s, %s: pooled rho = %.2f (p = %s) - %s.", a, fl$target, fl$site, fl$pooled_rho, fp(fl$pooled_p), fl$interpretation),
+    "Within-group (AD, healthy, relapse, non-relapse, lesional, ex-lesional) and per-visit results: tnfrsf9_correlation/TNFRSF9_correlation.xlsx, sheet targeted_correlations.",
+    "## Proteome-wide (partial Spearman adjusted for skin state / group, visit and plate; mixed model as second method)",
+    sprintf("%s, %s: rank %d of %d, rho = %.2f, FDR = %s (mixed model FDR = %s).", wh$Assay, wh$site, wh$rank, wh$of, wh$rho_partial,
+            fp(wh$fdr_partial), fp(wh$fdr_mixed)),
+    if (nrow(top)) sprintf("Strongest correlates, %s (FDR < %g, %d shown): %s.", top$site, fdr, top$n, top$t) else sprintf("No protein reaches FDR < %g.", fdr),
+    "## Within patients over visits (AD)",
+    sprintf("%s vs %s, %s: within-patient r = %.2f (p = %s); visit-to-visit changes rho = %.2f (p = %s, %d changes).",
+            a, lg$target, lg$site, lg$r_within_subject, fp(lg$p_within_subject), lg$delta_rho, fp(lg$delta_p), lg$n_visit_changes),
+    "## dISF vs serum (MicroAD only)",
+    sprintf("%s in dISF (%s) vs serum at the same visit: rho = %.2f (p = %s, n = %d); within patients r = %.2f (p = %s).",
+            a, cr$site, cr$rho, fp(cr$p), cr$n, cr$r_within, fp(cr$p_within)),
+    if (nrow(se)) sprintf("In serum: %s vs %s rho = %.2f (p = %s, n = %d; %s above LOD in %.0f%% of serum samples).",
+                          a, se$target, se$rho, fp(se$p), se$n, se$target, se$target_serum_pct_above_LOD) else "Serum: target proteins not available."),
+    subtitle = "step 16 - Spearman correlations; p-values unadjusted unless FDR is stated", size = 9)
+  page_table(sprintf("Where the target proteins rank among all dISF proteins (correlation with %s)", a),
+             tc_sum$where |> select(site, protein = Assay, rank, of, rho = rho_partial, p = p_partial, FDR = fdr_partial,
+                                    mixed_FDR = fdr_mixed, pct_above_LOD = pct_above_LOD_dISF),
+             note = "Full ranked lists: tnfrsf9_correlation/TNFRSF9_correlation.xlsx (sheet proteome_wide) and Executive_summary_tables.xlsx")
+  page_table(sprintf("LOD summary: %% of dISF samples above LOD (%s and targets)", a),
+             tc_sum$lod |> filter(protein %in% c(a, mains)) |> select(protein, site, group, n, pct_above_LOD, median_NPX, median_LOD))
+  walk(tc_sum$plots, page_plot)
+})
+
+# ---- 1d. serum vs dISF signatures (step 17) --------------------------------------------------------------------------------
+section("Serum vs dISF signatures", {
+  if (is.null(sg_sum)) stop("step 17 results not found")
+  n <- sg_sum$n
+  cc <- sg_sum$concordance |> filter(visit == "all visits")
+  ca <- cc |> filter(proteins == "all measured in both"); cs <- cc |> filter(str_detect(proteins, "^FDR"))
+  ps <- sg_sum$prof_sum
+  page_text("Do serum and dISF carry the same or different biological signatures?", c(
+    "## Data", sprintf("MicroAD only (RELAD, RELAD2 and LEIP serum not used). %d dISF proteins; %d also detected in MicroAD serum (compared); %d detected in dISF but not in serum (reported separately).",
+                       n[["isf"]], n[["shared"]], n[["isf_only"]]),
+    "## 1 Effect-size concordance (log2FC serum vs dISF, all visits pooled)",
+    sprintf("%s: all shared proteins rho = %.2f, slope = %.2f, %.0f%% same sign (n = %d); FDR-significant in either: rho = %.2f, %.0f%% same sign (n = %d).",
+            ca$comparison, ca$spearman_rho, ca$slope_serum_on_dISF, ca$pct_same_sign, ca$n,
+            cs$spearman_rho[match(ca$comparison, cs$comparison)], cs$pct_same_sign[match(ca$comparison, cs$comparison)], cs$n[match(ca$comparison, cs$comparison)]),
+    "A slope well below 1 with positive rho = the same biology, weaker in serum; rho near 0 = different processes. Per visit: next pages and signatures.xlsx.",
+    "## 2 Time-resolved models (group x visit)",
+    sprintf("%s - %s: %d of %d proteins FDR < %g.", sg_sum$tm_sum$model, sg_sum$tm_sum$test, sg_sum$tm_sum$FDR_sig, sg_sum$tm_sum$proteins, fdr),
+    if (nrow(ps)) sprintf("%s, %s: %d proteins (%d in serum); serum attenuation slope %s.", ps$site, ps$profile, ps$proteins, ps$in_serum,
+                          ifelse(is.na(ps$attenuation_slope), "n/a", sprintf("%.2f", ps$attenuation_slope))) else "No dISF-significant temporal profiles.",
+    "## 3 Compartment x group", if (nrow(sg_sum$cxg_sum)) sprintf("%s: %s %d.", sg_sum$cxg_sum$model, sg_sum$cxg_sum$pattern, sg_sum$cxg_sum$n) else "n/a",
+    "## 6 Relapse, predictive framing (visit before relapse vs non-relapsers)",
+    if (nrow(sg_sum$pred_sum)) sprintf("%s (%d vs %d patients): %d of %d proteins FDR < %g; %d at p < 0.05 (about %d expected by chance).",
+                                       sg_sum$pred_sum$set, sg_sum$pred_sum$n_relapse, sg_sum$pred_sum$n_non, sg_sum$pred_sum$FDR_sig,
+                                       sg_sum$pred_sum$proteins, fdr, sg_sum$pred_sum$p05, sg_sum$pred_sum$expected_p05_by_chance) else "n/a",
+    if (!isTRUE(sg_sum$hpa)) "Tissue origin (Human Protein Atlas) not annotated: run source(\"tools/download_hpa.R\") once, then step 17."),
+    subtitle = "step 17 - MicroAD only; FDR < 0.05 unless stated", size = 9)
+  page_table("Effect-size concordance per comparison and visit", sg_sum$concordance |>
+               select(comparison, visit, proteins, n, rho = spearman_rho, p, slope = slope_serum_on_dISF, `% same sign` = pct_same_sign), rows_per_page = 30)
+  if (nrow(sg_sum$nis_sum)) page_table("dISF proteins not detected in serum: significant in dISF?", sg_sum$nis_sum)
+  page_table("Signature sets (all visits pooled)", sg_sum$set_sum,
+             note = "Protein lists, Reactome/GO enrichment and tissue origin: signatures/signatures.xlsx")
+  if (nrow(sg_sum$sets_fdr)) page_table("Signature protein lists (FDR < 0.05, all visits pooled)",
+             sg_sum$sets_fdr |> select(comparison, set, Assay, dISF_log2FC = isf_logFC, dISF_FDR = isf_fdr, serum_log2FC = ser_logFC, serum_FDR = ser_fdr,
+                                      any_of("hpa_origin")) |> head(120),
+             note = "First 120 rows; all rows: signatures/signatures.xlsx, sheet signature_sets")
+  walk(sg_sum$plots, page_plot)
+})
+
 # ---- 2. key findings ---------------------------------------------------------------------------------------------
 section("Key findings", {
   cs <- if (!is.null(cons)) cons |> filter(contrast == "Lsite_vs_HC") else NULL
@@ -162,8 +244,8 @@ section("Key findings", {
     if (!is.null(corr)) sprintf("dISF and serum levels move together within patients over visits for %d (lesion site) and %d (non-lesional skin) proteins; between-patient correlation: %d / %d.",
                                 sum(corr$fdr_within < fdr & corr$site == "L", na.rm = TRUE), sum(corr$fdr_within < fdr & corr$site == "NL", na.rm = TRUE),
                                 sum(corr$fdr_between < fdr & corr$site == "L", na.rm = TRUE), sum(corr$fdr_between < fdr & corr$site == "NL", na.rm = TRUE)) else "n/a",
-    sprintf("Serum AD vs in-study healthy controls: %s proteins; vs LEIP biobank: %s; significant against both (same direction): %s (%s).",
-            na_txt(n_sig(ser, "AD_vs_HC_in_study", "AD_vs_HC")), na_txt(n_sig(ser, "AD_vs_Biobank", "AD_vs_Biobank")),
+    sprintf("Serum AD vs healthy, MicroAD only (reference for dISF): %s proteins. All studies (MicroAD + RELAD/RELAD2) vs in-study healthy controls: %s; vs LEIP biobank: %s; significant against both (same direction): %s (%s).",
+            na_txt(n_sig(ser, "MicroAD_AD_vs_HC", "AD_vs_HC")), na_txt(n_sig(ser, "AD_vs_HC_in_study", "AD_vs_HC")), na_txt(n_sig(ser, "AD_vs_Biobank", "AD_vs_Biobank")),
             if (is.null(agree)) "n/a" else sum(agree$agree_both_controls, na.rm = TRUE),
             if (is.null(agree)) "n/a" else top_names(agree |> filter(agree_both_controls), 10)),
     "## Aim 3 - disease course and relapse (exploratory)",
@@ -171,6 +253,9 @@ section("Key findings", {
             if (is.null(delta)) "n/a" else sum(delta$significant), na_txt(n_sig(ser, "MicroAD_relapse", "relapse_vs_non")),
             na_txt(n_sig(ser, "RELAD_relapse", "relapse_vs_non"))),
     if (!is.null(traj_s)) paste(sprintf("%s: %d", traj_s$model, traj_s$n_sig), collapse = "; ") else "Trajectories: n/a",
+    "## RELAD / RELAD2 serum",
+    sprintf("All RELAD and RELAD2 results (relapse vs non-relapse per cohort and combined, AD vs healthy, group means, NPX values): relad/RELAD_RELAD2_serum_results.xlsx. Combined relapse: %s proteins at FDR < %g. dISF vs serum comparisons use MicroAD serum only.",
+            na_txt(n_sig(ser, "RELAD_relapse", "relapse_vs_non")), fdr),
     "## LEIP population reference",
     if (!is.null(leip)) sprintf("%d dISF-serum correlated proteins checked in LEIP; %d associate with clinical parameters (FDR < %g); %d differ between LEIP and in-study healthy controls (possible pre-analytical effect).",
                                 nrow(leip), if (is.null(leip_a)) 0 else n_distinct(leip_a$Assay[leip_a$significant]), fdr,
@@ -181,9 +266,9 @@ section("Key findings", {
     for (pr in unique(fov$label)) {
       d <- fov |> filter(label == pr)
       g <- \(cmp) { r <- d |> filter(comparison == cmp); if (!nrow(r)) "n/a" else sprintf("%+.2f (p = %.2g)", r$estimate[1], r$p[1]) }
-      items <- c(items, sprintf("%s: dISF lesional vs non-lesional %s; ex-lesional vs non-lesional %s; non-lesional vs healthy %s; serum AD vs healthy %s.",
+      items <- c(items, sprintf("%s: dISF lesional vs non-lesional %s; ex-lesional vs non-lesional %s; non-lesional vs healthy %s; serum AD vs healthy (MicroAD) %s.",
                                 pr, g("dISF: states_all_visits AD_L_vs_NL"), g("dISF: states_all_visits AD_xL_vs_NL"),
-                                g("dISF: states_all_visits AD_NL_vs_HC"), g("serum: AD_vs_HC_in_study AD_vs_HC")))
+                                g("dISF: states_all_visits AD_NL_vs_HC"), g("serum: MicroAD_AD_vs_HC AD_vs_HC")))
     }
     missing_fp <- setdiff(toupper(unlist(cfg$focus_proteins)), toupper(unique(fov$protein)))
     if (length(missing_fp)) items <- c(items, sprintf("Not measured in this dataset: %s.", paste(missing_fp, collapse = ", ")))
@@ -360,7 +445,8 @@ section("Methods", {
     "## Output folders (all under the output directory)",
     "qc/ - QC tables and plots | models/ - all model results and volcano plots (models/volcano/) | visit_course/ - per-visit analysis and time courses",
     "isf_profile/ - dISF proteome | matrix_comparison/ - dISF vs serum | serum_vs_disf/ - overlap per visit (Venn) | isf_serum/ - correlations",
-    "trajectories/ - disease course | leip_reference/ | enrichment/ | focus/ - focus proteins (overview + one folder per protein)"),
+    "trajectories/ - disease course | leip_reference/ | enrichment/ | focus/ - focus proteins (overview + one folder per protein)",
+    "tnfrsf9_correlation/ - proteins correlating with TNFRSF9 | signatures/ - serum vs dISF signatures | relad/ - all RELAD/RELAD2 serum results (RELAD_RELAD2_serum_results.xlsx)"),
     size = 10)
 })
 
@@ -400,7 +486,11 @@ tabs <- c(list(
   enr_sheets,
   list(serum_AD_vs_HC = sig_list(ser, "AD_vs_HC_in_study", "AD_vs_HC"),
        serum_AD_both_controls = if (!is.null(agree)) agree |> filter(agree_both_controls) else NULL,
-       key_questions = kq_ans, focus_proteins = fov)) |> compact()
+       key_questions = kq_ans, focus_proteins = fov,
+       TNFRSF9_targeted = tc_targ,
+       TNFRSF9_ranking_all_dISF = if (!is.null(tc_rank)) tc_rank |> filter(site == "all dISF") else NULL,
+       signature_sets = sg_sum$sets_fdr,
+       relapse_predictive = if (!is.null(sg_sum$predictive) && nrow(sg_sum$predictive)) sg_sum$predictive |> filter(P.Value < 0.05) else NULL)) |> compact()
 tabs <- tabs[vapply(tabs, nrow, 1L) > 0]
 index <- tibble(sheet = names(tabs), rows = vapply(tabs, nrow, 1L),
                 content = c(lesion_restricted = "proteins detectable only in lesional AD dISF (step 09)",
@@ -423,7 +513,11 @@ index <- tibble(sheet = names(tabs), rows = vapply(tabs, nrow, 1L),
                             serum_AD_vs_HC = "significant: serum AD vs in-study healthy controls",
                             serum_AD_both_controls = "serum AD vs controls: significant against in-study AND biobank controls",
                             key_questions = "answers and evidence for the key questions",
-                            focus_proteins = "focus proteins: key single-protein tests")[names(tabs)])
+                            focus_proteins = "focus proteins: key single-protein tests",
+                            TNFRSF9_targeted = "TNFRSF9 vs target proteins in dISF: Spearman pooled, within groups and per visit (step 16)",
+                            TNFRSF9_ranking_all_dISF = "all dISF proteins ranked by partial correlation with TNFRSF9 (step 16)",
+                            signature_sets = "serum vs dISF signature sets at FDR < 0.05, all visits pooled (step 17)",
+                            relapse_predictive = "visit before relapse vs non-relapsers, proteins with p < 0.05 (step 17)")[names(tabs)])
 writexl::write_xlsx(c(list(index = index), tabs), out_path(cfg, "Executive_summary_tables.xlsx"))
 msg("Full lists: %s", out_path(cfg, "Executive_summary_tables.xlsx"))
 msg("Executive summary: %s", out_file)

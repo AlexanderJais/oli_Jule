@@ -102,10 +102,10 @@ if (file.exists(isf_res) && file.exists(serum_res)) {
   comparisons <- list(
     c(isf_model = "states_all_visits", isf_ct = "AD_L_vs_NL", serum_model = "MicroAD_active_vs_cleared",
       serum_ct = "active_vs_cleared", label = "lesion activity: skin (L vs NL) vs blood (active vs cleared visits)"),
-    c(isf_model = "states_all_visits", isf_ct = "AD_L_vs_HC", serum_model = "AD_vs_HC_in_study",
-      serum_ct = "AD_vs_HC", label = "disease: lesional skin vs healthy skin, AD vs healthy serum"),
-    c(isf_model = "states_all_visits", isf_ct = "AD_NL_vs_HC", serum_model = "AD_vs_HC_in_study",
-      serum_ct = "AD_vs_HC", label = "systemic: non-lesional AD skin vs healthy skin, AD vs healthy serum")
+    c(isf_model = "states_all_visits", isf_ct = "AD_L_vs_HC", serum_model = "MicroAD_AD_vs_HC",
+      serum_ct = "AD_vs_HC", label = "disease: lesional skin vs healthy skin, AD vs healthy serum (MicroAD)"),
+    c(isf_model = "states_all_visits", isf_ct = "AD_NL_vs_HC", serum_model = "MicroAD_AD_vs_HC",
+      serum_ct = "AD_vs_HC", label = "systemic: non-lesional AD skin vs healthy skin, AD vs healthy serum (MicroAD)")
   )
   conc <- map(comparisons, \(cp) {
     a <- pick(ir, cp[["isf_model"]], cp[["isf_ct"]], "isf"); b <- pick(sr, cp[["serum_model"]], cp[["serum_ct"]], "serum")

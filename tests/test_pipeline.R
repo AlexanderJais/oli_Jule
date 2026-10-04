@@ -59,21 +59,41 @@ fov  <- read_csv(file.path(out, "focus/focus_overview.csv"), show_col_types = FA
 ex_rl <- read_csv(file.path(out, "export/RELAD2/RELAD2_Serum_NPX_wide.csv"), show_col_types = FALSE)
 kqa <- read_csv(file.path(out, "key_questions/answers.csv"), show_col_types = FALSE)
 est <- readxl::excel_sheets(file.path(out, "Executive_summary_tables.xlsx"))
+tc_rank <- read_csv(file.path(out, "tnfrsf9_correlation/proteome_wide_correlation.csv"), show_col_types = FALSE)
+tc_targ <- read_csv(file.path(out, "tnfrsf9_correlation/targeted_correlations.csv"), show_col_types = FALSE)
+tc_lod  <- readxl::read_excel(file.path(out, "tnfrsf9_correlation/TNFRSF9_correlation.xlsx"), sheet = "LOD_summary")
+sig_eff <- read_csv(file.path(out, "signatures/effects_per_comparison.csv"), show_col_types = FALSE)
+sig_xl  <- readxl::excel_sheets(file.path(out, "signatures/signatures.xlsx"))
+relad_xl <- readxl::excel_sheets(file.path(out, "relad/RELAD_RELAD2_serum_results.xlsx"))
+n_micro_serum <- read_csv(file.path(out, "metadata/sample_metadata.csv"), show_col_types = FALSE) |>
+  filter(matrix == "Serum", cohort == "MicroAD") |> nrow()
 stopifnot(
-  "summary tables workbook incomplete (step 16)" = all(c("index", "lesion_restricted", "dISF_L_vs_NL", "all_visits_Lsite_vs_NL",
+  "TNFRSF9-IL33 relationship not ranked first (step 16)" =
+    all(tc_rank |> group_by(site) |> slice_min(p_partial, n = 1, with_ties = FALSE) |> pull(Assay) == "IL33"),
+  "TNFRSF9-IL33 within-group correlation missing (step 16)" =
+    any(tc_targ$target == "IL33" & tc_targ$subset == "AD lesional" & tc_targ$p < 0.05 & tc_targ$rho > 0),
+  "IL4 detectability not reported as low (step 16)" =
+    any(tc_lod$protein == "IL4" & tc_lod$site == "all dISF" & tc_lod$pct_above_LOD < 50),
+  "signatures step used non-MicroAD serum (step 17)" = max(sig_eff$n_samples[sig_eff$compartment == "serum"]) <= n_micro_serum,
+  "signatures workbook incomplete (step 17)" = all(c("concordance", "time_models_F", "compartment_x_group", "signature_sets",
+                                                    "relapse_predictive", "paired_correlation") %in% sig_xl),
+  "RELAD/RELAD2 workbook incomplete (step 05)" = all(c("RELAD_relapse", "RELAD_only_relapse", "RELAD2_only_relapse", "RELAD_AD_vs_HC",
+                                                      "group_means", "NPX_values") %in% relad_xl),
+  "new sheets missing from the summary tables (step 18)" = all(c("TNFRSF9_targeted", "TNFRSF9_ranking_all_dISF", "signature_sets") %in% est),
+  "summary tables workbook incomplete (step 18)" = all(c("index", "lesion_restricted", "dISF_L_vs_NL", "all_visits_Lsite_vs_NL",
                                                           "per_visit_Lsite_vs_NL_all", "dISF_vs_serum_healthy") %in% est),
   "evidence figures missing (step 15)" = file.exists(file.path(out, "key_questions/evidence/TNFRSF9.png")) &&
     file.exists(file.path(out, "key_questions/evidence/Mast_cell_score.png")),
   "key questions incomplete (step 15)" = all(paste0("Q", 1:5) %in% str_extract(kqa$question, "^Q[0-9]")) &&
     any(str_detect(kqa$verdict[str_detect(kqa$question, "^Q1") & kqa$item == "Mast cell score"], "elevated in AD")),
-  "export missing or incomplete (step 17)" = nrow(ex_rl) == 76 && all(ex_rl$cohort == "RELAD2") &&
+  "export missing or incomplete (step 19)" = nrow(ex_rl) == 76 && all(ex_rl$cohort == "RELAD2") &&
     file.exists(file.path(out, "export/ISF_NPX_wide.csv")) && file.exists(file.path(out, "export/proteins.csv")),
   "serum vs dISF overlap missing (step 14)" = nrow(ov15) > 0 && any(ov15$visit == "all visits") &&
     file.exists(file.path(out, "serum_vs_disf/venn_AD_vs_healthy_nominal.png")),
   "focus overview missing a simulated focus protein (step 12)" =
     all(c("TNFRSF9", "TNFSF9", "KITLG", "CPA4", "FCER1A", "TPSAB1", "TPSD1", "POSTN") %in% fov$protein),
   "no protein regulated at all visits found (step 13)" = sum(vc$all_visits_nominal & vc$role != "null") >= 3,
-  "executive summary PDF missing (step 16)" = file.exists(file.path(out, "Executive_summary.pdf")) &&
+  "executive summary PDF missing (step 18)" = file.exists(file.path(out, "Executive_summary.pdf")) &&
     file.size(file.path(out, "Executive_summary.pdf")) > 20000,
   "lesion-restricted proteins not found (step 09)" =
     sum(prof$lesion_restricted & prof$role == "ISF_lesion_restricted", na.rm = TRUE) >= 4,

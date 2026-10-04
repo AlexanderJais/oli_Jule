@@ -1,4 +1,4 @@
-# 17 - Export of the Olink results (all proteins, all samples) as CSV
+# 19 - Export of the Olink results (all proteins, all samples) as CSV
 # Out (output/export/):
 #   proteins.csv                      one row per protein: OlinkID, Assay, UniProt, block, LOD, detection per matrix
 #   samples.csv                       one row per sample: all metadata + Olink sample QC + whether excluded in QC

@@ -8,6 +8,7 @@ data/
 ├── manifest.xlsx                          Olink sample submission sheet (sheet "manifest" is used)
 ├── LEIP_clinical_parameters_n35.xlsx      LEIP clinical data (sheet "Key_parameters")
 ├── Explore_HT_Fixed_LOD.csv               Olink fixed LOD file (Explore HT, version >= 6.0.0)
+├── reference/proteinatlas.tsv.zip          optional: Human Protein Atlas table (public; tools/download_hpa.R)
 ├── severity.xlsx                          optional: SubjectID, Visit (V1 or 1), SCORAD / EASI / NRS ...
 └── npx/
     ├── O-MicroAD_ISF_NPX_2026-09-24.parquet

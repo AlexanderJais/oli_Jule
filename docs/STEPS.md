@@ -1,6 +1,6 @@
 # What each step does – in plain words
 
-The pipeline has 17 steps (`scripts/01_…` to `scripts/17_…`). `run_all.R` runs them in this
+The pipeline has 19 steps (`scripts/01_…` to `scripts/19_…`). `run_all.R` runs them in this
 order, and each step uses what the earlier ones saved. For every step this page explains the
 **question** it answers, **what it does**, **what comes out**, and **what to keep in mind**.
 
@@ -14,8 +14,8 @@ the [README](../README.md#2-words-you-will-meet). The statistical details are in
 | B. Group comparisons, protein by protein | 04 dISF models · 05 serum models · 07 pathways |
 | C. Skin fluid and blood together | 06 correlation · 08 LEIP reference · 10 dISF vs serum proteome · 14 overlap per visit |
 | D. The three study aims | 09 aim 1 (dISF profile) · 10 aim 2 · 11 aim 3 (disease course) · 13 visit by visit |
-| E. Specific proteins and questions | 12 focus proteins · 15 key questions |
-| F. Reporting | 16 executive summary · 17 data export |
+| E. Specific proteins and questions | 12 focus proteins · 15 key questions · 16 TNFRSF9 correlations · 17 serum vs dISF signatures |
+| F. Reporting | 18 executive summary · 19 data export |
 
 ---
 
@@ -108,11 +108,14 @@ Repeated samples of the same person are taken into account (patient as a "random
 | `AD_vs_HC_in_study` | AD vs the healthy controls of the studies (one sample per person) |
 | `AD_vs_Biobank`, `HC_vs_Biobank` | vs LEIP biobank serum. The second shows what differs just because biobank serum was handled differently. |
 | `MicroAD_active_vs_cleared` | The same patients' serum when their lesion is active vs cleared |
+| `MicroAD_AD_vs_HC` | MicroAD only: AD (V1) vs healthy volunteers. **This is the serum comparison used whenever dISF is compared with serum** (RELAD/RELAD2 excluded). |
 | `MicroAD_relapse`, `RELAD_relapse` | Relapsers vs non-relapsers (MicroAD; RELAD + RELAD2), plus a version without samples with contradictory labels |
+| `RELAD_only_relapse`, `RELAD2_only_relapse`, `RELAD_AD_vs_HC` | Each RELAD cohort on its own; AD vs healthy within RELAD/RELAD2 |
 
 **Output:**
 - `Serum_results.csv` and `Serum_summary.csv`;
 - `Serum_AD_vs_controls_agreement.csv`: proteins that differ in AD against **both** the in-study and the biobank controls. These are the most trustworthy.
+- `relad/RELAD_RELAD2_serum_results.xlsx`: **all RELAD and RELAD2 results in one workbook**: every model, group means, % above LOD, sample labels and NPX values.
 
 ### Step 07 – Pathways (`07_enrichment.R` → `enrichment/`)
 **Question:** Which biological processes stand behind the protein changes?
@@ -154,7 +157,7 @@ Both are done separately for the lesion site and the non-lesional site.
 **What it does**
 1. **Detection:** which proteins are measurable in dISF only, serum only, both, or neither.
 2. **Relative enrichment:** for each matched dISF–serum pair it computes dISF minus serum and centres that on the typical protein, because dISF is more dilute overall. Proteins far above the typical protein are relatively enriched in skin fluid, i.e. candidates for **local production in the skin**. This is done separately for AD lesional, ex-lesional and non-lesional skin and for healthy skin. "Enriched" requires FDR < 0.05 and at least a 2-fold difference.
-3. **Disease signals:** it compares the effects of step 04 (skin) with step 05 (blood): same direction, skin only, or blood only?
+3. **Disease signals:** it compares the effects of step 04 (skin) with step 05 (blood, MicroAD serum only): same direction, skin only, or blood only?
 4. Does the serum level follow the lesional-minus-non-lesional skin difference from visit to visit?
 
 **Output:** `matrix_comparison.xlsx`, `relative_enrichment.csv`, `disease_signal_concordance.*`.
@@ -258,13 +261,75 @@ Healthy skin (one visit) is the reference at every visit. **"Regulated at all vi
 
 **Keep in mind:** the verdicts are generated automatically from p < 0.05 and must be read with the evidence. Relapse results rest on 4 vs 6 patients in MicroAD. The wording of Q2–Q5 and the choice of one primary test per question are currently under review.
 
+### Step 16 – Which proteins correlate with TNFRSF9 in dISF? (`16_tnfrsf9_correlation.R` → `tnfrsf9_correlation/`)
+**Question:** Which measured proteins correlate with TNFRSF9 (4-1BB / CD137) in dISF? In particular, do IL-33, IL-4, CSF2, IL6, IL18, CXCL8, IL1RL1, KIT, KITLG, TPSAB1, TPSB2 and FCER1A? The list is in `config.yml`.
+
+**What it does**
+- **Detectability (reported first):** % of dISF samples above LOD per site and group. Proteins below LOD in more than half of the samples are flagged before any correlation. Values below LOD are used as measured, not replaced, and every targeted correlation is repeated on the samples where both proteins are above LOD.
+- **Targeted correlations:** Spearman ρ, p and n for TNFRSF9 vs each target, separately for the lesion site and for non-lesional / healthy skin. Each is reported:
+  - (a) pooled;
+  - (b) within each group: AD, healthy, relapse, non-relapse, lesional, ex-lesional;
+  - (c) per visit.
+
+  A correlation seen only when pooling, but not within groups, is flagged: it comes from group differences, not from the two proteins being linked.
+- **Proteome-wide:** TNFRSF9 against every dISF protein, adjusted for skin state / group, visit and plate.
+  - The partial Spearman correlation gives the ranking.
+  - A mixed model with the patient as random effect is a second method.
+  - The output is a ranked list with FDR, showing where IL-33, IL-4 and the other targets fall.
+- **Within patients:** do changes of TNFRSF9 from visit to visit go with changes of the targets in the same patient (repeated-measures and Δ–Δ correlation)?
+- **dISF vs serum:** dISF TNFRSF9 vs serum TNFRSF9 at the same visit, and whether the TNFRSF9–target relationship exists in serum. MicroAD only.
+
+**Output:**
+- `TNFRSF9_correlation.xlsx`;
+- scatter plots per target (coloured by group, per site, open symbols = below LOD);
+- a heatmap and a proteome-wide plot.
+
+**Keep in mind:**
+- Pooled correlations use several samples of the same patient, so trust the within-group and within-patient results more.
+- The p-values of the targeted correlations are not corrected for testing several targets.
+- TPSB2 is not on the Explore HT panel.
+
+### Step 17 – Serum vs dISF signatures (`17_disf_serum_signatures.R` → `signatures/`)
+**Question:** Do serum and dISF reflect the same biology at different sensitivity, or different processes? Does that change between groups (AD vs healthy; relapse vs non-relapse) and across V1–V6?
+
+**Only MicroAD samples are used.** RELAD, RELAD2 and LEIP serum are excluded. "Measured in both" = passes the dISF detection filter **and** is above LOD in MicroAD serum. dISF proteins not detected in serum are reported separately, so that "dISF only" can be told apart: is there no effect in serum, or is the protein simply not measurable there?
+
+1. **Effect-size concordance:** for every protein measured in both, the serum effect is plotted against the dISF effect, per comparison, per visit and pooled. Reported:
+   - Spearman ρ;
+   - the slope: below 1 = the same signal, weaker in serum;
+   - % same direction.
+
+   This is done for all proteins and again for those significant in either compartment.
+2. **Time-resolved models:** group × visit in each compartment.
+   - Healthy controls have one visit, so the test asks whether the AD–healthy difference changes over V1–V6. Relapse × visit is tested within AD.
+   - dISF-significant proteins are grouped by their time profile: high at V1 and resolving, persistent, late-rising, reversing or fluctuating.
+   - For each profile, the step checks whether serum shows a weaker version of it.
+3. **Compartment × group:** which proteins change with disease differently in dISF than in serum, tested on the paired dISF − serum difference of each visit.
+4. **Paired correlation within patients** (from step 06):
+   - proteins that follow serum are candidates for systemic spill-over;
+   - proteins that don't follow serum and are relatively enriched in dISF are candidates for local production.
+5. **Signature sets:** dISF-only, serum-only, shared-concordant and shared-discordant, at FDR < 0.05 (p < 0.05 as sensitivity analysis). Each set gets:
+   - Reactome / GO enrichment, with the measured panel as background;
+   - tissue origin from the Human Protein Atlas (skin / keratinocyte, immune, liver);
+   - the full protein lists.
+6. **Relapse, predictive:** dISF and serum at the **visit before the relapse** vs the cleared visits of non-relapsers, one value per patient.
+
+**Output:**
+- `signatures.xlsx` (sheet `README` explains each sheet);
+- concordance and time-profile figures;
+- a relapse volcano plot.
+
+**Keep in mind:**
+- Relapse analyses rest on 4 vs 6 patients.
+- The tissue origin needs the Human Protein Atlas table: download it once with `source("tools/download_hpa.R")`.
+
 ---
 
 ## F. Reporting
 
-### Step 16 – Executive summary (`16_summary_report.R` → `Executive_summary.pdf`, `Executive_summary_tables.xlsx`)
+### Step 18 – Executive summary (`18_summary_report.R` → `Executive_summary.pdf`, `Executive_summary_tables.xlsx`)
 Collects everything in one PDF:
-1. answers to the key questions with evidence;
+1. answers to the key questions with evidence, then the TNFRSF9 correlations (step 16) and the serum vs dISF signatures (step 17);
 2. data and QC;
 3. key findings per aim;
 4. all comparisons in one table;
@@ -273,7 +338,7 @@ Collects everything in one PDF:
 
 Where the PDF shows a shortened list, the complete list is in `Executive_summary_tables.xlsx`. The first sheet, `index`, explains each sheet. If an earlier step did not run, its page says so instead of stopping the report.
 
-### Step 17 – Data export (`17_export_data.R` → `export/`)
+### Step 19 – Data export (`19_export_data.R` → `export/`)
 Writes the Olink data as CSV files for use in Excel, Prism, SPSS …:
 - all samples × all proteins, as delivered (NPX) and as analysed (PCNormalizedNPX);
 - sample and protein information;

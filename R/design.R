@@ -71,6 +71,10 @@ serum_specs <- function(info) {
          samples = ids(cross_sectional, status %in% c("AD", "HC")),
          formula = ~ 0 + status + cohort + plate,
          contrasts = c(AD_vs_HC = "statusAD - statusHC")),
+    list(name = "MicroAD_AD_vs_HC",              # MicroAD only (no RELAD/RELAD2): the serum reference for dISF comparisons
+         samples = ids(cohort == "MicroAD", visit == "V1", status %in% c("AD", "HC")),
+         formula = ~ 0 + status + plate,
+         contrasts = c(AD_vs_HC = "statusAD - statusHC")),
     list(name = "AD_vs_Biobank",
          samples = ids(cross_sectional, status %in% c("AD", "Biobank")),
          formula = ~ 0 + status + plate,
@@ -91,6 +95,18 @@ serum_specs <- function(info) {
          samples = ids(cohort %in% c("RELAD", "RELAD2"), group == "AD", !is.na(relapse2)),
          formula = ~ 0 + relapse2 + cohort + plate,
          contrasts = c(relapse_vs_non = "relapse2relapse - relapse2non_relapse")),
+    list(name = "RELAD_only_relapse",             # each cohort on its own
+         samples = ids(cohort == "RELAD", group == "AD", !is.na(relapse2)),
+         formula = ~ 0 + relapse2 + plate,
+         contrasts = c(relapse_vs_non = "relapse2relapse - relapse2non_relapse")),
+    list(name = "RELAD2_only_relapse",
+         samples = ids(cohort == "RELAD2", group == "AD", !is.na(relapse2)),
+         formula = ~ 0 + relapse2 + plate,
+         contrasts = c(relapse_vs_non = "relapse2relapse - relapse2non_relapse")),
+    list(name = "RELAD_AD_vs_HC",                 # RELAD + RELAD2 only
+         samples = ids(cohort %in% c("RELAD", "RELAD2"), status %in% c("AD", "HC")),
+         formula = ~ 0 + status + cohort + plate,
+         contrasts = c(AD_vs_HC = "statusAD - statusHC")),
     list(name = "RELAD_relapse_unflagged",        # sensitivity: without samples with conflicting labels
          samples = ids(cohort %in% c("RELAD", "RELAD2"), group == "AD", !is.na(relapse2), !flagged),
          formula = ~ 0 + relapse2 + cohort + plate,

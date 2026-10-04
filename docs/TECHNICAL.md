@@ -13,8 +13,11 @@ CPUO), plus serum from RELAD / RELAD2 and LEIP biobank controls.
 | 3. Track changes across the disease course | 11, 13, 04 (time models) | `trajectories/trajectory_results.csv`, per-patient plots in `trajectories/plots/`, `visit_course/*` (per visit, proteins regulated at all visits) |
 | Focus proteins: CD137 (TNFRSF9), TNFSF9, KITLG, CPA4, FCER1A, TPSAB1, MS4A2, TPSD1, PNOC, POSTN | 12 | `focus/focus_overview.xlsx`, `focus/focus_overview_heatmap.png`, one folder per protein |
 | Key questions: mast cells, CD137 / CD137L, relapse, dISF vs serum | 15 | `key_questions/answers.csv`, `key_questions/key_questions.xlsx`, `key_questions/evidence/*.png` |
-| **Executive summary of everything** | 16 | `Executive_summary.pdf`, `Executive_summary_tables.xlsx` (full lists) |
-| **Data export: all proteins, all samples (CSV); RELAD2 separately** | 17 | `export/` |
+| Which proteins correlate with TNFRSF9 (CD137) in dISF (IL-33, IL-4 …) | 16 | `tnfrsf9_correlation/TNFRSF9_correlation.xlsx`, scatter plots |
+| Serum vs dISF: same or different signatures (MicroAD only) | 17 | `signatures/signatures.xlsx` |
+| All RELAD / RELAD2 serum results | 05 | `relad/RELAD_RELAD2_serum_results.xlsx` |
+| **Executive summary of everything** | 18 | `Executive_summary.pdf`, `Executive_summary_tables.xlsx` (full lists) |
+| **Data export: all proteins, all samples (CSV); RELAD2 separately** | 19 | `export/` |
 
 Relapse analyses (04, 05, 11, 14, 15) are exploratory in MicroAD; RELAD/RELAD2 serum gives larger groups (05).
 
@@ -40,6 +43,7 @@ To run a single step, use `Rscript scripts/NN_....R` (or `start_at <- NN; source
 | `data/manifest.xlsx` | Olink sample submission sheet; the `manifest` sheet is the master (v4: incl. `Sex`, `NoRELAD2`) | `paths$manifest` |
 | `data/npx/*.parquet` | Olink NPX files, here `O-MicroAD_ISF_NPX_2026-09-24.parquet` and `O-MicroAD_Serum_NPX_2026-09-24.parquet`; all files in the folder are read, and the file name must contain ISF or Serum | `paths$npx_dir` |
 | `data/LEIP_clinical_parameters_n35.xlsx` | LEIP clinical data, sheet `Key_parameters` (optional) | `paths$leip_clinical` |
+| `data/reference/proteinatlas.tsv.zip` | optional: Human Protein Atlas table (public) for the tissue origin in step 17; download with `source("tools/download_hpa.R")` | `paths$hpa` |
 | `data/severity.xlsx` | optional: `SubjectID`, `Visit` (V1–V6 or 1–6), plus numeric scores (e.g. SCORAD, EASI, itch NRS). Steps 11 and 12 then model the proteins against each score | `paths$severity` |
 | `data/Explore_HT_Fixed_LOD.csv` | Olink fixed LOD file for Explore HT, version ≥ 6.0.0, from olink.com (recommended) | `paths$fixed_lod` |
 
@@ -70,8 +74,10 @@ A plain-language explanation of every step (question, what it does, how to read 
 | `13_visit_course.R` | dISF per visit (V1–V6, visits with ≥ `stats$visit_min_subjects` patients): tracked lesion site vs healthy skin, vs non-lesional skin, and non-lesional vs healthy. Same model as step 04, with a volcano plot per visit. "Regulated at all visits" = modelled and significant at every analysed visit in the same direction, at FDR < `stats$fdr` (strict) or p < 0.05 (nominal); with time-course plots of effects and NPX levels. | `visit_course/*`, `models/ISF_by_visit_*` |
 | `14_serum_vs_disf.R` | The same question in dISF and serum, per visit and pooled: AD vs healthy (dISF lesion site or non-lesional skin vs healthy skin; MicroAD serum AD vs healthy) and relapse vs non-relapse (only visits before the relapse). Significant sets (FDR, and p < 0.05 as exploratory) are split into both (same / opposite direction), dISF only, dISF only because the protein isn't measurable in serum, and serum only. Output: Venn diagrams, stacked bars per visit, dISF volcano plots coloured by what serum shows, and dISF vs serum effect plots. | `serum_vs_disf/*` |
 | `15_key_questions.R` | Answers Q1–Q5 with pre-specified single tests (see *Key questions* below), with one evidence figure per protein / score. | `key_questions/*` |
-| `16_summary_report.R` | Executive summary PDF: key-question answers with evidence, data and QC, key findings per aim, all comparisons, visit course, volcano plots, pathways, dISF vs serum, serum, focus proteins, methods and caveats. Each section is replaced by a note if its step did not run. Plus a workbook with the full list behind every shortened list in the PDF. | `Executive_summary.pdf`, `Executive_summary_tables.xlsx` |
-| `17_export_data.R` | CSV export of the Olink data: `samples.csv` (metadata + QC), `proteins.csv` (annotation, LOD, detection), wide tables per matrix (samples × proteins) as delivered (`NPX`) and as analysed (`PCNormalizedNPX`), a long table (`NPX_long.csv.gz`) with LOD and QC flags, and `export/RELAD2/` with the RELAD2 samples only. Values below LOD are kept as measured. For German Excel set `export: sep: ";"` in `config.yml`. | `export/*` |
+| `16_tnfrsf9_correlation.R` | TNFRSF9 vs target proteins (config `tnfrsf9_correlation`) in dISF: detectability first (values below LOD used as measured; sensitivity on pairs above LOD), Spearman pooled / within groups / per visit per site with a pooled-only flag, proteome-wide partial Spearman (rank-based residuals on skin state, visit, plate) plus dream (protein ~ TNFRSF9 + state + visit + plate + (1&#124;subject)), rmcorr and delta-delta within patients, and dISF vs serum (MicroAD). CPUO not used. | `tnfrsf9_correlation/*` |
+| `17_disf_serum_signatures.R` | MicroAD only. Effect concordance (Spearman, OLS slope serum on dISF, % same sign) per comparison and visit; group × visit F-tests (limma + duplicateCorrelation; HC single visit, so the test is on change of the AD − HC difference), rule-based temporal profile classes and serum attenuation slopes; compartment × group on pair-centred dISF − serum differences; paired correlation from step 06; signature sets with fgsea::fora (background = assayed panel) and HPA origin (`paths$hpa`); relapse at the visit before relapse vs non-relapsers' cleared visits (patient means). | `signatures/*` |
+| `18_summary_report.R` | Executive summary PDF: key-question answers with evidence, data and QC, key findings per aim, all comparisons, visit course, volcano plots, pathways, dISF vs serum, serum, focus proteins, methods and caveats. Each section is replaced by a note if its step did not run. Plus a workbook with the full list behind every shortened list in the PDF. | `Executive_summary.pdf`, `Executive_summary_tables.xlsx` |
+| `19_export_data.R` | CSV export of the Olink data: `samples.csv` (metadata + QC), `proteins.csv` (annotation, LOD, detection), wide tables per matrix (samples × proteins) as delivered (`NPX`) and as analysed (`PCNormalizedNPX`), a long table (`NPX_long.csv.gz`) with LOD and QC flags, and `export/RELAD2/` with the RELAD2 samples only. Values below LOD are kept as measured. For German Excel set `export: sep: ";"` in `config.yml`. | `export/*` |
 
 ### Models
 
@@ -95,7 +101,8 @@ missing values are set to the protein median.
   - `HC_vs_Biobank` shows proteins affected by the biobank source.
 - `MicroAD_active_vs_cleared`: serum when the tracked lesion is active vs cleared.
 - `MicroAD_relapse`: relapsers vs non-relapsers at cleared visits.
-- `RELAD_relapse`: RELAD and RELAD2, adjusted for cohort and plate, plus a sensitivity analysis without the samples with conflicting relapse labels.
+- `RELAD_relapse`: RELAD and RELAD2, adjusted for cohort and plate, plus a sensitivity analysis without the samples with conflicting relapse labels; also each cohort alone and `RELAD_AD_vs_HC`. All in `relad/RELAD_RELAD2_serum_results.xlsx`.
+- `MicroAD_AD_vs_HC`: MicroAD AD (V1) vs healthy volunteers. Used for every dISF vs serum comparison (steps 10, 15), so that RELAD/RELAD2 serum never enters them; steps 06, 14 and 17 use MicroAD serum only as well.
 
 ### Key questions (step 15)
 

@@ -5,7 +5,7 @@ study: about 5,400 proteins measured in **dermal interstitial fluid (dISF)** and
 patients with atopic dermatitis (AD) and control persons.
 
 This page tells you how to run the analysis and **where to find which result**.
-**What each of the 17 steps does, in plain words:** [`docs/STEPS.md`](docs/STEPS.md).
+**What each of the 19 steps does, in plain words:** [`docs/STEPS.md`](docs/STEPS.md).
 Technical details (models, design decisions) are in [`docs/TECHNICAL.md`](docs/TECHNICAL.md).
 
 > **Start here:** after a run, open **`output/Executive_summary.pdf`**. It summarises all
@@ -74,12 +74,12 @@ data only, takes about 5 minutes, and must end with "All pipeline checks passed"
 Each script writes into its own folder. Most folders contain an **`.xlsx` file** that collects
 all their tables. Open that one first.
 
-### `Executive_summary.pdf` – the overview (step 16)
+### `Executive_summary.pdf` – the overview (step 18)
 The answers to the key questions with the data behind them, key numbers and findings for each
 aim, all comparisons in one table, the most important figures, and the methods and caveats.
 **Read this first.**
 
-### `Executive_summary_tables.xlsx` – the full lists behind the summary (step 16)
+### `Executive_summary_tables.xlsx` – the full lists behind the summary (step 18)
 Wherever the PDF shows a shortened list ("up: TNC, LAIR2 …"), the complete list is in this
 workbook. The first sheet, `index`, says what each sheet contains:
 - proteins detectable only in lesional skin;
@@ -108,6 +108,41 @@ the score is not, if the other markers don't move with it.
 are on the first pages of the executive summary. With only 4 relapsing patients in MicroAD a relapse "hit" is
 called **possible (exploratory)**; only groups of ≥ 10 (RELAD/RELAD2) can give a firm "predicts
 relapse". Marker lists are set in `config.yml` under `key_questions`.
+
+### `tnfrsf9_correlation/` – which proteins correlate with TNFRSF9 / CD137 in dISF? (step 16)
+TNFRSF9 is compared with IL-33, IL-4, CSF2, IL6, IL18, CXCL8, IL1RL1, KIT, KITLG, TPSAB1, TPSB2 and FCER1A
+(the list is in `config.yml` under `tnfrsf9_correlation`). TPSB2 is not on the Explore HT panel.
+
+| File | Content |
+|---|---|
+| `TNFRSF9_correlation.xlsx` | Everything below in one workbook. Start with `README`, then `LOD_summary`. |
+| `LOD_summary` (sheet) | % of dISF samples above LOD per site and group. **Read first:** proteins mostly below LOD give unreliable correlations. |
+| `targeted_correlations.csv` | Spearman ρ, p and n for TNFRSF9 vs each target: pooled, within each group (AD, healthy, relapse, non-relapse, lesional, ex-lesional) and per visit, for the lesion site and non-lesional / healthy skin. `interpretation` flags correlations that appear only when pooling, which come from group differences. |
+| `proteome_wide_correlation.csv` | All dISF proteins ranked by their correlation with TNFRSF9, adjusted for skin state / group, visit and plate, with FDR. `target = TRUE` marks IL-33, IL-4 … |
+| `longitudinal_within_patient.csv` | Do TNFRSF9 and the targets change together from visit to visit in the same patient? |
+| `cross_compartment.csv`, `serum_correlations.csv` | dISF TNFRSF9 vs serum TNFRSF9 at the same visit; TNFRSF9 vs targets in serum (MicroAD only) |
+| `scatter/*.png`, `targeted_heatmap.png`, `proteome_wide_correlation.png` | Scatter plots per target (coloured by group, per site; open symbols = below LOD) and overviews |
+
+### `signatures/` – do serum and dISF carry the same or different signatures? (step 17)
+**MicroAD only** – RELAD, RELAD2 and LEIP serum are not used. Open `signatures.xlsx` (sheet `README` explains each sheet).
+
+| Analysis | Where |
+|---|---|
+| 1 Effect-size concordance: serum vs dISF log2FC per comparison and visit (ρ, slope, % same sign); dISF proteins not detected in serum listed separately | `effect_concordance*.png`, sheets `concordance`, `not_detected_in_serum*` |
+| 2 Group × visit models per compartment; temporal profiles (resolving / persistent / late-rising …) and whether serum shows a weaker version | `temporal_profiles.png`, sheets `time_models_*`, `temporal_profiles*` |
+| 3 Compartment × group: proteins whose disease effect differs between dISF and serum | sheet `compartment_x_group` |
+| 4 Within-patient paired correlation: systemic spill-over vs local production candidates | sheet `paired_correlation` |
+| 5 Signature sets (dISF-only, serum-only, shared-concordant, shared-discordant) with Reactome/GO enrichment and tissue origin | sheets `signature_sets`, `enrichment`, `signature_origin_counts` |
+| 6 Relapse, predictive: the visit before the relapse vs non-relapsers | `relapse_predictive_volcano.png`, sheets `relapse_predictive*` |
+
+Tissue origin uses the Human Protein Atlas table. Download it once with `source("tools/download_hpa.R")`
+(public data, saved in `data/reference/`), then rerun step 17.
+
+### `relad/` – all RELAD and RELAD2 serum results (step 05)
+`RELAD_RELAD2_serum_results.xlsx`: relapse vs non-relapse (both cohorts together, RELAD alone,
+RELAD2 alone, without conflicting labels), AD vs healthy within RELAD/RELAD2, group means with % above
+LOD per protein, all sample labels and the NPX values. RELAD and RELAD2 are **not** used when dISF is
+compared with serum (steps 10, 14, 15 and 17 use MicroAD serum only).
 
 ### `metadata/` – the samples (step 01)
 | File | Content |
@@ -225,7 +260,7 @@ The list is set in `config.yml` under `focus_proteins`.
 For these proteins the **p-value** of the single test is the main result, because they were
 chosen in advance. The FDR is shown alongside.
 
-### `export/` – the data as CSV (step 17)
+### `export/` – the data as CSV (step 19)
 | File | Content |
 |---|---|
 | `ISF_NPX_wide.csv`, `Serum_NPX_wide.csv` | The Olink result: one row per sample, one column per protein (NPX as delivered) |
@@ -235,7 +270,7 @@ chosen in advance. The FDR is shown alongside.
 | `RELAD2/` | The RELAD2 samples only |
 
 Tip: if Excel shows everything in one column, set `sep: ";"` under `export:` in `config.yml`
-and rerun step 17 (`start_at <- 17; source("run_all.R")`).
+and rerun step 19 (`start_at <- 19; source("run_all.R")`).
 
 ### `data/` (inside `output/`)
 Intermediate files used by the scripts (`.rds`). You don't need to open them.
@@ -279,7 +314,7 @@ Model names: `states_all_visits` = all visits together; `baseline_V1` = V1 only;
 |---|---|
 | `run_all.R` | Runs everything in order |
 | `config.yml` | All settings: file paths, thresholds, focus proteins, CSV separator |
-| `scripts/01_…` to `scripts/17_…` | One script per analysis step. The number is also the step in `start_at`. |
+| `scripts/01_…` to `scripts/19_…` | One script per analysis step. The number is also the step in `start_at`. |
 | `R/` | Shared functions used by the scripts |
 | `data/` | Your input files (not uploaded to GitHub) – see `data/README.md` |
 | `output/` | All results (not uploaded to GitHub) |
@@ -306,8 +341,10 @@ Each step is explained in [`docs/STEPS.md`](docs/STEPS.md).
 | 13 | `13_visit_course.R` | Per visit and time course |
 | 14 | `14_serum_vs_disf.R` | Serum vs dISF overlap per visit |
 | 15 | `15_key_questions.R` | Answers to the key questions (mast cells, CD137, relapse, dISF vs serum) |
-| 16 | `16_summary_report.R` | Executive summary PDF |
-| 17 | `17_export_data.R` | CSV export of the data |
+| 16 | `16_tnfrsf9_correlation.R` | Which proteins correlate with TNFRSF9 (CD137) in dISF (IL-33, IL-4 …) |
+| 17 | `17_disf_serum_signatures.R` | Do serum and dISF carry the same or different signatures? (MicroAD only) |
+| 18 | `18_summary_report.R` | Executive summary PDF |
+| 19 | `19_export_data.R` | CSV export of the data |
 
 ---
 
