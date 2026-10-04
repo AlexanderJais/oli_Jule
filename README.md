@@ -250,7 +250,9 @@ significant if `padj < 0.05`.
 | `isf_detection_profile.csv` | For each protein: how often it is detected in dISF, per skin state. `lesion_restricted` = detectable only in lesional AD skin. |
 | `isf_detected_pathways.csv` | Which pathways the detectable dISF proteome covers |
 | `detected_per_sample.png` | Number of proteins above LOD in each dISF sample, by skin state |
-| `top_variable_heatmap.png` | The 50 dISF proteins that vary most between samples (z-score per protein). The numbers behind it are in `isf_profile.xlsx`: sheets `heatmap_zscores`, `heatmap_NPX` and `heatmap_samples` (column order and skin state of each sample). |
+| `top_variable_heatmap.png` | The 50 dISF proteins that vary most between samples, chosen **without** using any group information. Rows and samples are clustered (similar ones side by side); colour bars show skin state, patient, visit and plate. Use it to see which proteins move together and whether samples group by skin state or by patient. |
+| `lesional_vs_nonlesional_heatmap.png` | The disease signal: the 25 proteins most clearly higher and the 25 most clearly lower in lesional than in non-lesional skin (step 04, all visits), shown in lesional, ex-lesional, non-lesional and healthy skin. Rows are clustered; the black bar marks FDR-significant proteins. |
+| `isf_profile.xlsx` (heatmap sheets) | The numbers behind both heatmaps, in the order shown: `variable_*` and `lesional_*` sheets with z-scores, NPX values and the sample order (`*_samples`). |
 
 ### `isf_serum/` – do skin fluid and blood go together? (step 06)
 `isf_serum_correlation.csv`: for each protein and skin site, the correlation of dISF with serum taken
