@@ -9,8 +9,13 @@ rscript <- file.path(R.home("bin"), "Rscript")
 # fully synthetic: no study data needed
 stopifnot(system2(rscript, "tests/make_synthetic_manifest.R") == 0)
 stopifnot(system2(rscript, "tests/simulate_explore_ht.R") == 0)
+# the test settings are set only for the pipeline run and then removed again, so a later
+# source("run_all.R") in the same R session analyses the real data, not the invented data
+old_cfg <- Sys.getenv("OLINK_CONFIG", NA)
 Sys.setenv(OLINK_CONFIG = "data_sim/config_sim.yml")
-stopifnot(system2(rscript, "run_all.R") == 0)
+run_ok <- system2(rscript, "run_all.R") == 0
+if (is.na(old_cfg)) Sys.unsetenv("OLINK_CONFIG") else Sys.setenv(OLINK_CONFIG = old_cfg)
+stopifnot("pipeline run on simulated data failed" = run_ok)
 
 out   <- "output_sim"
 truth <- read_csv("data_sim/truth.csv", show_col_types = FALSE)

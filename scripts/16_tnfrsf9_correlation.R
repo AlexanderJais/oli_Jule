@@ -78,6 +78,7 @@ det_notes <- c(
   "Below-LOD handling: values below LOD are used as measured (no substitution, Olink recommendation). Each targeted correlation is also given for the sample pairs where both proteins are above LOD (rho_both_above_LOD).",
   map_chr(seq_len(nrow(overall_det)), \(i) {
     d <- overall_det[i, ]
+    if (is.na(d$pct_above_LOD)) return(sprintf("%s: no LOD available for dISF - detectability unknown.", d$protein))
     sprintf("%s: %.0f%% of dISF samples above LOD%s", d$protein, d$pct_above_LOD,
             if (d$pct_above_LOD < 50) " - LARGELY BELOW LOD: correlations with this protein mostly reflect background noise and must be interpreted with great caution." else
               if (d$pct_above_LOD < 80) " - partly below LOD: check rho_both_above_LOD." else ".")
@@ -139,10 +140,13 @@ proteome <- imap(pw_strata, \(d, st) {
   covars <- c("state_g", "visit_f", "plate")
   msg("Proteome-wide (%s): %d samples, %d proteins", st, nrow(d), nrow(e))
   ps <- partial_spearman(d$anchor, e, d, covars, min_n = 8)
-  mm <- fit_contrasts(e, d |> mutate(anchor_z = anchor),
+  # tryCatch: a rank-deficient design (e.g. plate identical to visit in a stratum) must not stop the step;
+  # the partial Spearman ranking (primary) is then still reported
+  mm <- tryCatch(fit_contrasts(e, d |> mutate(anchor_z = anchor),
                       as.formula(paste("~ anchor_z +", paste(covars[vapply(covars, \(v) n_distinct(d[[v]]) > 1, logical(1))], collapse = " + "),
                                        "+ (1 | SubjectID)")),
-                      c(TNFRSF9 = "anchor_z"), paste("proteome-wide", st), cfg$stats$min_group_n)
+                      c(TNFRSF9 = "anchor_z"), paste("proteome-wide", st), cfg$stats$min_group_n),
+                 error = \(e) { msg("  mixed model (%s) not fitted: %s", st, conditionMessage(e)); NULL })
   ps |> mutate(fdr_partial = p.adjust(p_partial, "BH")) |>
     left_join(if (is.null(mm)) tibble(OlinkID = character()) else
                 mm |> transmute(OlinkID, slope_mixed = logFC, t_mixed = t, p_mixed = P.Value, fdr_mixed = adj.P.Val, method_mixed = method),
@@ -175,7 +179,7 @@ longit <- map(names(t_oid), \(tg) {
 save_csv(longit, cfg, out("longitudinal_within_patient.csv"))
 
 # ---- 4. cross-compartment (MicroAD only; RELAD / RELAD2 / LEIP not used) -------------------------------------------------
-ser_vals <- clean |> filter(matrix == "Serum", cohort == "MicroAD", OlinkID %in% c(a_oid, t_oid)) |>
+ser_vals <- clean |> filter(matrix == "Serum", cohort == "MicroAD", group %in% c("AD", "HC"), OlinkID %in% c(a_oid, t_oid)) |>
   select(SampleID, SubjectID, visit, group, relapse, OlinkID, value, below_lod)
 ser_anchor <- ser_vals |> filter(OlinkID == a_oid) |> select(SubjectID, visit, serum_anchor = value)
 cross <- isf |> filter(cohort == "MicroAD") |> inner_join(ser_anchor, by = c("SubjectID", "visit")) |>
@@ -195,7 +199,8 @@ serum_targeted <- map(names(t_oid), \(tg) {
     x <- if (g == "pooled") ser_w else ser_w |> filter(recode(group, HC = "healthy") == g)
     bind_cols(tibble(target = tg, group = g), spearman_n(x[[an]], x[[tn]], min_n), rmcorr_n(x[[an]], x[[tn]], x$SubjectID, min_n))
   }) |> bind_rows()
-}) |> bind_rows() |> left_join(ser_det |> rename(target_serum_pct_above_LOD = serum_pct_above_LOD), by = c("target" = "protein"))
+}) |> bind_rows() |> mutate(protein = unname(assay_name[t_oid[target]])) |>
+  left_join(ser_det |> rename(target_serum_pct_above_LOD = serum_pct_above_LOD), by = "protein") |> select(-protein)
 save_csv(cross, cfg, out("cross_compartment.csv")); save_csv(serum_targeted, cfg, out("serum_correlations.csv"))
 
 # ---- figures -------------------------------------------------------------------------------------------------------------

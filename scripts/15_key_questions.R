@@ -146,7 +146,9 @@ q3_trend <- map(c(names(kp_oid), if (!is.null(score)) "Mast cell score"), \(ent)
     test_single(ser, ~ weeks_to_relapse + plate + (1 | SubjectID), c(per_week = "weeks_to_relapse"),
                 "serum vs weeks to relapse (relapsers)", mgn)) |> mutate(entity = ent, .before = 1)
 }) |> bind_rows()
-q3 <- tests |> filter(entity %in% c(names(kp_oid), "Mast cell score"), contrast == "relapse_vs_non") |>
+# one test per data set: the per-cohort RELAD fits and the unflagged sensitivity fit would count RELAD data several times
+q3 <- tests |> filter(entity %in% c(names(kp_oid), "Mast cell score"), contrast == "relapse_vs_non",
+                      model %in% c("relapse_ex_lesional", "relapse_delta_xL_minus_NL", "MicroAD_relapse", "RELAD_relapse")) |>
   select(entity, matrix, model, contrast, estimate, ci_low, ci_high, p, n_samples, n_subjects) |>
   bind_rows(q3_trend |> transmute(entity, matrix = if_else(str_detect(model, "^dISF"), "dISF", "serum"), model, contrast,
                                   estimate, ci_low, ci_high, p, n_samples, n_subjects))
@@ -301,7 +303,7 @@ for (kp in names(kp_oid)) {
   sig <- d |> filter(p < 0.05)
   add(Q[["Q3"]], kp, if (nrow(sig)) sprintf("nominal association in %d of %d relapse tests (exploratory)", nrow(sig), nrow(d)) else
         sprintf("no association in %d relapse tests", nrow(d)),
-      paste(sprintf("%s %s: %s", d$matrix, d$model, fmt_e(d$estimate, d$p)), collapse = "; "))
+      paste(sprintf("%s: %s", if_else(str_starts(d$model, d$matrix), d$model, paste(d$matrix, d$model)), fmt_e(d$estimate, d$p)), collapse = "; "))
 }
 for (kp in names(kp_oid)) {
   m <- q4_marker |> filter(entity == kp)

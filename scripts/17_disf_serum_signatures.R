@@ -40,7 +40,9 @@ aname <- setNames(assay_map$Assay, assay_map$OlinkID)
 ser_det <- clean |> filter(matrix == "Serum", cohort == "MicroAD", group %in% c("AD", "HC")) |>
   group_by(OlinkID, group) |> summarise(f = mean(!below_lod, na.rm = TRUE), .groups = "drop") |>
   group_by(OlinkID) |> summarise(serum_pct_above_LOD_best_group = round(100 * max(f, na.rm = TRUE), 1), .groups = "drop") |>
-  mutate(serum_detected = serum_pct_above_LOD_best_group >= 100 * cfg$qc$min_detect_frac)
+  # no LOD available (NaN / -Inf) = cannot be judged = kept, as in step 02
+  mutate(serum_pct_above_LOD_best_group = if_else(is.finite(serum_pct_above_LOD_best_group), serum_pct_above_LOD_best_group, NA_real_),
+         serum_detected = is.na(serum_pct_above_LOD_best_group) | serum_pct_above_LOD_best_group >= 100 * cfg$qc$min_detect_frac)
 ser_ok <- intersect(rownames(wide$Serum), ser_det$OlinkID[ser_det$serum_detected])
 isf_ok <- rownames(wide$ISF)
 shared <- intersect(isf_ok, ser_ok)
@@ -74,7 +76,7 @@ for (v in c(as.list(visits), list("all"))) {
   inv <- \(d) if (pooled) rep(TRUE, nrow(d)) else d$visit_num %in% v
   re <- \(f) if (pooled) update(f, ~ . + (1 | SubjectID)) else f
   add_eff("AD vs healthy", vlab, "serum",
-          fit1(wide$Serum, ser_info, c(ser_info$SampleID[ser_info$status %in% "AD" & inv(ser_info)], hc_ser),
+          fit1(wide$Serum[ser_ok, , drop = FALSE], ser_info, c(ser_info$SampleID[ser_info$status %in% "AD" & inv(ser_info)], hc_ser),
                re(~ 0 + status + plate), c(AD_vs_HC = "statusAD - statusHC"), paste("serum AD vs HC", vlab)))
   for (st in c("Lsite", "NL")) {
     lab <- c(Lsite = "lesion site", NL = "non-lesional skin")[[st]]
@@ -89,7 +91,7 @@ for (v in c(as.list(visits), list("all"))) {
   add_eff("relapse vs non-relapse (before relapse) - lesion site", vlab, "dISF",
           fit1(wide$ISF, ri, ri$SampleID, rf, c(relapse_vs_non = "relapse2relapse - relapse2non_relapse"), paste("dISF relapse", vlab)))
   add_eff("relapse vs non-relapse (before relapse)", vlab, "serum",
-          fit1(wide$Serum, rs, rs$SampleID, rf, c(relapse_vs_non = "relapse2relapse - relapse2non_relapse"), paste("serum relapse", vlab)))
+          fit1(wide$Serum[ser_ok, , drop = FALSE], rs, rs$SampleID, rf, c(relapse_vs_non = "relapse2relapse - relapse2non_relapse"), paste("serum relapse", vlab)))
 }
 effects <- bind_rows(effects) |> mutate(Assay = aname[OlinkID], .after = OlinkID)
 save_csv(effects, cfg, out("effects_per_comparison.csv"))
@@ -261,10 +263,10 @@ if (nrow(cxg)) {
   cxg <- cxg |> mutate(site = if_else(str_detect(model, "lesion site"), "lesion site", "non-lesional skin"), Assay = aname[OlinkID]) |>
     left_join(pooled_eff, by = c("site", "OlinkID")) |>
     transmute(model, Assay, OlinkID, interaction_log2 = logFC, t, P.Value, FDR = adj.P.Val, n_samples, n_subjects,
-              dISF_AD_vs_HC = isf_logFC, serum_AD_vs_HC = ser_logFC,
+              dISF_AD_vs_HC_all_visits = isf_logFC, serum_AD_vs_HC_all_visits = ser_logFC,
               pattern = case_when(FDR >= fdr ~ "same disease effect in both (no interaction)",
-                                  sign(dISF_AD_vs_HC) != sign(serum_AD_vs_HC) & abs(dISF_AD_vs_HC) > 0.1 & abs(serum_AD_vs_HC) > 0.1 ~ "opposite direction",
-                                  abs(dISF_AD_vs_HC) > abs(serum_AD_vs_HC) ~ "stronger in dISF",
+                                  sign(dISF_AD_vs_HC_all_visits) != sign(serum_AD_vs_HC_all_visits) & abs(dISF_AD_vs_HC_all_visits) > 0.1 & abs(serum_AD_vs_HC_all_visits) > 0.1 ~ "opposite direction",
+                                  abs(dISF_AD_vs_HC_all_visits) > abs(serum_AD_vs_HC_all_visits) ~ "stronger in dISF",
                                   TRUE ~ "stronger in serum")) |> arrange(model, P.Value)
   save_csv(cxg, cfg, out("compartment_x_group.csv"))
   print(count(cxg, model, pattern))
@@ -336,7 +338,7 @@ msg("Over-representation: %d set x gene-set tests, %d with padj < %g", nrow(ora)
 # ---- 6. relapse, predictive framing ----------------------------------------------------------------------------------------
 pre <- function(info, cleared) {               # one value set per patient: relapsers = visit before relapse
   info <- info |> filter(group == "AD", !is.na(relapse2))
-  keep <- (info$relapse2 == "relapse" & !is.na(info$relapse_visit) & info$visit_num %in% (info$relapse_visit - 1)) |
+  keep <- (info$relapse2 == "relapse" & !is.na(info$relapse_visit) & info$visit_num %in% (info$relapse_visit - 1) & cleared(info)) |
     (info$relapse2 == "non_relapse" & cleared(info))
   info[keep, ] |> select(SubjectID, relapse2, SampleID)
 }
@@ -390,7 +392,7 @@ readme <- tibble(sheet = c("README", "concordance", "not_detected_in_serum", "no
                              "2: dISF-significant proteins with their temporal profile class, dISF and serum effects per visit",
                              "2: proteins per profile class; attenuation_slope < 1 = serum shows a weaker version of the dISF profile",
                              "3: interaction = (AD - healthy in dISF) - (AD - healthy in serum) on paired, pair-centred differences; pattern from the pooled effects",
-                             "4: within-subject (rmcorr) and between-subject correlation of dISF and serum levels (step 06) with origin hint",
+                             "4: within-subject (rmcorr) and between-subject correlation of dISF and serum levels (step 06; MicroAD incl. the 3 CPUO patients, healthy skin counted as non-lesional) with origin hint",
                              "5: protein lists: dISF-only, serum-only, shared-concordant, shared-discordant (FDR and nominal), with HPA tissue origin",
                              "5: number of proteins per set", "5: HPA origin per set (empty if no HPA file)",
                              "5: Reactome / GO over-representation per set, background = assayed panel of that comparison",

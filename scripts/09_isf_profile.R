@@ -32,7 +32,7 @@ profile <- det_all |> left_join(det_state, by = c("OlinkID", "Assay")) |>
   mutate(
     detection_class = case_when(frac_detected >= 0.9 ~ "robust (>= 90%)",
                                 frac_detected >= min_f ~ sprintf("detected (%.0f-90%%)", 100 * min_f),
-                                frac_detected > 0.1 ~ "sporadic (10-50%)",
+                                frac_detected > 0.1 ~ sprintf("sporadic (10-%.0f%%)", 100 * min_f),
                                 TRUE ~ "not detected (<= 10%)")) |>
   arrange(desc(frac_detected))
 # detectable in lesional AD skin but not in non-lesional or healthy skin
@@ -79,7 +79,7 @@ ann_cols <- function(ids) {
   a <- sinfo[match(ids, sinfo$SampleID), ]
   data.frame(`skin state` = a$state_group,
              patient = if_else(a$group == "AD", a$SubjectID, if_else(a$group == "HC", "healthy volunteer", "CPUO")),
-             visit = coalesce(a$visit, "-"), plate = a$plate, row.names = ids, check.names = FALSE)
+             visit = coalesce(a$visit, "-"), row.names = ids, check.names = FALSE)
 }
 ann_colours <- function(ann) {
   pal <- \(lv, cols) setNames(rep_len(cols, length(lv)), lv)
@@ -89,8 +89,7 @@ ann_colours <- function(ann) {
                                  `healthy (HC)` = "darkgreen", `CPUO lesional` = "purple", `CPUO non-lesional` = "plum")[st], st),
        patient = c(setNames(grDevices::hcl.colors(max(length(ad), 2), "Dark 3")[seq_along(ad)], ad),
                    `healthy volunteer` = "grey80", CPUO = "grey45")[pt],
-       visit = setNames(grDevices::hcl.colors(length(unique(ann$visit)), "Blues 3", rev = TRUE), sort(unique(ann$visit))),
-       plate = setNames(grDevices::hcl.colors(length(unique(ann$plate)), "Set 2"), sort(unique(ann$plate))))
+       visit = setNames(grDevices::hcl.colors(length(unique(ann$visit)), "Blues 3", rev = TRUE), sort(unique(ann$visit))))
 }
 zscore <- \(x) t(scale(t(x)))
 draw_heatmap <- function(z, ann_col, file, title, cluster_cols = TRUE, gaps_col = NULL, ann_row = NULL, ann_row_colours = NULL) {

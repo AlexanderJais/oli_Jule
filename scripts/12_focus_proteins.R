@@ -33,7 +33,7 @@ for (fp in focus) {
     pd <- pd |> filter(OlinkID == OlinkID[1])
   }
   nm <- pd$Assay[1]; oid <- pd$OlinkID[1]
-  found <- c(found, nm)
+  found <- c(found, fp)                   # configured name (may differ from the assay name, e.g. TPSAB1 in "TPSAB1_TPSB2")
   lab <- if (nm %in% names(aliases)) sprintf("%s (%s)", nm, aliases[[nm]]) else nm
   fpath <- function(...) file.path("focus", nm, ...)
   msg("==== Focus protein %s (%s) ====", nm, oid)
@@ -141,7 +141,7 @@ for (fp in focus) {
   p1 <- ggplot(pi, aes(cond, value)) +
     geom_hline(yintercept = lod_isf, linetype = 2, colour = "grey50") +
     geom_boxplot(outlier.shape = NA, fill = "grey92") + geom_jitter(aes(colour = below_lod), width = 0.15, size = 1.2) +
-    scale_colour_manual(values = c(`FALSE` = "black", `TRUE` = "grey65"), labels = c("above LOD", "below LOD"), name = NULL) +
+    scale_colour_manual(values = c(`FALSE` = "black", `TRUE` = "grey65"), labels = c(`FALSE` = "above LOD", `TRUE` = "below LOD"), name = NULL) +
     labs(title = sprintf("%s in dISF by skin state (dashed: median LOD)", lab), x = NULL, y = "NPX") +
     theme(axis.text.x = element_text(angle = 30, hjust = 1))
   save_plot(p1, cfg, fpath(sprintf("%s_dISF_skin_states.png", nm)), width = 8, height = 5)
@@ -153,9 +153,9 @@ for (fp in focus) {
     save_plot(p2, cfg, fpath(sprintf("%s_dISF_V1_paired.png", nm)), width = 6, height = 5)
   }
 
-  ps <- serum_info |> filter(cross_sectional | cohort == "MicroAD") |>
+  ps <- serum_info |> filter(cross_sectional | cohort == "MicroAD", !is.na(status)) |>     # CPUO (status NA) not shown
     mutate(grp = case_when(status == "HC" ~ "healthy (in-study)", status == "Biobank" ~ "LEIP biobank",
-                           TRUE ~ paste("AD", cohort)),
+                           status == "AD" ~ paste("AD", cohort)),
            relapse_lab = coalesce(relapse, "")) |>
     filter(cross_sectional)
   p3 <- ggplot(ps, aes(grp, value)) +
@@ -234,4 +234,5 @@ if (length(overview)) {
   save_plot(p, cfg, "focus", "focus_overview_heatmap.png", width = 12, height = 2.5 + 0.4 * n_distinct(hm$label))
 }
 missing <- setdiff(toupper(focus), toupper(found))
+save_csv(tibble(not_in_data = missing), cfg, "focus", "focus_not_in_data.csv")
 if (length(missing)) msg("Focus proteins not in the data: %s", paste(missing, collapse = ", "))

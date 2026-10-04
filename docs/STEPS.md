@@ -207,7 +207,7 @@ This is done at FDR < 0.05 and at p < 0.05 (exploratory).
 - **Lesion-restricted proteins:** detectable in lesional AD skin but not in non-lesional or healthy skin.
 - Which pathways the detectable dISF proteome covers, compared with the whole panel.
 - Two heatmaps (z-score per protein; numbers in `isf_profile.xlsx`):
-  - the 50 proteins that vary most between dISF samples, selected without group information. Proteins and samples are clustered, with colour bars for skin state, patient, visit and plate. It shows which proteins move together and whether samples group by skin state or by patient.
+  - the 50 proteins that vary most between dISF samples, selected without group information. Proteins and samples are clustered, with colour bars for skin state, patient and visit. It shows which proteins move together and whether samples group by skin state or by patient.
   - the 25 strongest up and 25 strongest down proteins of lesional vs non-lesional skin (step 04), in lesional, ex-lesional, non-lesional and healthy skin. It shows the disease signal and whether ex-lesional skin still carries it.
 
 **Keep in mind:** NPX values of different proteins are not comparable, so this step does not rank proteins by "amount".

@@ -1,9 +1,10 @@
 # 05 - Serum models
 # Out: output/models/Serum_results.csv, Serum_summary.csv, volcano plots
 #
-# AD vs controls is fitted twice: against the in-study healthy controls (adjusted for cohort)
-# and against the LEIP biobank controls. Biobank serum is collected and stored differently,
-# so a protein is most credible when both comparisons agree (column 'agree_both_controls').
+# AD vs controls: against the in-study healthy controls of all studies (adjusted for cohort) and against the
+# LEIP biobank controls. Biobank serum is collected and stored differently, so a protein is most credible when
+# both comparisons agree (column 'agree_both_controls'). MicroAD_AD_vs_HC (MicroAD only) is the serum reference
+# for all dISF vs serum comparisons; RELAD/RELAD2 models and a workbook with all their results: relad/.
 
 source("R/utils.R")
 source("R/models.R")
@@ -36,6 +37,7 @@ if (nrow(res) && all(c("AD_vs_HC_in_study", "AD_vs_Biobank") %in% res$model)) {
 
 # ---- RELAD / RELAD2: all serum results in one workbook ------------------------------------------------------
 clear_outputs(cfg, "relad")
+if (nrow(res)) {
 rl_models <- c("RELAD_relapse", "RELAD_only_relapse", "RELAD2_only_relapse", "RELAD_relapse_unflagged", "RELAD_AD_vs_HC")
 rl_ids <- info |> filter(cohort %in% c("RELAD", "RELAD2")) |> pull(SampleID)
 rl_long <- clean |> filter(SampleID %in% rl_ids, matrix == "Serum")
@@ -55,8 +57,11 @@ rl_res <- map(setNames(rl_models, rl_models), \(m) res |> filter(model == m) |> 
 rl_sum <- map(rl_res, \(d) tibble(n_samples = d$n_samples[1], proteins = nrow(d), significant = sum(d$significant),
                                   up = sum(d$significant & d$logFC > 0), down = sum(d$significant & d$logFC < 0))) |>
   bind_rows(.id = "model")
-rl_wide <- rl_long |> filter(keep %in% TRUE) |> select(SampleID, Assay, value) |>
-  pivot_wider(names_from = Assay, values_from = value) |>
+rl_wide <- rl_long |> filter(keep %in% TRUE) |> distinct(OlinkID, Assay) |>
+  mutate(column = if_else(duplicated(Assay) | duplicated(Assay, fromLast = TRUE), paste(Assay, OlinkID, sep = "_"), Assay)) |>
+  (\(nm) rl_long |> filter(keep %in% TRUE) |> left_join(nm |> select(OlinkID, column), by = "OlinkID"))() |>
+  select(SampleID, column, value) |>
+  pivot_wider(names_from = column, values_from = value) |>
   right_join(rl_samples |> filter(in_analysis) |> select(SampleID, cohort, group, relapse, time_to_relapse), by = "SampleID") |>
   relocate(SampleID, cohort, group, relapse, time_to_relapse)
 readme <- tibble(sheet = c("summary", "samples", names(rl_res), "group_means", "NPX_values"),
@@ -69,3 +74,4 @@ writexl::write_xlsx(c(list(README = readme, summary = rl_sum, samples = rl_sampl
                       list(group_means = rl_means, NPX_values = rl_wide)),
                     out_path(cfg, "relad", "RELAD_RELAD2_serum_results.xlsx"))
 msg("RELAD/RELAD2 workbook: %s", out_path(cfg, "relad", "RELAD_RELAD2_serum_results.xlsx"))
+} else msg("No serum model fitted - RELAD/RELAD2 workbook skipped.")

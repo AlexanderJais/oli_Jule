@@ -78,16 +78,16 @@ in others it doesn't (*non-relapse*).
 6. **To resume** from a later step, e.g. after changing a setting for step 12: `start_at <- 12; source("run_all.R")`.
    Earlier results are reused, and all later steps run again (including the summary, step 18). Start
    from the **earliest** step you changed (step numbers are in [section 7](#7-what-is-in-the-repository)).
-   `start_at` stays set until you restart R: before the next full run, type `rm(start_at)`.
+   After a successful run `start_at` is removed automatically, so the next `source("run_all.R")` is a full run.
+   (If a run stops with an error, `start_at` stays set: fix the problem and run again.)
 
 The first lines of the run list the input files: `[ok]` = found, `[MISSING]` = required file
 missing (the run stops), `[--]` = optional or recommended file not found (the run continues).
 
 To check that R and the packages work, run `source("tests/test_pipeline.R")`. It uses invented data
 only, takes about 15 minutes, and must end with "All pipeline checks passed". Its results go to
-`output_sim/` and are **invented**: never use them as study results. **Afterwards restart R**
-(RStudio: Session → Restart R) before you run the real analysis; otherwise `run_all.R` keeps using
-the test settings.
+`output_sim/` and are **invented**: never use them as study results. The test switches its settings
+off again when it finishes; the first lines of every run say which settings file and output folder are used.
 
 ### Updating to a new version
 Pull the new version (RStudio: **Git** tab → **Pull**), then check [`docs/CHANGES.md`](docs/CHANGES.md):
@@ -255,7 +255,7 @@ significant if `padj < 0.05`.
 | `isf_detection_profile.csv` | For each protein: how often it is detected in dISF, per skin state. `lesion_restricted` = detectable only in lesional AD skin. |
 | `isf_detected_pathways.csv` | Which pathways the detectable dISF proteome covers |
 | `detected_per_sample.png` | Number of proteins above LOD in each dISF sample, by skin state |
-| `top_variable_heatmap.png` | The 50 dISF proteins that vary most between samples, chosen **without** using any group information. Rows and samples are clustered (similar ones side by side); colour bars show skin state, patient, visit and plate. Use it to see which proteins move together and whether samples group by skin state or by patient. |
+| `top_variable_heatmap.png` | The 50 dISF proteins that vary most between samples, chosen **without** using any group information. Rows and samples are clustered (similar ones side by side); colour bars show skin state, patient and visit. Use it to see which proteins move together and whether samples group by skin state or by patient. |
 | `lesional_vs_nonlesional_heatmap.png` | The disease signal: the 25 proteins most clearly higher and the 25 most clearly lower in lesional than in non-lesional skin (step 04, all visits), shown in lesional, ex-lesional, non-lesional and healthy skin. Rows are clustered; the black bar marks FDR-significant proteins. |
 | `isf_profile.xlsx` (heatmap sheets) | The numbers behind both heatmaps, in the order shown: `variable_*` and `lesional_*` sheets with z-scores, NPX values and the sample order (`*_samples`). |
 
@@ -433,7 +433,7 @@ used when dISF is compared with serum) and `RELAD_AD_vs_HC` (RELAD/RELAD2). Rela
 | `[MISSING] manifest` or `[MISSING] NPX parquet files` | Check the file names and places in `data/README.md` (the `.parquet` files go into `data/npx/`) |
 | `[--] Olink fixed LOD file` at the start, or `WARNING: no Olink fixed LOD file` in step 02 | The Olink fixed LOD file was not found, so the LOD comes from the negative controls (less precise). Put it in `data/` as `Explore_HT_Fixed_LOD.csv`, or keep Olink's own name (e.g. `Explore HT_Fixed LOD.csv`): it must contain "Fixed LOD" or "Fixed_LOD", end in `.csv`, and be the only such file in the folder. |
 | A step fails | Read the last lines of the message, fix the problem, and restart from that step with `start_at <- N; source("run_all.R")` |
-| The run skips steps you wanted, or writes to `output_sim/` | `start_at` or the test settings are still set from earlier: restart R (RStudio: Session → Restart R) and run again |
+| The run skips steps you wanted, or writes to `output_sim/` | `start_at` or the test settings are still set from an interrupted run: restart R (RStudio: Session → Restart R) and run again. The first lines of the run show the settings file and output folder. |
 | `there is no package called '…'` | A new version needs a new package: run `source("install_packages.R")`, restart R, run again |
 | Package error | Run `source("install_packages.R")` again. It only installs missing packages; to update an old one, use `install.packages("name")` or `BiocManager::install("name")`. |
 

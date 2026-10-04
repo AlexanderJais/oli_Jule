@@ -199,13 +199,13 @@ section("Serum vs dISF signatures", {
                                        sg_sum$pred_sum$set, sg_sum$pred_sum$n_relapse, sg_sum$pred_sum$n_non, sg_sum$pred_sum$FDR_sig,
                                        sg_sum$pred_sum$proteins, fdr, sg_sum$pred_sum$p05, sg_sum$pred_sum$expected_p05_by_chance) else "n/a",
     if (!isTRUE(sg_sum$hpa)) "Tissue origin (Human Protein Atlas) not annotated: run source(\"tools/download_hpa.R\") once, then step 17."),
-    subtitle = "step 17 - MicroAD only; FDR < 0.05 unless stated", size = 9)
+    subtitle = sprintf("step 17 - MicroAD only; FDR < %g unless stated", fdr), size = 9)
   page_table("Effect-size concordance per comparison and visit", sg_sum$concordance |>
                select(comparison, visit, proteins, n, rho = spearman_rho, p, slope = slope_serum_on_dISF, `% same sign` = pct_same_sign), rows_per_page = 30)
   if (nrow(sg_sum$nis_sum)) page_table("dISF proteins not detected in serum: significant in dISF?", sg_sum$nis_sum)
   page_table("Signature sets (all visits pooled)", sg_sum$set_sum,
              note = "Protein lists, Reactome/GO enrichment and tissue origin: signatures/signatures.xlsx")
-  if (nrow(sg_sum$sets_fdr)) page_table("Signature protein lists (FDR < 0.05, all visits pooled)",
+  if (nrow(sg_sum$sets_fdr)) page_table(sprintf("Signature protein lists (FDR < %g, all visits pooled)", fdr),
              sg_sum$sets_fdr |> select(comparison, set, Assay, dISF_log2FC = isf_logFC, dISF_FDR = isf_fdr, serum_log2FC = ser_logFC, serum_FDR = ser_fdr,
                                       any_of("hpa_origin")) |> head(120),
              note = "First 120 rows; all rows: signatures/signatures.xlsx, sheet signature_sets")
@@ -237,7 +237,7 @@ section("Key findings", {
     "## Aim 2 - dISF vs blood",
     if (!is.null(det_mx)) sprintf("Detected in both matrices: %d; dISF only: %d; serum only: %d.",
                                   sum(det_mx$detected_in == "both"), sum(det_mx$detected_in == "dISF only"), sum(det_mx$detected_in == "serum only")) else "n/a",
-    if (!is.null(enr)) paste(map_chr(unique(enr$model), \(md) sprintf("Relatively enriched in dISF vs serum (>= 2-fold vs the typical protein), %s: %d, e.g. %s.",
+    if (!is.null(enr)) paste(map_chr(unique(enr$model), \(md) sprintf("Relatively enriched in dISF vs serum (>= %g-fold vs the typical protein), %s: %d, e.g. %s.", 2^(cfg$stats$min_rel_log2 %||% 1),
                                str_remove(md, "relative enrichment, "), sum(enr$direction == "enriched in dISF" & enr$model == md),
                                top_names(enr |> filter(direction == "enriched in dISF", model == md) |> arrange(desc(rel_log2_isf_vs_serum)), 6))),
                              collapse = " ") else "n/a",
@@ -270,7 +270,8 @@ section("Key findings", {
                                 pr, g("dISF: states_all_visits AD_L_vs_NL"), g("dISF: states_all_visits AD_xL_vs_NL"),
                                 g("dISF: states_all_visits AD_NL_vs_HC"), g("serum: MicroAD_AD_vs_HC AD_vs_HC")))
     }
-    missing_fp <- setdiff(toupper(unlist(cfg$focus_proteins)), toupper(unique(fov$protein)))
+    nf <- out_csv(cfg, "focus", "focus_not_in_data.csv")
+    missing_fp <- if (is.null(nf)) character() else nf$not_in_data
     if (length(missing_fp)) items <- c(items, sprintf("Not measured in this dataset: %s.", paste(missing_fp, collapse = ", ")))
   }
   if (!is.null(ov15)) {
@@ -484,7 +485,8 @@ tabs <- c(list(
   per_visit_Lsite_vs_NL_all = per_visit_wide("Lsite_vs_NL"),
   per_visit_Lsite_vs_HC_all = per_visit_wide("Lsite_vs_HC")),
   enr_sheets,
-  list(serum_AD_vs_HC = sig_list(ser, "AD_vs_HC_in_study", "AD_vs_HC"),
+  list(serum_MicroAD_AD_vs_HC = sig_list(ser, "MicroAD_AD_vs_HC", "AD_vs_HC"),
+       serum_AD_vs_HC_all_studies = sig_list(ser, "AD_vs_HC_in_study", "AD_vs_HC"),
        serum_AD_both_controls = if (!is.null(agree)) agree |> filter(agree_both_controls) else NULL,
        key_questions = kq_ans, focus_proteins = fov,
        TNFRSF9_targeted = tc_targ,
@@ -510,13 +512,14 @@ index <- tibble(sheet = names(tabs), rows = vapply(tabs, nrow, 1L),
                             dISF_vs_serum_ex_lesional = "relatively enriched in dISF (or serum) - AD ex-lesional skin vs serum",
                             dISF_vs_serum_non_lesional = "relatively enriched in dISF (or serum) - AD non-lesional skin vs serum",
                             dISF_vs_serum_healthy = "relatively enriched in dISF (or serum) - healthy skin vs serum",
-                            serum_AD_vs_HC = "significant: serum AD vs in-study healthy controls",
+                            serum_MicroAD_AD_vs_HC = "significant: serum AD vs healthy, MicroAD only (the serum reference for dISF comparisons)",
+                            serum_AD_vs_HC_all_studies = "significant: serum AD vs in-study healthy controls, all studies (MicroAD + RELAD/RELAD2)",
                             serum_AD_both_controls = "serum AD vs controls: significant against in-study AND biobank controls",
                             key_questions = "answers and evidence for the key questions",
                             focus_proteins = "focus proteins: key single-protein tests",
                             TNFRSF9_targeted = "TNFRSF9 vs target proteins in dISF: Spearman pooled, within groups and per visit (step 16)",
                             TNFRSF9_ranking_all_dISF = "all dISF proteins ranked by partial correlation with TNFRSF9 (step 16)",
-                            signature_sets = "serum vs dISF signature sets at FDR < 0.05, all visits pooled (step 17)",
+                            signature_sets = sprintf("serum vs dISF signature sets at FDR < %g, all visits pooled (step 17)", fdr),
                             relapse_predictive = "visit before relapse vs non-relapsers, proteins with p < 0.05 (step 17)")[names(tabs)])
 writexl::write_xlsx(c(list(index = index), tabs), out_path(cfg, "Executive_summary_tables.xlsx"))
 msg("Full lists: %s", out_path(cfg, "Executive_summary_tables.xlsx"))
