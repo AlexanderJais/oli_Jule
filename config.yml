@@ -1,37 +1,44 @@
 # O-MicroAD Olink Explore HT analysis - settings
-# Paths are relative to the repository root.
+# Lines starting with # are comments. Change only the value after the colon and keep the
+# indentation (spaces, no tabs). Paths are relative to the repository root.
+# After changing a setting, rerun from the step named in its comment, e.g.
+#   start_at <- 12; source("run_all.R")      (all later steps are rerun as well)
 
+# Input files: see data/README.md (the original Olink / lab file names also work).
+# After changing a path, rerun from step 01 (only hpa: from step 17; only severity: from step 11).
 paths:
   manifest: data/manifest.xlsx                          # Olink sample submission sheet (sheet "manifest" is the master)
   npx_dir: data/npx                                     # folder with the Olink *.parquet file(s)
   leip_clinical: data/LEIP_clinical_parameters_n35.xlsx # optional; sheet "Key_parameters"
-  fixed_lod: data/Explore_HT_Fixed_LOD.csv              # optional; Olink fixed LOD file (";"-separated, version >= 6.0.0)
+  fixed_lod: data/Explore_HT_Fixed_LOD.csv              # recommended; Olink fixed LOD file (";"-separated, version >= 6.0.0)
   hpa: data/reference/proteinatlas.tsv.zip              # optional; Human Protein Atlas download for tissue origin (step 17) - see tools/download_hpa.R
   severity: data/severity.xlsx                          # optional; columns SubjectID, Visit (V1..V6 or 1..6) + numeric scores (e.g. SCORAD, EASI, NRS)
-  output: output
+  output: output                                        # folder for all results
 
-# Which NPX column to analyse. PCNormalizedNPX is required here: plate 1 is ISF only,
+# Which NPX column to analyse (step 02). PCNormalizedNPX is required here: plate 1 is ISF only,
 # plate 2 mixed and plates 3-4 serum, so intensity normalisation would be distorted.
 npx_column: PCNormalizedNPX
 
+# Quality control (step 02; after changing low_volume_ul, rerun from step 01)
 qc:
-  lod_method: auto            # auto = Olink fixed LOD file if present, else NC-based LOD from the 8 negative controls
+  lod_method: auto            # auto = Olink fixed LOD file if present, else LOD from the 8 negative controls
   drop_sample_qc_warn: false  # keep samples with SampleQC = WARN (they are flagged)
   drop_assay_qc_warn: false   # keep assay/plate results with AssayQC = WARN (they are flagged)
   min_detect_frac: 0.5        # keep an assay in a matrix if >= 50% of samples are above LOD in at least one group
   outlier_sd: 3               # sample outlier: median or IQR beyond mean +/- 3 SD (Olink QC plot rule)
   drop_outliers: false        # flag only; set true after reviewing the QC plots
-  low_volume_ul: {ISF: 20, Serum: 40}
+  low_volume_ul: {ISF: 20, Serum: 40}   # in microlitres; smaller samples are flagged (metadata/data_flags.csv), not removed
 
+# Statistics (steps 03-18; after changing fdr or min_group_n, rerun from step 04)
 stats:
-  fdr: 0.05
+  fdr: 0.05                   # a result is significant if its adjusted p-value (FDR) is below this
   min_group_n: 3              # skip a contrast if a group has fewer samples than this
   min_rel_log2: 1             # step 10: minimum relative dISF/serum difference (log2) to call a protein enriched
-  visit_min_subjects: 5        # step 13: analyse a visit only if >= this many AD patients
-  cores: 4                    # parallel workers for the mixed models (1 = serial)
+  visit_min_subjects: 5       # step 13: analyse a visit only if >= this many AD patients
+  cores: 4                    # parallel workers for the mixed models (1 = serial); speed only, no rerun needed
 
 # Pre-specified proteins for the dedicated analysis (step 12). Olink assay name (gene symbol),
-# OlinkID or UniProt. CD137 / 4-1BB = TNFRSF9; its ligand 4-1BBL = TNFSF9 can be added.
+# OlinkID or UniProt. CD137 / 4-1BB = TNFRSF9; its ligand CD137L / 4-1BBL = TNFSF9.
 focus_proteins: ["TNFRSF9", "TNFSF9", "KITLG", "CPA4", "FCER1A", "TPSAB1", "MS4A2", "TPSD1", "PNOC", "POSTN"]
 
 export:                       # step 19: CSV export of the Olink data
@@ -40,23 +47,26 @@ export:                       # step 19: CSV export of the Olink data
 
 # Key questions (step 15)
 key_questions:
-  mast_cell_markers: ["KITLG", "CPA4", "FCER1A", "TPSAB1", "MS4A2", "TPSD1", "CPA3", "CMA1", "KIT", "HDC"]   # combined into a mast cell score
-  proteins: ["TNFRSF9", "TNFSF9"]                                             # CD137 and its ligand
-  bootstrap: 2000                                                             # resamples for AUC confidence intervals
+  # mast_cell_markers are combined into one mast cell score
+  mast_cell_markers: ["KITLG", "CPA4", "FCER1A", "TPSAB1", "MS4A2", "TPSD1", "CPA3", "CMA1", "KIT", "HDC"]
+  proteins: ["TNFRSF9", "TNFSF9"]   # CD137 and its ligand CD137L
+  bootstrap: 2000                   # resamples for AUC confidence intervals
 
+# Pathway analysis: GSEA for every comparison of steps 04 and 05 (step 07) and the pathways of the
+# detectable dISF proteome (step 09). Step 17 uses `signatures` below.
 enrichment:
-  collections: ["H", "C2:CP:REACTOME", "C5:GO:BP"]
-  min_size: 10
-  max_size: 500
+  collections: ["H", "C2:CP:REACTOME", "C5:GO:BP"]   # MSigDB: Hallmark, Reactome pathways, GO biological processes
+  min_size: 10                # smallest gene set, in panel proteins (step 09); step 07 also tests sets of 5-9 and marks them small_set = TRUE
+  max_size: 500               # largest gene set (steps 07, 09 and 17)
 
 # Step 16: which proteins correlate with TNFRSF9 (4-1BB / CD137) in dISF?
 tnfrsf9_correlation:
   anchor: TNFRSF9
   targets: ["IL33", "IL4", "CSF2", "IL6", "IL18", "CXCL8", "IL1RL1", "KIT", "KITLG", "TPSAB1", "TPSB2", "FCER1A"]
-  main_targets: ["IL33", "IL4"]   # scatter plots and highlighted in the summary
+  main_targets: ["IL33", "IL4"]   # highlighted in the executive summary; every measured target gets a scatter plot in tnfrsf9_correlation/scatter/
   min_n: 5                        # minimum number of sample pairs for a correlation
 
 # Step 17: do serum and dISF carry the same or different signatures? (MicroAD only; RELAD/RELAD2/LEIP not used)
 signatures:
   collections: ["C2:CP:REACTOME", "C5:GO:BP"]   # over-representation against the assayed panel
-  min_size: 5
+  min_size: 5                                   # smallest gene set, in panel proteins (the largest is max_size under enrichment)
