@@ -250,7 +250,7 @@ significant if `padj < 0.05`.
 | `isf_detection_profile.csv` | For each protein: how often it is detected in dISF, per skin state. `lesion_restricted` = detectable only in lesional AD skin. |
 | `isf_detected_pathways.csv` | Which pathways the detectable dISF proteome covers |
 | `detected_per_sample.png` | Number of proteins above LOD in each dISF sample, by skin state |
-| `top_variable_heatmap.png` | The 50 dISF proteins that vary most between samples |
+| `top_variable_heatmap.png` | The 50 dISF proteins that vary most between samples (z-score per protein). The numbers behind it are in `isf_profile.xlsx`: sheets `heatmap_zscores`, `heatmap_NPX` and `heatmap_samples` (column order and skin state of each sample). |
 
 ### `isf_serum/` – do skin fluid and blood go together? (step 06)
 `isf_serum_correlation.csv`: for each protein and skin site, the correlation of dISF with serum taken

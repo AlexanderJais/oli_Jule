@@ -70,6 +70,7 @@ m <- wide$ISF
 if (!is.null(m) && nrow(m) > 1) {
   top <- names(sort(apply(m, 1, sd, na.rm = TRUE), decreasing = TRUE))[seq_len(min(50, nrow(m)))]
   info <- isf |> distinct(SampleID, state_group, SubjectID, visit_num)
+  assay_of <- clean |> distinct(OlinkID, Assay) |> (\(d) setNames(d$Assay, d$OlinkID))()
   z <- t(scale(t(m[top, , drop = FALSE])))
   hm <- as_tibble(z, rownames = "OlinkID") |>
     pivot_longer(-OlinkID, names_to = "SampleID", values_to = "z") |>
@@ -81,10 +82,22 @@ if (!is.null(m) && nrow(m) > 1) {
   p <- ggplot(hm, aes(SampleID, Assay, fill = z)) + geom_tile() +
     scale_fill_gradient2(low = "steelblue", high = "firebrick") +
     facet_grid(~state_group, scales = "free_x", space = "free_x") +
-    labs(title = "50 most variable dISF proteins (z-score per protein)", x = "samples", y = NULL) +
+    labs(title = "50 most variable dISF proteins (z-score per protein)",
+         subtitle = "PCNormalizedNPX; proteins passing the dISF detection filter, ranked by SD over all dISF samples; z over all dISF samples, shown capped at +/-3. Numbers: isf_profile.xlsx",
+         x = "samples", y = NULL) +
     theme(axis.text.x = element_blank(), axis.ticks.x = element_blank(), strip.text = element_text(size = 7))
   save_plot(p, cfg, "isf_profile", "top_variable_heatmap.png", width = 12, height = 9)
-}
 
-writexl::write_xlsx(list(detection_profile = profile, detected_pathways = ora),
+  # the numbers behind the heatmap: samples in the heatmap's column order, proteins in its row order
+  ord <- levels(hm$SampleID)
+  ann <- tibble(OlinkID = top, Assay = assay_of[top], rank_by_SD = seq_along(top),
+                SD_NPX = apply(m[top, , drop = FALSE], 1, sd, na.rm = TRUE), mean_NPX = rowMeans(m[top, , drop = FALSE], na.rm = TRUE))
+  heat_tabs <- list(
+    heatmap_samples = info |> mutate(column = match(SampleID, ord)) |> arrange(column) |>
+      select(column, SampleID, skin_state_group = state_group, SubjectID, visit_num),
+    heatmap_zscores = bind_cols(ann, as_tibble(z[, ord, drop = FALSE])),
+    heatmap_NPX = bind_cols(ann, as_tibble(m[top, ord, drop = FALSE])))
+} else heat_tabs <- list()
+
+writexl::write_xlsx(c(list(detection_profile = profile, detected_pathways = ora), heat_tabs),
                     out_path(cfg, "isf_profile", "isf_profile.xlsx"))
