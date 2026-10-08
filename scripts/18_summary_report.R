@@ -1,11 +1,12 @@
 # 18 - Executive summary PDF of all findings (step 19 only exports data)
-# Collects the key numbers, tables and figures of steps 01-17 into output/Executive_summary.pdf,
+# Collects the key numbers, tables and figures of steps 01-17 (incl. 02b) into output/Executive_summary.pdf,
 # plus Executive_summary_tables.xlsx with the full list behind every shortened list in the PDF.
 # Every section is optional: if an earlier step did not run, its page says so instead of failing.
 
 source("R/utils.R")
 source("R/models.R")
 source("R/report.R")
+source("R/qc_overview.R")
 cfg  <- load_config()
 fdr  <- cfg$stats$fdr
 meta <- read_step(cfg, "metadata", "sample_metadata.rds", step = "scripts/01_metadata.R")
@@ -52,6 +53,7 @@ kq_auc  <- out_csv(cfg, "key_questions", "Q4_auc.csv")
 ov15    <- out_csv(cfg, "serum_vs_disf", "overlap_summary.csv")
 rds_or_null <- \(...) { p <- file.path(cfg$paths$output, ...); if (file.exists(p)) readRDS(p) else NULL }
 tc_sum  <- rds_or_null("tnfrsf9_correlation", "summary.rds")
+qo      <- rds_or_null("qc_overview", "plots.rds")
 sg_sum  <- rds_or_null("signatures", "summary.rds")
 tc_rank <- out_csv(cfg, "tnfrsf9_correlation", "proteome_wide_correlation.csv")
 tc_targ <- out_csv(cfg, "tnfrsf9_correlation", "targeted_correlations.csv")
@@ -84,6 +86,7 @@ section("Overview", {
       paste("LOD source per assay -", lod_line),
       if (!is.null(kept)) paste(sprintf("%s: %d of %d proteins pass the detection filter (>= %d%% of samples above LOD in at least one group)",
                                         kept$matrix, kept$kept, kept$n, round(100 * cfg$qc$min_detect_frac)), collapse = "; ") else "n/a",
+      if (!is.null(qo$methods)) paste0(qo$methods, " The next page shows it."),
       if (!is.null(cv)) sprintf("Sample controls: median inter-plate CV %.1f%%, intra-plate CV %.1f%%.",
                                 100 * median(cv$inter_cv, na.rm = TRUE), 100 * median(cv$intra_cv, na.rm = TRUE)) else "n/a",
       sprintf("Metadata issues flagged (not corrected): %s.", if (is.null(flags) || !nrow(flags)) "none" else
@@ -92,6 +95,12 @@ section("Overview", {
       sprintf("Proteome-wide results use the Benjamini-Hochberg false discovery rate (FDR < %g) within each comparison. Effects are differences in PC-normalised NPX (log2 scale). Focus proteins (e.g. CD137) are pre-specified and judged by their own p-value. Relapse analyses are exploratory (%s).", fdr, rel_txt),
       paste("Generated", format(Sys.time(), "%Y-%m-%d %H:%M"), "from", normalizePath(cfg$paths$output))),
     subtitle = "dermal interstitial fluid (dISF) and serum - automatically generated from the pipeline results")
+})
+
+# ---- 1a. detection overview (step 02b) -------------------------------------------------------------------------------
+section("Detection overview", {
+  if (is.null(qo)) stop("step 02b results not found")
+  draw_qc_overview(qo$plots, no_class_note = qo$note)
 })
 
 # ---- 1b. key questions (step 15) ------------------------------------------------------------------------------------
@@ -447,7 +456,7 @@ section("Methods", {
     "qc/ - QC tables and plots | models/ - all model results and volcano plots (models/volcano/) | visit_course/ - per-visit analysis and time courses",
     "isf_profile/ - dISF proteome | matrix_comparison/ - dISF vs serum | serum_vs_disf/ - overlap per visit (Venn) | isf_serum/ - correlations",
     "trajectories/ - disease course | leip_reference/ | enrichment/ | focus/ - focus proteins (overview + one folder per protein)",
-    "tnfrsf9_correlation/ - proteins correlating with TNFRSF9 | signatures/ - serum vs dISF signatures | relad/ - all RELAD/RELAD2 serum results (RELAD_RELAD2_serum_results.xlsx)"),
+    "qc_overview/ - proteins above / below LOD by protein class | tnfrsf9_correlation/ - proteins correlating with TNFRSF9 | signatures/ - serum vs dISF signatures | relad/ - all RELAD/RELAD2 serum results (RELAD_RELAD2_serum_results.xlsx)"),
     size = 10)
 })
 
@@ -471,6 +480,7 @@ enr_sheets <- if (is.null(enr)) list() else
   setNames(paste0("dISF_vs_serum_", c(`relative enrichment, AD lesional skin` = "lesional", `relative enrichment, AD ex-lesional skin` = "ex_lesional",
                                       `relative enrichment, AD non-lesional skin` = "non_lesional", `relative enrichment, healthy skin` = "healthy")[names(split(enr, enr$model))]))
 tabs <- c(list(
+  detection_by_class = out_csv(cfg, "qc_overview", "detection_by_class.csv"),
   lesion_restricted = if (!is.null(prof)) prof |> filter(lesion_restricted) |> select(-any_of("lesion_restricted")) else NULL,
   dISF_L_vs_NL = sig_list(isf, "states_all_visits", "AD_L_vs_NL"),
   dISF_xL_vs_NL = sig_list(isf, "states_all_visits", "AD_xL_vs_NL"),
@@ -495,7 +505,8 @@ tabs <- c(list(
        relapse_predictive = if (!is.null(sg_sum$predictive) && nrow(sg_sum$predictive)) sg_sum$predictive |> filter(P.Value < 0.05) else NULL)) |> compact()
 tabs <- tabs[vapply(tabs, nrow, 1L) > 0]
 index <- tibble(sheet = names(tabs), rows = vapply(tabs, nrow, 1L),
-                content = c(lesion_restricted = "proteins detectable only in lesional AD dISF (step 09)",
+                content = c(detection_by_class = "proteins above / below LOD per protein class, serum and dISF (step 02b)",
+                            lesion_restricted = "proteins detectable only in lesional AD dISF (step 09)",
                             dISF_L_vs_NL = sprintf("significant: lesional vs non-lesional AD skin, all visits (FDR < %g)", fdr),
                             dISF_xL_vs_NL = "significant: ex-lesional vs non-lesional, all visits",
                             dISF_L_vs_xL = "significant: lesional vs ex-lesional, all visits",

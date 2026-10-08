@@ -210,14 +210,48 @@ sev <- meta |> filter(cohort == "MicroAD", group == "AD", matrix == "ISF", site 
   transmute(SubjectID, Visit = visit, EASI = round(pmax(0, if_else(state == "lesional", 12, 3) + rnorm(n(), 0, 2)), 1))
 write_csv(sev, file.path(sim_dir, "severity.csv"))
 
+# a small Human Protein Atlas-style table (step 02b protein classes, step 17 origin): every class value occurs;
+# 2 assays are missing (not in HPA), 1 is found only by gene symbol (no UniProt) and 1 only by a synonym
+hpa_vals <- c("Enzymes", "Metabolic proteins", "Transcription factors", "Nuclear receptors", "G-protein coupled receptors",
+              "Voltage-gated ion channels", "Transporters", "FDA approved drug targets", "Potential drug targets",
+              "Disease related genes", "Human disease related genes", "Cancer-related genes", "CD markers",
+              "Immunoglobulin genes", "T-cell receptor genes", "Essential proteins", "Predicted intracellular proteins",
+              "Predicted membrane proteins", "Predicted secreted proteins", "Plasma proteins")
+hpa_sim <- assays |> slice(-(1:2)) |>
+  mutate(i = row_number(),
+         `Protein class` = map_chr(i, \(k) paste(unique(c(hpa_vals[(k - 1) %% length(hpa_vals) + 1],
+                                                          hpa_vals[(3 * k) %% length(hpa_vals) + 1],
+                                                          c("Predicted intracellular proteins", "Predicted membrane proteins",
+                                                            "Predicted secreted proteins")[k %% 3 + 1])), collapse = ", ")),
+         Uniprot = if_else(i == 1, NA_character_, UniProt),
+         `Gene synonym` = if_else(i == 2, Assay, NA_character_), Gene = if_else(i == 2, paste0(Assay, "_OLD"), Assay),
+         Uniprot = if_else(i == 2, NA_character_, Uniprot)) |>
+  select(Gene, `Gene synonym`, Uniprot, `Protein class`) |>
+  # like the real HPA: one row per gene of a combined assay (EBI3_IL27 -> EBI3, IL27); genes sharing one protein
+  # (DEFB104A_DEFB104B, one UniProt) each get that UniProt
+  mutate(g = str_split(Gene, "_(?!OLD$)"), u = str_split(coalesce(Uniprot, ""), "_"),
+         u = map2(g, u, \(g, u) if (length(u) == length(g)) u else rep(u[1], length(g)))) |>
+  select(-Gene, -Uniprot) |> unnest(c(g, u)) |>
+  transmute(Gene = g, `Gene synonym`, Uniprot = na_if(u, ""), `Protein class`) |>
+  # a second component with an extra class: the assay must get the union of its genes' classes
+  mutate(`Protein class` = if_else(Gene == "IL27", paste(`Protein class`, "Nuclear receptors", sep = ", "), `Protein class`))
+# truth for the test: per assay the union of the classes of its genes (assays missing from the HPA excluded)
+hpa_truth <- assays |> slice(-(1:2)) |> transmute(OlinkID, genes = str_split(Assay, "_")) |> unnest(genes) |>
+  left_join(hpa_sim |> mutate(genes = coalesce(`Gene synonym`, Gene)) |> select(genes, `Protein class`), by = "genes") |>
+  group_by(OlinkID) |> summarise(classes = paste(unique(na.omit(`Protein class`)), collapse = ", "), .groups = "drop")
+write_csv(hpa_truth, file.path(sim_dir, "hpa_truth.csv"))
+write_tsv(hpa_sim, file.path(sim_dir, "hpa_sim.tsv"))
+truth_hpa_missing <- assays$OlinkID[1:2]
+write_lines(truth_hpa_missing, file.path(sim_dir, "hpa_missing.txt"))
+
 yaml::write_yaml(list(
   paths = list(manifest = cfg$paths$manifest, npx_dir = file.path(sim_dir, "npx"),
-               severity = file.path(sim_dir, "severity.csv"),
+               severity = file.path(sim_dir, "severity.csv"), hpa = file.path(sim_dir, "hpa_sim.tsv"),
                leip_clinical = cfg$paths$leip_clinical, fixed_lod = file.path(sim_dir, "fixed_lod.csv"),
                output = "output_sim"),
   npx_column = cfg$npx_column, qc = cfg$qc, stats = cfg$stats, enrichment = cfg$enrichment,
   focus_proteins = cfg$focus_proteins, key_questions = cfg$key_questions, export = cfg$export,
-  tnfrsf9_correlation = cfg$tnfrsf9_correlation, signatures = cfg$signatures
+  tnfrsf9_correlation = cfg$tnfrsf9_correlation, signatures = cfg$signatures, qc_overview = cfg$qc_overview
 ), file.path(sim_dir, "config_sim.yml"))
 
 msg("Simulated %d samples/controls x %d assays -> %s", nrow(samples), n_assays, sim_dir)

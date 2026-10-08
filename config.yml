@@ -5,13 +5,13 @@
 #   start_at <- 12; source("run_all.R")      (all later steps are rerun as well)
 
 # Input files: see data/README.md (the original Olink / lab file names also work).
-# After changing a path, rerun from step 01 (only hpa: from step 17; only severity: from step 11).
+# After changing a path, rerun from step 01 (only hpa: from step 02b; only severity: from step 11).
 paths:
   manifest: data/manifest.xlsx                          # Olink sample submission sheet (sheet "manifest" is the master)
   npx_dir: data/npx                                     # folder with the Olink *.parquet file(s)
   leip_clinical: data/LEIP_clinical_parameters_n35.xlsx # optional; sheet "Key_parameters"
   fixed_lod: data/Explore_HT_Fixed_LOD.csv              # recommended; Olink fixed LOD file (";"-separated, version >= 6.0.0)
-  hpa: data/reference/proteinatlas.tsv.zip              # optional; Human Protein Atlas download for tissue origin (step 17) - see tools/download_hpa.R
+  hpa: data/reference/proteinatlas.tsv.zip              # optional; Human Protein Atlas: protein classes (step 02b), tissue origin (step 17) - tools/download_hpa.R
   severity: data/severity.xlsx                          # optional; columns SubjectID, Visit (V1..V6 or 1..6) + numeric scores (e.g. SCORAD, EASI, NRS)
   output: output                                        # folder for all results
 
@@ -28,6 +28,15 @@ qc:
   outlier_sd: 3               # sample outlier: median or IQR beyond mean +/- 3 SD (Olink QC plot rule)
   drop_outliers: false        # flag only; set true after reviewing the QC plots
   low_volume_ul: {ISF: 20, Serum: 40}   # in microlitres; smaller samples are flagged (metadata/data_flags.csv), not removed
+
+# QC overview (step 02b): ring charts of proteins above / below LOD and the distribution across protein classes
+qc_overview:
+  rule: all_samples           # all_samples = above LOD in >= qc$min_detect_frac of all samples of the matrix;
+                              # analysis_filter = the step 02 detection filter (>= that share in at least one group;
+                              # serum then covers all cohorts, as that filter does)
+  serum_cohorts: ["MicroAD"]  # serum samples counted; [] = all serum cohorts (RELAD, RELAD2, LEIP too)
+  font: "Nimbus Sans"         # used if installed; otherwise R's built-in Nimbus Sans substitute (PDF)
+  colours: {above: "#69005F", below: "#FF506E", no_lod: "#BDBDBD"}   # Helmholtz Munich violet and pink
 
 # Statistics (steps 03-18; after changing fdr or min_group_n, rerun from step 04)
 stats:

@@ -87,6 +87,7 @@ write_output_guide <- function(cfg) {
     "(top level)",         "18",  "Executive summary of all results and the full lists behind it",           "Executive_summary.pdf",
     "metadata",            "01",  "Sample list from the manifest; flagged inconsistencies",                  "data_flags.csv",
     "qc",                  "02",  "Quality control: samples, LOD, which proteins are detectable",            "assay_detection.csv",
+    "qc_overview",         "02b", "Proteins above / below LOD in serum and dISF, by protein class",          "qc_overview.pdf",
     "explore",             "03",  "PCA plots and sources of variation",                                      "pca_*.png",
     "models",              "4,5,13", "Group comparisons per protein (dISF, serum, per visit); volcano/", "*_results.xlsx (one sheet per volcano)",
     "relad",               "05",  "All RELAD / RELAD2 serum results",                                        "RELAD_RELAD2_serum_results.xlsx",

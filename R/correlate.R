@@ -117,9 +117,8 @@ fit_limma_f <- function(expr, info, form, block = NULL, contrasts, f_sets = list
 #' Returns one row per gene with the HPA specificity columns and a simple origin label.
 hpa_annotate <- function(genes, path) {
   empty <- tibble(gene = character(), hpa_origin = character())
-  if (is.null(path) || !file.exists(path)) return(empty)
-  h <- if (str_detect(path, "\\.zip$")) readr::read_tsv(unz(path, "proteinatlas.tsv"), show_col_types = FALSE, guess_max = 1e5)
-       else readr::read_tsv(path, show_col_types = FALSE, guess_max = 1e5)
+  h <- read_hpa(path)
+  if (is.null(h)) return(empty)
   col <- \(nm) if (nm %in% names(h)) h[[nm]] else rep(NA_character_, nrow(h))
   h <- tibble(gene = h$Gene, tissue_specificity = col("RNA tissue specificity"), tissue_specific = col("RNA tissue specific nTPM"),
               cell_type_specific = col("RNA single cell type specific nCPM"), blood_cell_specific = col("RNA blood cell specific nTPM"),

@@ -51,11 +51,11 @@ check_inputs <- function(cfg) {
   p <- cfg$paths
   npx <- if (dir.exists(p$npx_dir)) list.files(p$npx_dir, "\\.parquet$") else character()
   status <- tibble(
-    input = c("manifest", "NPX parquet files", "LEIP clinical data", "Olink fixed LOD file", "severity scores"),
-    required = c("yes", "yes", "no", "recommended", "no"),
-    path = c(p$manifest, file.path(p$npx_dir, "*.parquet"), p$leip_clinical %||% "", p$fixed_lod %||% "", p$severity %||% ""),
+    input = c("manifest", "NPX parquet files", "LEIP clinical data", "Olink fixed LOD file", "severity scores", "Human Protein Atlas"),
+    required = c("yes", "yes", "no", "recommended", "no", "no"),
+    path = c(p$manifest, file.path(p$npx_dir, "*.parquet"), p$leip_clinical %||% "", p$fixed_lod %||% "", p$severity %||% "", p$hpa %||% ""),
     found = c(file.exists(p$manifest %||% ""), length(npx) > 0, file.exists(p$leip_clinical %||% ""),
-              file.exists(p$fixed_lod %||% ""), file.exists(p$severity %||% ""))
+              file.exists(p$fixed_lod %||% ""), file.exists(p$severity %||% ""), file.exists(p$hpa %||% ""))
   )
   message("Input files (working directory: ", getwd(), "):")
   for (i in seq_len(nrow(status)))
@@ -70,6 +70,31 @@ check_inputs <- function(cfg) {
     stop("Missing: ", paste(missing, collapse = ", "), ". See data/README.md for where each file goes.", call. = FALSE)
   }
   invisible(status)
+}
+
+#' Step number of a script from its file name: "02_import_qc.R" -> 2, "02b_qc_overview.R" -> 2.2.
+step_number <- function(f) {
+  m <- str_match(basename(f), "^(\\d+)([a-z]?)_")
+  as.numeric(m[, 2]) + if_else(is.na(m[, 3]) | m[, 3] == "", 0, match(m[, 3], letters) / 10)
+}
+
+#' Steps to run when resuming: all scripts from step `start_at` on (a number such as 3, or a name such as "02b").
+select_steps <- function(steps, start_at = 1) {
+  key <- step_number(steps)
+  s <- if (is.character(start_at)) step_number(paste0(start_at, "_")) else if (is.numeric(start_at)) start_at else NA
+  if (length(s) != 1 || is.na(s) || !s %in% key)       # must name an existing script
+    stop("start_at must be a step number from 1 to ", floor(max(key)), " (or e.g. \"02b\"); it is ",
+         paste(format(start_at), collapse = ", "), ". Type rm(start_at) for a full run.", call. = FALSE)
+  steps[key >= s]
+}
+
+#' Human Protein Atlas gene table (proteinatlas.tsv or the downloaded .zip); NULL if the file is missing.
+read_hpa <- function(path) {
+  if (is.null(path) || !file.exists(path)) return(NULL)
+  h <- if (str_detect(path, "\\.zip$")) readr::read_tsv(unz(path, "proteinatlas.tsv"), show_col_types = FALSE, guess_max = 1e5)
+       else readr::read_tsv(path, show_col_types = FALSE, guess_max = 1e5)
+  attr(h, "downloaded") <- format(as.Date(file.mtime(path)))
+  h
 }
 
 #' Path inside the output folder; creates the sub-folder if needed.

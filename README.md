@@ -5,7 +5,7 @@ study: about 5,400 proteins measured in **dermal interstitial fluid (dISF)** and
 patients with atopic dermatitis (AD) and control persons.
 
 This page tells you how to run the analysis and **where to find which result**. Two more pages:
-- [`docs/STEPS.md`](docs/STEPS.md) – what each of the 19 steps does, in plain words;
+- [`docs/STEPS.md`](docs/STEPS.md) – what each step does (01–19, plus 02b), in plain words;
 - [`docs/TECHNICAL.md`](docs/TECHNICAL.md) – technical details (models, design decisions);
 - [`docs/CHANGES.md`](docs/CHANGES.md) – what changed in each version and which steps to rerun.
 
@@ -74,10 +74,11 @@ in others it doesn't (*non-relapse*).
    **Data files are never uploaded to GitHub.**
 3. The first time only, run `source("install_packages.R")` (needs R 4.3 or newer).
 4. Optional, once (needs internet): `source("tools/download_hpa.R")` downloads the public Human Protein
-   Atlas table that step 17 uses for the tissue origin of proteins. Without it, step 17 still runs but
-   leaves the tissue origin out.
+   Atlas table. Step 02b uses it for the protein classes, step 17 for the tissue origin of proteins.
+   Without it, both steps still run but leave these parts out.
 5. Run `source("run_all.R")`. The full run can take an hour or more, and the results appear in `output/`.
 6. **To resume** from a later step, e.g. after changing a setting for step 12: `start_at <- 12; source("run_all.R")`.
+   Step numbers are the script numbers; for step 02b use `start_at <- "02b"`.
    Earlier results are reused, and all later steps run again (including the summary, step 18). Start
    from the **earliest** step you changed (step numbers are in [section 7](#7-what-is-in-the-repository)).
    After a successful run `start_at` is removed automatically, so the next `source("run_all.R")` is a full run.
@@ -103,7 +104,8 @@ Each script writes into its own folder. Most folders contain an **`.xlsx` file**
 all their tables. Open that one first.
 
 ### `Executive_summary.pdf` – the overview (step 18)
-First an overview of the samples and the quality control, then the answers to the key questions
+First an overview of the samples and the quality control, the proteins above / below LOD by protein class
+(step 02b), then the answers to the key questions
 with the data behind them, the TNFRSF9 correlations (step 16) and the serum vs dISF signatures
 (step 17), key numbers and findings for each aim, all comparisons in one table, the most important
 figures, and the methods and caveats. **Read this first.**
@@ -111,6 +113,7 @@ figures, and the methods and caveats. **Read this first.**
 ### `Executive_summary_tables.xlsx` – the full lists behind the summary (step 18)
 Wherever the PDF shows a shortened list ("up: TNC, LAIR2 …"), the complete list is in this
 workbook. The first sheet, `index`, says what each sheet contains:
+- proteins above / below LOD per protein class, serum and dISF (step 02b, sheet `detection_by_class`);
 - proteins detectable only in lesional skin;
 - all significant proteins for lesional / ex-lesional / non-lesional / healthy comparisons;
 - proteins regulated at every visit, with per-visit values;
@@ -178,8 +181,8 @@ biology as dISF; a slope between 0 and 1 = the same signal, but weaker in serum.
 be empty are left out of the workbook.
 
 Tissue origin uses the Human Protein Atlas table. Download it once with `source("tools/download_hpa.R")`
-(public data, saved in `data/reference/`), then run `start_at <- 17; source("run_all.R")`, which
-also updates the summary. Without the file, the tissue origin is left out.
+(public data, saved in `data/reference/`), then rerun from step 02b (`start_at <- "02b"; source("run_all.R")`),
+which also adds the protein classes of step 02b and updates the summary. Without the file, the tissue origin is left out.
 
 ### `relad/` – all RELAD and RELAD2 serum results (step 05)
 `RELAD_RELAD2_serum_results.xlsx`: relapse vs non-relapse (both cohorts together, RELAD alone,
@@ -197,6 +200,15 @@ RELAD/RELAD2 serum, as separate tests.)
 |---|---|
 | `sample_metadata.csv` | One row per sample: patient, visit, skin site, skin state, group, relapse, plate, volume … |
 | `data_flags.csv` | Inconsistencies found in the manifest, e.g. contradicting relapse labels or low sample volume. They are **flagged, not corrected**. |
+
+### `qc_overview/` – how many proteins are measurable? (step 02b)
+One page (`qc_overview.pdf` / `.png`): ring charts with the share of Olink proteins above and below LOD
+(total in the middle; serum left, dISF right), and below them the distribution across 14 protein classes
+(enzymes, transcription factors … extracellular / secreted). A protein counts as above LOD if it is above
+LOD in at least 50 % of the samples of that matrix; serum = MicroAD samples (settings: `config.yml` →
+`qc_overview`). The classes come from the Human Protein Atlas; a protein can belong to several classes.
+`qc_overview.xlsx` has the numbers, one row per protein with its classes, and the counts under other
+above-LOD definitions (e.g. the analysis filter of step 02).
 
 ### `qc/` – quality control (step 02)
 | File | Content |
@@ -396,7 +408,7 @@ used when dISF is compared with serum) and `RELAD_AD_vs_HC` (RELAD/RELAD2). Rela
 | `config.yml` | All settings: file paths, thresholds, focus proteins, mast cell markers, TNFRSF9 targets, CSV separator |
 | `scripts/01_…` to `scripts/19_…` | One script per analysis step. The number is also the step in `start_at`. |
 | `R/` | Shared functions used by the scripts |
-| `tools/download_hpa.R` | Optional: downloads the public Human Protein Atlas table for step 17 |
+| `tools/download_hpa.R` | Optional: downloads the public Human Protein Atlas table for steps 02b and 17 |
 | `data/` | Your input files (not uploaded to GitHub) – see `data/README.md` |
 | `output/` | All results (not uploaded to GitHub) |
 | `tests/` | Test with invented data |
@@ -408,6 +420,7 @@ used when dISF is compared with serum) and `RELAD_AD_vs_HC` (RELAD/RELAD2). Rela
 |---|---|---|---|
 | 01 | `01_metadata.R` | Read and check the manifest | `metadata/` |
 | 02 | `02_import_qc.R` | Read the Olink files, LOD, quality control | `qc/` |
+| 02b | `02b_qc_overview.R` | Proteins above / below LOD in serum and dISF, by protein class | `qc_overview/` |
 | 03 | `03_explore.R` | PCA, sources of variation | `explore/` |
 | 04 | `04_isf_models.R` | dISF comparisons | `models/ISF_*` |
 | 05 | `05_serum_models.R` | Serum comparisons | `models/Serum_*`, `relad/` |

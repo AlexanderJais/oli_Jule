@@ -72,7 +72,39 @@ sig_xl  <- readxl::excel_sheets(file.path(out, "signatures/signatures.xlsx"))
 relad_xl <- readxl::excel_sheets(file.path(out, "relad/RELAD_RELAD2_serum_results.xlsx"))
 n_micro_serum <- read_csv(file.path(out, "metadata/sample_metadata.csv"), show_col_types = FALSE) |>
   filter(matrix == "Serum", cohort == "MicroAD") |> nrow()
+qo_all <- read_csv(file.path(out, "qc_overview/detection_overall.csv"), show_col_types = FALSE)
+qo_cls <- read_csv(file.path(out, "qc_overview/detection_by_class.csv"), show_col_types = FALSE)
+qo_xl  <- readxl::excel_sheets(file.path(out, "qc_overview/qc_overview.xlsx"))
+qo_nh  <- readxl::read_excel(file.path(out, "qc_overview/qc_overview.xlsx"), sheet = "not_in_HPA")
+n_assay <- read_csv(file.path(out, "qc/assay_detection.csv"), show_col_types = FALSE) |> count(matrix, name = "n_det") |>
+  mutate(matrix = recode(matrix, ISF = "dISF"))
+qo_def <- readxl::read_excel(file.path(out, "qc_overview/qc_overview.xlsx"), sheet = "definitions")
+qo_prot <- read_csv(file.path(out, "qc_overview/protein_detection.csv"), show_col_types = FALSE)
+hpa_truth <- read_csv("data_sim/hpa_truth.csv", show_col_types = FALSE)
+gpcr_expected <- sum(str_detect(hpa_truth$classes, "G-protein coupled receptors") & hpa_truth$OlinkID %in% qo_prot$OlinkID)
+source("R/qc_overview.R")
+grDevices::pdf(NULL)
+draw_ok <- !inherits(try(draw_qc_overview(readRDS(file.path(out, "qc_overview/plots.rds"))$plots), silent = TRUE), "try-error")
+invisible(grDevices::dev.off())
+st_demo <- c("scripts/01_x.R", "scripts/02_x.R", "scripts/02b_x.R", "scripts/03_x.R", "scripts/19_x.R")
 stopifnot(
+  "QC overview: totals differ from the number of proteins per matrix (step 02b)" =
+    { j <- qo_all |> distinct(matrix, total) |> inner_join(n_assay, by = "matrix"); nrow(j) == 2 && all(j$total == j$n_det) },
+  "QC overview: definitions sheet must mark exactly one row per matrix (step 02b)" =
+    { u <- filter(qo_def, used_in_figure); nrow(u) == 2 && setequal(u$matrix, c("Serum", "dISF")) &&
+        all(u$`above LOD` == qo_all$n[match(paste(u$matrix, "above LOD"), paste(qo_all$matrix, qo_all$status))]) },
+  "QC overview: class counts differ from the simulated HPA truth (step 02b)" =
+    all(qo_cls$total[qo_cls$class == "GPCRs"] == gpcr_expected) &&
+    (isTRUE(qo_prot$`Nuclear receptors`[qo_prot$Assay == "EBI3_IL27"]) || !"EBI3_IL27" %in% qo_prot$Assay),
+  "QC overview page cannot be drawn (steps 02b / 18)" = draw_ok,
+  "QC overview: not all 14 protein classes present (step 02b)" = n_distinct(qo_cls$class) == 14 && all(c("Serum", "dISF") %in% qo_cls$matrix),
+  "QC overview: HPA matching (missing / symbol / synonym) wrong (step 02b)" =
+    setequal(qo_nh$OlinkID, readLines("data_sim/hpa_missing.txt")),
+  "QC overview: files missing (step 02b)" = all(c("README", "overall", "by_class", "definitions", "proteins") %in% qo_xl) &&
+    file.exists(file.path(out, "qc_overview/qc_overview.pdf")) && file.exists(file.path(out, "qc_overview/qc_overview.png")),
+  "step selection by script number wrong (run_all.R)" =
+    identical(select_steps(st_demo, 2), st_demo[2:5]) && identical(select_steps(st_demo, 3), st_demo[4:5]) &&
+    identical(select_steps(st_demo, "02b"), st_demo[3:5]) && inherits(try(select_steps(st_demo, 20), silent = TRUE), "try-error"),
   "TNFRSF9-IL33 relationship not ranked first (step 16)" =
     all(tc_rank |> group_by(site) |> slice_min(p_partial, n = 1, with_ties = FALSE) |> pull(Assay) == "IL33"),
   "TNFRSF9-IL33 within-group correlation missing (step 16)" =
@@ -84,7 +116,7 @@ stopifnot(
                                                     "relapse_predictive", "paired_correlation") %in% sig_xl),
   "RELAD/RELAD2 workbook incomplete (step 05)" = all(c("RELAD_relapse", "RELAD_only_relapse", "RELAD2_only_relapse", "RELAD_AD_vs_HC",
                                                       "group_means", "NPX_values") %in% relad_xl),
-  "new sheets missing from the summary tables (step 18)" = all(c("TNFRSF9_targeted", "TNFRSF9_ranking_all_dISF", "signature_sets") %in% est),
+  "new sheets missing from the summary tables (step 18)" = all(c("TNFRSF9_targeted", "TNFRSF9_ranking_all_dISF", "signature_sets", "detection_by_class") %in% est),
   "summary tables workbook incomplete (step 18)" = all(c("index", "lesion_restricted", "dISF_L_vs_NL", "all_visits_Lsite_vs_NL",
                                                           "per_visit_Lsite_vs_NL_all", "dISF_vs_serum_healthy") %in% est),
   "evidence figures missing (step 15)" = file.exists(file.path(out, "key_questions/evidence/TNFRSF9.png")) &&

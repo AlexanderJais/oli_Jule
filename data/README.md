@@ -14,7 +14,7 @@ data/
 ├── LEIP_clinical_parameters_n35.xlsx      optional: LEIP clinical data (sheet "Key_parameters")
 ├── severity.xlsx                          optional: SubjectID, Visit (V1–V6 or 1–6), SCORAD / EASI / NRS ...
 └── reference/
-    └── proteinatlas.tsv.zip               optional: Human Protein Atlas table (public; tools/download_hpa.R)
+    └── proteinatlas.tsv.zip               optional: Human Protein Atlas table (public; tools/download_hpa.R) - protein classes (02b), tissue origin (17)
 ```
 
 What each file needs:
@@ -38,7 +38,7 @@ What each file needs:
 - **Severity scores** (`.xlsx` or `.csv`): one row per patient and visit, with `SubjectID`, `Visit`
   and one numeric column per score. Steps 11 and 12 then model the proteins against each score.
 - **Human Protein Atlas table**: download it once with `source("tools/download_hpa.R")`, which
-  creates `data/reference/`. Step 17 uses it for the tissue origin of proteins.
+  creates `data/reference/`. Step 02b uses it for the protein classes, step 17 for the tissue origin of proteins.
 
 The data files are git-ignored, so they are not uploaded to GitHub. Never commit them: the repository is public.
 When asking for help, share error messages and file, column or sample names – not the data.

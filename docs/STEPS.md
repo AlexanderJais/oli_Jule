@@ -1,6 +1,6 @@
 # What each step does – in plain words
 
-The pipeline has 19 steps (`scripts/01_…` to `scripts/19_…`). `run_all.R` runs them in this
+The pipeline has 20 steps (`scripts/01_…` to `scripts/19_…`, plus `02b`). `run_all.R` runs them in this
 order, and each step uses what the earlier ones saved. For every step this page explains the
 **question** it answers, **what it does**, **what comes out**, and **what to keep in mind**.
 
@@ -10,7 +10,7 @@ the [README](../README.md#2-words-you-will-meet). The statistical details are in
 
 | Part | Steps |
 |---|---|
-| A. Preparing the data | 01 metadata · 02 import and QC · 03 first look |
+| A. Preparing the data | 01 metadata · 02 import and QC · 02b QC overview · 03 first look |
 | B. Group comparisons, protein by protein | 04 dISF models · 05 serum models · 07 pathways |
 | C. Skin fluid and blood together | 06 correlation · 08 LEIP reference · 10 aim 2 (dISF vs serum proteome) · 14 overlap per visit |
 | D. The three study aims | 09 aim 1 (dISF profile) · 11 aim 3 (disease course) · 13 visit by visit · *aim 2 = step 10, see part C* |
@@ -63,6 +63,26 @@ them 01 → 19.
 - the cleaned data for all later steps (`data/*.rds`).
 
 **Keep in mind:** the analysis uses **PCNormalizedNPX**, because the plates were filled by matrix: plate 1 holds dISF, plate 2 both matrices and plates 3–4 serum. `pca_by_plate.png` shows one PCA per matrix, so within a panel the points should not separate by plate. If they do, check which groups sit on which plate.
+
+### Step 02b – QC overview: how many proteins are measurable? (`02b_qc_overview.R` → `qc_overview/`)
+**Question:** How many of the Olink proteins are above LOD in serum and in dISF, and which kinds of proteins are they?
+
+**What it does**
+- Calls each protein **above LOD** in a matrix if at least 50 % of that matrix's samples are above its LOD
+  (`qc$min_detect_frac`). Serum = MicroAD samples, the same people as dISF (settings in `config.yml` → `qc_overview`).
+- Draws **ring charts** (serum left, dISF right): share of proteins above / below LOD, total in the middle.
+- Below them, the **distribution across 14 protein classes** from the Human Protein Atlas: enzymes, transcription
+  factors, nuclear receptors, GPCRs, voltage-gated ion channels, transporters, drug related, disease related,
+  cancer related, immune related, essential (DepMap), intracellular, membrane, extracellular / secreted.
+  A protein can belong to several classes, so the bars do not add up to the total.
+
+**Output:** `qc_overview.pdf` and `.png` (font Nimbus Sans, Helmholtz Munich violet / pink), `qc_overview.xlsx`
+(numbers, one row per protein with its classes, counts under other above-LOD definitions, proteins not found in the atlas).
+
+**Keep in mind:** the protein classes need the Human Protein Atlas table (`source("tools/download_hpa.R")` once);
+without it only the ring charts are drawn. The counts can differ slightly from the "proteins kept" of step 02,
+which uses a more generous rule (≥ 50 % in at least one group); the Excel file shows both. If `qc_overview: rule` is set to
+`analysis_filter`, the step 02 rule is used, and then serum covers all cohorts, because that filter is computed over all of them.
 
 ### Step 03 – First look at the data (`03_explore.R` → `explore/`)
 **Question:** What drives the differences between samples: the person, the skin state, the plate or the cohort?
@@ -334,7 +354,7 @@ Healthy skin (one visit) is the reference at every visit. **"Regulated at all vi
 
 **Keep in mind:**
 - Relapse analyses rest on 4 vs 6 patients.
-- The tissue origin needs the Human Protein Atlas table: download it once with `source("tools/download_hpa.R")`, then rerun from step 17 with `start_at <- 17; source("run_all.R")`. Without the table the origin columns stay empty.
+- The tissue origin needs the Human Protein Atlas table: download it once with `source("tools/download_hpa.R")`, then rerun from step 02b with `start_at <- "02b"; source("run_all.R")` (this also adds the protein classes of step 02b). Without the table the origin columns stay empty.
 
 ---
 
@@ -342,7 +362,7 @@ Healthy skin (one visit) is the reference at every visit. **"Regulated at all vi
 
 ### Step 18 – Executive summary (`18_summary_report.R` → `Executive_summary.pdf`, `Executive_summary_tables.xlsx`)
 Collects everything in one PDF:
-1. overview: samples, data and QC;
+1. overview: samples, data and QC, then the proteins above / below LOD by protein class (step 02b);
 2. answers to the key questions with evidence, then the TNFRSF9 correlations (step 16) and the serum vs dISF signatures (step 17);
 3. key findings per aim;
 4. all comparisons in one table;
