@@ -100,7 +100,10 @@ section("Overview", {
 # ---- 1a. detection overview (step 02b) -------------------------------------------------------------------------------
 section("Detection overview", {
   if (is.null(qo)) stop("step 02b results not found")
-  draw_qc_overview(qo$plots, no_class_note = qo$note)
+  fi <- qc_font_setup(cfg$qc_overview$font %||% "Nimbus Sans")     # Nimbus Sans as outlines via showtext, as in step 02b
+  if (fi$mode == "showtext") { showtext::showtext_opts(dpi = 96); showtext::showtext_begin() }
+  tryCatch(draw_qc_overview(qo$plots, no_class_note = qo$note, family = if (fi$mode == "showtext") fi$family else ""),
+           finally = if (fi$mode == "showtext") showtext::showtext_end())
 })
 
 # ---- 1b. key questions (step 15) ------------------------------------------------------------------------------------

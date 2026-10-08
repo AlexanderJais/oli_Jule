@@ -66,8 +66,9 @@ lod_status <- function(clean, det, rule = "all_samples", min_frac = 0.5, serum_c
   st
 }
 
-#' Font handling: the configured font (default Nimbus Sans) is used if it is installed; otherwise PDFs use R's
-#' built-in "NimbusSan" (Helvetica metrics) and PNGs the default sans font.
+#' Font handling. Nimbus Sans ships with the project (fonts/, URW base35, AGPL-3 with font exception) and is drawn by
+#' the package showtext as vector outlines: identical on every computer, but the PDF lists no font and the figure text
+#' cannot be selected. Other fonts: the installed font via cairo, else standard Helvetica (a PDF base font).
 font_installed <- function(family) {
   if (requireNamespace("systemfonts", quietly = TRUE))
     return(any(tolower(systemfonts::system_fonts()$family) == tolower(family)))
@@ -81,17 +82,46 @@ font_installed <- function(family) {
   files <- unlist(lapply(dirs[dir.exists(dirs)], list.files, recursive = TRUE))
   any(grepl(gsub("\\s+", "", family), gsub("[\\s_-]+", "", files, perl = TRUE), ignore.case = TRUE))
 }
-open_device <- function(file, type = c("pdf", "png"), font = "Nimbus Sans", width = 11.69, height = 8.27) {
+
+#' How the figure font is provided: list(mode = "showtext" | "cairo" | "builtin", family, message).
+qc_font_setup <- function(font = "Nimbus Sans", font_dir = "fonts") {
+  files <- file.path(font_dir, c("NimbusSans-Regular.otf", "NimbusSans-Bold.otf"))
+  if (grepl("^nimbus ?sans", font, ignore.case = TRUE) && all(file.exists(files)) &&
+      requireNamespace("showtext", quietly = TRUE) && requireNamespace("sysfonts", quietly = TRUE)) {
+    if (!"NimbusSansQC" %in% sysfonts::font_families())
+      sysfonts::font_add("NimbusSansQC", regular = files[1], bold = files[2])
+    return(list(mode = "showtext", family = "NimbusSansQC", message = NULL))
+  }
+  if (font_installed(font) && capabilities("cairo")) return(list(mode = "cairo", family = font, message = NULL))
+  list(mode = "builtin", family = "",
+       message = sprintf("Font '%s' is not in fonts/ and not installed: the figure uses Helvetica instead.", font))
+}
+
+#' Open a PDF / PNG device for the figure with the font set up; close it with close_device().
+open_device <- function(file, type = c("pdf", "png"), fi = qc_font_setup(), width = 11.69, height = 8.27) {
   type <- match.arg(type)
-  ok <- font_installed(font) && capabilities("cairo")
   if (type == "pdf") {
-    if (ok) grDevices::cairo_pdf(file, width = width, height = height, family = font)
-    else grDevices::pdf(file, width = width, height = height, family = if (grepl("nimbus", font, ignore.case = TRUE)) "NimbusSan" else "Helvetica")
+    if (fi$mode == "cairo") grDevices::cairo_pdf(file, width = width, height = height, family = fi$family)
+    else grDevices::pdf(file, width = width, height = height, family = "Helvetica")
   } else {
     grDevices::png(file, width = width, height = height, units = "in", res = 300,
-                   type = if (capabilities("cairo")) "cairo" else getOption("bitmapType"), family = if (ok) font else "sans")
+                   type = if (capabilities("cairo")) "cairo" else getOption("bitmapType"),
+                   family = if (fi$mode == "cairo") fi$family else "sans")
   }
-  invisible(ok)
+  if (fi$mode == "showtext") { showtext::showtext_opts(dpi = if (type == "png") 300 else 96); showtext::showtext_begin() }
+  invisible(fi)
+}
+close_device <- function(fi) {
+  if (fi$mode == "showtext") showtext::showtext_end()
+  invisible(grDevices::dev.off())
+}
+
+#' Use font family `fam` for all text of a ggplot (theme and text layers).
+set_family <- function(p, fam) {
+  if (is.null(p) || !nzchar(fam)) return(p)
+  p <- p + theme(text = element_text(family = fam))
+  for (i in seq_along(p$layers)) if (inherits(p$layers[[i]]$geom, "GeomText")) p$layers[[i]]$aes_params$family <- fam
+  p
 }
 
 #' Ring charts (one per matrix) and class bars; returns list(rings, classes) of ggplot objects.
@@ -101,10 +131,25 @@ qc_overview_plots <- function(st, cls, colours) {
   ring <- st |> count(matrix, status) |>
     mutate(matrix = factor(matrix, mx), status = factor(status, c("above LOD", "below LOD", "no LOD"))) |>
     arrange(matrix, status) |>
-    group_by(matrix) |> mutate(total = sum(n), pct = n / total, ymax = cumsum(n), ymin = ymax - n) |> ungroup()
+    # shares, not counts: each ring is a full circle even if serum and dISF have different totals
+    group_by(matrix) |> mutate(total = sum(n), pct = n / total, ymax = cumsum(n) / total, ymin = ymax - n / total) |>
+    # label just outside the ring, aligned away from it (justification follows the angle smoothly, so the gap
+    # to the ring stays even); two labels in the top band (e.g. a tiny "no LOD" slice) are pushed apart sideways
+    mutate(ang = 2 * pi * (ymin + ymax) / 2,
+           hjust = pmin(1, pmax(0, 0.5 - 2 * sin(ang))),
+           vjust = pmin(1, pmax(0, 0.5 - cos(ang))),
+           top = cos(ang) > 0.5,
+           pushed = sum(top) > 1 & top,
+           hjust = if (sum(top) > 1) if_else(top, if_else(sin(ang) == min(sin(ang)[top]), 1, 0), hjust) else hjust) |>
+    ungroup() |>
+    mutate(label = sprintf("%s\n%.0f%%", format(n, big.mark = ",", trim = TRUE), 100 * pct),
+           # a small gap between two labels pushed apart at the top
+           label = case_when(pushed & hjust == 1 ~ gsub("(\n|$)", "   \\1", label),
+                             pushed & hjust == 0 ~ gsub("(^|\n)", "\\1   ", label),
+                             TRUE ~ label))
   rings <- ggplot(ring) +
     geom_rect(aes(xmin = 2, xmax = 3.4, ymin = ymin, ymax = ymax, fill = status), colour = "white", linewidth = 0.8) +
-    geom_text(aes(x = 4.25, y = (ymin + ymax) / 2, label = sprintf("%s\n%.0f%%", format(n, big.mark = ",", trim = TRUE), 100 * pct)),
+    geom_text(aes(x = 3.75, y = (ymin + ymax) / 2, hjust = hjust, vjust = vjust, label = label),
               size = 4, lineheight = 0.9, colour = "grey15") +
     geom_text(data = distinct(ring, matrix, total), aes(x = 0, y = 0, label = paste0(matrix, "\n", format(total, big.mark = ",", trim = TRUE))),
               size = 5.2, fontface = "bold", lineheight = 0.95, colour = "grey10") +
@@ -137,15 +182,17 @@ qc_overview_plots <- function(st, cls, colours) {
 }
 
 #' Draw the one-page overview on the open device.
-draw_qc_overview <- function(plots, title = "Olink Explore HT: proteins above and below LOD", no_class_note = NULL) {
+draw_qc_overview <- function(plots, title = "Olink Explore HT: proteins above and below LOD", no_class_note = NULL, family = "") {
+  plots <- lapply(plots, set_family, fam = family)
+  fg <- if (nzchar(family)) list(fontfamily = family) else list()
   grid.newpage()
   pushViewport(viewport(layout = grid.layout(3, 1, heights = unit(c(0.06, 0.36, 0.58), "npc"))))
-  grid.text(title, x = 0.02, just = "left", gp = gpar(fontsize = 16, fontface = "bold"), vp = viewport(layout.pos.row = 1))
+  grid.text(title, x = 0.02, just = "left", gp = do.call(gpar, c(list(fontsize = 16, fontface = "bold"), fg)), vp = viewport(layout.pos.row = 1))
   # layout cell first, then the shifted viewport (x / width are ignored when given together with layout.pos.row)
   pushViewport(viewport(layout.pos.row = 2))
   print(plots$rings, vp = viewport(x = if (is.null(plots$classes)) 0.5 else 0.62, width = 0.76))
   popViewport()
   if (!is.null(plots$classes)) print(plots$classes, vp = viewport(layout.pos.row = 3))
-  else if (!is.null(no_class_note)) grid.text(no_class_note, vp = viewport(layout.pos.row = 3), gp = gpar(fontsize = 11, col = "grey30"))
+  else if (!is.null(no_class_note)) grid.text(no_class_note, vp = viewport(layout.pos.row = 3), gp = do.call(gpar, c(list(fontsize = 11, col = "grey30"), fg)))
   popViewport()
 }

@@ -408,6 +408,7 @@ used when dISF is compared with serum) and `RELAD_AD_vs_HC` (RELAD/RELAD2). Rela
 | `config.yml` | All settings: file paths, thresholds, focus proteins, mast cell markers, TNFRSF9 targets, CSV separator |
 | `scripts/01_…` to `scripts/19_…` | One script per analysis step. The number is also the step in `start_at`. |
 | `R/` | Shared functions used by the scripts |
+| `fonts/` | Nimbus Sans font files (free, URW) used for the QC overview figure |
 | `tools/download_hpa.R` | Optional: downloads the public Human Protein Atlas table for steps 02b and 17 |
 | `data/` | Your input files (not uploaded to GitHub) – see `data/README.md` |
 | `output/` | All results (not uploaded to GitHub) |

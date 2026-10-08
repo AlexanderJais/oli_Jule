@@ -76,7 +76,7 @@ them 01 → 19.
   cancer related, immune related, essential (DepMap), intracellular, membrane, extracellular / secreted.
   A protein can belong to several classes, so the bars do not add up to the total.
 
-**Output:** `qc_overview.pdf` and `.png` (font Nimbus Sans, Helmholtz Munich violet / pink), `qc_overview.xlsx`
+**Output:** `qc_overview.pdf` and `.png` (font Nimbus Sans from the project's `fonts/` folder, drawn as outlines, so it looks the same on every computer - the text in the figure can't be selected; Helmholtz Munich violet / pink), `qc_overview.xlsx`
 (numbers, one row per protein with its classes, counts under other above-LOD definitions, proteins not found in the atlas).
 
 **Keep in mind:** the protein classes need the Human Protein Atlas table (`source("tools/download_hpa.R")` once);

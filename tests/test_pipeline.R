@@ -97,6 +97,8 @@ stopifnot(
     all(qo_cls$total[qo_cls$class == "GPCRs"] == gpcr_expected) &&
     (isTRUE(qo_prot$`Nuclear receptors`[qo_prot$Assay == "EBI3_IL27"]) || !"EBI3_IL27" %in% qo_prot$Assay),
   "QC overview page cannot be drawn (steps 02b / 18)" = draw_ok,
+  "QC overview PDF does not embed Nimbus Sans (step 02b; needs package showtext)" = !requireNamespace("showtext", quietly = TRUE) ||
+    !any(grepl("NimbusSanL", readLines(file.path(out, "qc_overview/qc_overview.pdf"), warn = FALSE), useBytes = TRUE)),
   "QC overview: not all 14 protein classes present (step 02b)" = n_distinct(qo_cls$class) == 14 && all(c("Serum", "dISF") %in% qo_cls$matrix),
   "QC overview: HPA matching (missing / symbol / synonym) wrong (step 02b)" =
     setequal(qo_nh$OlinkID, readLines("data_sim/hpa_missing.txt")),

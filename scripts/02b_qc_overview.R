@@ -96,8 +96,16 @@ note <- if (!is.null(cls)) NULL else if (is.null(hpa))
   "Protein classes: no Olink assay could be given a class from the Human Protein Atlas table - check the file and its 'Protein class' column."
 methods <- sprintf("Detection overview (step 02b): above LOD = %s. Samples: %s. Protein classes: %s", readme$note[2], readme$note[3], readme$note[5])
 saveRDS(list(plots = plots, note = note, methods = methods), out_path(cfg, "qc_overview", "plots.rds"))
-real_font <- open_device(out_path(cfg, "qc_overview", "qc_overview.pdf"), "pdf", font); draw_qc_overview(plots, no_class_note = note); invisible(grDevices::dev.off())
-open_device(out_path(cfg, "qc_overview", "qc_overview.png"), "png", font); draw_qc_overview(plots, no_class_note = note); invisible(grDevices::dev.off())
-if (!real_font) msg(if (!capabilities("cairo")) "R has no cairo support here: the PDF uses R's built-in Nimbus Sans substitute (looks like Helvetica)."
-                    else sprintf("Font '%s' is not installed on this computer: the PDF uses R's built-in Nimbus Sans substitute (looks like Helvetica). Install the font for exact rendering.", font))
+fi <- qc_font_setup(font)
+if (fi$mode != "showtext" && grepl("^nimbus ?sans", font, ignore.case = TRUE) && file.exists("fonts/NimbusSans-Regular.otf"))
+  stop("Package 'showtext' is needed to draw the figure in Nimbus Sans (fonts/): run source(\"install_packages.R\"), ",
+       "restart R, then start_at <- \"02b\"; source(\"run_all.R\").", call. = FALSE)
+for (type in c("pdf", "png")) {
+  open_device(out_path(cfg, "qc_overview", paste0("qc_overview.", type)), type, fi)
+  draw_qc_overview(plots, no_class_note = note, family = fi$family)
+  close_device(fi)
+}
+msg("Font: %s (%s)", font, switch(fi$mode, showtext = "from fonts/, drawn as outlines - no font listed in the PDF, text not selectable",
+                                   cairo = "installed font, embedded", builtin = "Helvetica instead"))
+if (!is.null(fi$message)) msg("WARNING: %s", fi$message)
 msg("QC overview: %s", file.path(cfg$paths$output, "qc_overview"))

@@ -35,7 +35,7 @@ qc_overview:
                               # analysis_filter = the step 02 detection filter (>= that share in at least one group;
                               # serum then covers all cohorts, as that filter does)
   serum_cohorts: ["MicroAD"]  # serum samples counted; [] = all serum cohorts (RELAD, RELAD2, LEIP too)
-  font: "Nimbus Sans"         # used if installed; otherwise R's built-in Nimbus Sans substitute (PDF)
+  font: "Nimbus Sans"         # from fonts/, drawn as outlines by the package showtext (no installation of the font needed)
   colours: {above: "#69005F", below: "#FF506E", no_lod: "#BDBDBD"}   # Helmholtz Munich violet and pink
 
 # Statistics (steps 03-18; after changing fdr or min_group_n, rerun from step 04)
