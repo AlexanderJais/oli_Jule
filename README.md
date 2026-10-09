@@ -327,6 +327,13 @@ it, and whether the protein depends on age, sex, BMI, CRP, lipids … in healthy
 `leip_reference.xlsx` holds the summary, the clinical associations and the check of LEIP against
 the in-study healthy controls; the position of each sample is in `samples_vs_leip.csv`.
 
+### `leip_case/` – one Leipzig sample against the others (step 08b)
+By default the Leipzig sample without clinical data (LEIP_35; another one: `leip_case$case` in `config.yml`).
+`<case>_profile.pdf` page 1 shows what the proteins say about the person: sex, age, BMI, body fat,
+lipids, CRP, kidney function … each as estimate with 80 % range, as low / middle / high third of the
+Leipzig samples, or "not predictable". Page 2 shows the proteins that differ from the other Leipzig
+samples, page 3 the checks (duplicate, sample handling). The full tables are in `<case>_results.xlsx`.
+
 ### `focus/` – the pre-specified proteins (step 12)
 CD137 (TNFRSF9), CD137L (TNFSF9), KITLG, CPA4, FCER1A, TPSAB1, MS4A2, TPSD1, PNOC and POSTN.
 The list is set in `config.yml` under `focus_proteins`.
@@ -409,6 +416,7 @@ used when dISF is compared with serum) and `RELAD_AD_vs_HC` (RELAD/RELAD2). Rela
 | `scripts/01_…` to `scripts/19_…` | One script per analysis step. The number is also the step in `start_at`. |
 | `R/` | Shared functions used by the scripts |
 | `fonts/` | Nimbus Sans font files (free, URW) used for the QC overview figure |
+| `reference/` | Published protein models (age clock, BMI score) and marker lists for step 08b – see `reference/README.md` |
 | `tools/download_hpa.R` | Optional: downloads the public Human Protein Atlas table for steps 02b and 17 |
 | `data/` | Your input files (not uploaded to GitHub) – see `data/README.md` |
 | `output/` | All results (not uploaded to GitHub) |
@@ -428,6 +436,7 @@ used when dISF is compared with serum) and `RELAD_AD_vs_HC` (RELAD/RELAD2). Rela
 | 06 | `06_isf_vs_serum.R` | dISF–serum correlation | `isf_serum/` |
 | 07 | `07_enrichment.R` | Pathways | `enrichment/` |
 | 08 | `08_leip_reference.R` | LEIP population reference | `leip_reference/` |
+| 08b | `08b_leip_case.R` | One Leipzig sample vs the others: differing proteins, estimated sex, age, BMI … | `leip_case/` |
 | 09 | `09_isf_profile.R` | dISF proteome profile (aim 1) | `isf_profile/` |
 | 10 | `10_matrix_comparison.R` | dISF vs serum proteome (aim 2) | `matrix_comparison/` |
 | 11 | `11_trajectories.R` | Disease course (aim 3) | `trajectories/` |

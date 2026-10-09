@@ -94,6 +94,7 @@ write_output_guide <- function(cfg) {
     "isf_serum",           "06",  "Do dISF and serum levels go together (per patient)?",                     "isf_serum_correlation.csv",
     "enrichment",          "07",  "Pathways behind the group differences",                                   "gsea_results.csv",
     "leip_reference",      "08",  "Population reference (LEIP biobank) for dISF-serum linked proteins",      "leip_reference.xlsx",
+    "leip_case",           "08b", "One Leipzig sample vs the others; its estimated sex, age, BMI ...",   "<case>_profile.pdf, _results.xlsx",
     "isf_profile",         "09",  "What is measurable in dISF; heatmaps",                                    "isf_profile.xlsx, *_heatmap.png",
     "matrix_comparison",   "10",  "dISF vs serum proteome: detection, enrichment in dISF, shared signals",   "matrix_comparison.xlsx",
     "trajectories",        "11",  "Disease course: after clearing, before relapse; per-patient plots",       "trajectory_results.csv, plots/",

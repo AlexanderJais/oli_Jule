@@ -110,6 +110,9 @@ clin <- tibble(Olink_SampleID = lp$SampleID, SubjectID = lp$SubjectID, SORB_barc
                C_HDL = round(rnorm(n, 1.6, 0.4), 2), C_LDL = round(rnorm(n, 3, 0.8), 2),
                C_TRIGLY = round(rlnorm(n, 0, 0.4), 2), c_apo = round(rnorm(n, 1.7, 0.3), 2),
                MDRD_kurz = round(rnorm(n, 98, 12), 1), Gluc0_mg_dl = round(rnorm(n, 92, 7), 1))
+# LEIP_35 has no clinical data; the simulation still gives it known values (step 08b test checks they are recovered)
+clin[n, c("sex_MF", "age", "BMI", "C_HDL")] <- list("M", 72, 31, 1.1)
+write.csv(clin[n, c("Olink_SampleID", "SubjectID", "sex_MF", "age", "BMI", "C_HDL")], "data_sim/leip_case_truth.csv", row.names = FALSE)
 clin[n, -(1:2)] <- NA                      # like LEIP_35: no clinical data
 writexl::write_xlsx(list(Key_parameters = clin), "data_sim/LEIP_clinical.xlsx")
 message("Synthetic manifest: ", nrow(manifest), " samples -> data_sim/manifest.xlsx, data_sim/LEIP_clinical.xlsx")

@@ -38,6 +38,17 @@ qc_overview:
   font: "Nimbus Sans"         # from fonts/, drawn as outlines by the package showtext (no installation of the font needed)
   colours: {above: "#69005F", below: "#FF506E", no_lod: "#BDBDBD"}   # Helmholtz Munich violet and pink
 
+# One Leipzig sample against the other Leipzig samples (step 08b): which proteins differ, and what the proteome
+# says about the person (sex, age, BMI, lipids ...). Only Leipzig serum samples are used.
+leip_case:
+  case: auto                  # auto = the one Leipzig sample without clinical data; or a SampleID / SubjectID, e.g. "LEIP_35"
+  fdr: 0.05                   # a protein differs if FDR < fdr ...
+  min_diff: 0.5               # ... and |difference to the reference median| >= this (NPX, log2; 0.5 = 1.4-fold) and outside the reference range
+  r2_estimate: 0.3            # clinical value given as a number with 80% range if the model explains >= 30% (leave-one-out) ...
+  r2_tertile: 0.1             # ... as low / middle / high third if 10-30%; otherwise "not predictable"
+  apo_analyte: auto           # which apolipoprotein c_apo is: auto (from its correlation with HDL / LDL), ApoA1, ApoB or Lpa
+  n_perm: 999                 # permutations per clinical value
+
 # Statistics (steps 03-18; after changing fdr or min_group_n, rerun from step 04)
 stats:
   fdr: 0.05                   # a result is significant if its adjusted p-value (FDR) is below this

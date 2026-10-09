@@ -86,6 +86,12 @@ source("R/qc_overview.R")
 grDevices::pdf(NULL)
 draw_ok <- !inherits(try(draw_qc_overview(readRDS(file.path(out, "qc_overview/plots.rds"))$plots), silent = TRUE), "try-error")
 invisible(grDevices::dev.off())
+# step 08b: LEIP_35 is male, 72 years, BMI 31, HDL 1.1 in the simulation (no clinical data in the files) and has 4 raised proteins
+lc_file <- file.path(out, "leip_case/LEIP_35_results.xlsx")
+lc_prof <- readxl::read_excel(lc_file, "profile"); lc_hits <- readxl::read_excel(lc_file, "proteins") |> filter(hit)
+lc_truth <- read.csv("data_sim/leip_case_truth.csv")
+lc_age <- lc_prof |> filter(parameter == "age")
+lc_shift <- truth$Assay[truth$role == "LEIP_case_shift"]
 st_demo <- c("scripts/01_x.R", "scripts/02_x.R", "scripts/02b_x.R", "scripts/03_x.R", "scripts/19_x.R")
 stopifnot(
   "QC overview: totals differ from the number of proteins per matrix (step 02b)" =
@@ -104,6 +110,11 @@ stopifnot(
     setequal(qo_nh$OlinkID, readLines("data_sim/hpa_missing.txt")),
   "QC overview: files missing (step 02b)" = all(c("README", "overall", "by_class", "definitions", "proteins") %in% qo_xl) &&
     file.exists(file.path(out, "qc_overview/qc_overview.pdf")) && file.exists(file.path(out, "qc_overview/qc_overview.png")),
+  "Leipzig case: sex not recovered (step 08b)" = lc_prof$verdict[lc_prof$parameter == "sex"] == "male",
+  "Leipzig case: age not recovered (step 08b)" = lc_age$verdict == "estimate" && lc_age$lo80 <= lc_truth$age && lc_age$hi80 >= lc_truth$age,
+  "Leipzig case: glucose should be not predictable (step 08b)" = lc_prof$verdict[lc_prof$parameter == "Gluc0_mg_dl"] == "not predictable",
+  "Leipzig case: raised proteins not found or false hits (step 08b)" = sum(lc_hits$Assay %in% lc_shift) >= 3 && sum(!lc_hits$Assay %in% lc_shift) <= 1,
+  "Leipzig case: PDF missing (step 08b)" = file.exists(file.path(out, "leip_case/LEIP_35_profile.pdf")),
   "step selection by script number wrong (run_all.R)" =
     identical(select_steps(st_demo, 2), st_demo[2:5]) && identical(select_steps(st_demo, 3), st_demo[4:5]) &&
     identical(select_steps(st_demo, "02b"), st_demo[3:5]) && inherits(try(select_steps(st_demo, 20), silent = TRUE), "try-error"),

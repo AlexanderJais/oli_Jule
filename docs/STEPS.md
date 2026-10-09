@@ -1,6 +1,6 @@
 # What each step does – in plain words
 
-The pipeline has 20 steps (`scripts/01_…` to `scripts/19_…`, plus `02b`). `run_all.R` runs them in this
+The pipeline has 21 steps (`scripts/01_…` to `scripts/19_…`, plus `02b` and `08b`). `run_all.R` runs them in this
 order, and each step uses what the earlier ones saved. For every step this page explains the
 **question** it answers, **what it does**, **what comes out**, and **what to keep in mind**.
 
@@ -14,7 +14,7 @@ the [README](../README.md#2-words-you-will-meet). The statistical details are in
 | B. Group comparisons, protein by protein | 04 dISF models · 05 serum models · 07 pathways |
 | C. Skin fluid and blood together | 06 correlation · 08 LEIP reference · 10 aim 2 (dISF vs serum proteome) · 14 overlap per visit |
 | D. The three study aims | 09 aim 1 (dISF profile) · 11 aim 3 (disease course) · 13 visit by visit · *aim 2 = step 10, see part C* |
-| E. Specific proteins and questions | 12 focus proteins · 15 key questions · 16 TNFRSF9 correlations · 17 serum vs dISF signatures |
+| E. Specific proteins and questions | 12 focus proteins · 15 key questions · 16 TNFRSF9 correlations · 17 serum vs dISF signatures · 08b one Leipzig sample |
 | F. Reporting | 18 executive summary · 19 data export |
 
 The steps are grouped by topic, so below they are not in number order; `run_all.R` always runs
@@ -181,6 +181,18 @@ CPUO patients and healthy volunteers, so it can partly reflect group differences
 - whether LEIP differs from the in-study healthy controls (biobank handling).
 
 **Output:** `leip_reference.xlsx`.
+
+### Step 08b – One Leipzig sample against the others (`08b_leip_case.R` → `leip_case/`)
+**Question:** Which proteins differ in one Leipzig sample (by default the one without clinical data, LEIP_35) from the other 34 Leipzig samples, and what do its proteins say about the person?
+
+**What it does** (Leipzig samples only):
+1. **Checks:** Olink QC, share of values below LOD, a duplicate check (is the sample more similar to one other sample than any two others are?), its position among the others (PCA), and blood-handling scores (platelets, red cells, neutrophils).
+2. **Proteins that differ:** a single-case test per protein (Crawford–Howell). A protein differs if FDR < 0.05, the difference to the median is ≥ 0.5 NPX (1.4-fold) and the value lies outside the range of the other samples. To show what is normal, each of the other samples is tested against the rest in the same way. Each protein that differs is listed with its link to age, sex, BMI … in the other samples, plus Hallmark pathways.
+3. **The person:** estimates of sex, age, BMI, body fat, waist-hip ratio, HOMA-IR, glucose, CRP, cholesterol, HDL, LDL, triglycerides, apolipoprotein and eGFR. Each uses a published protein model or a fixed marker list (`reference/`), re-scaled on the Leipzig samples with clinical data. Leave-one-out tests show how well each one works. A value is given as a number with an 80 % range only if it explains ≥ 30 % of the variation and beats chance; as low / middle / high third if 10–30 %; otherwise "not predictable". Sex comes from 14 sex-specific proteins (PSA is not on the panel).
+
+**Output:** `<case>_profile.pdf` (page 1: the estimates; page 2: the proteins that differ; page 3: the checks), `<case>_results.xlsx`.
+
+**Keep in mind:** the estimates come from 34 reference people. Expect a few values to be estimable (sex nearly always; age to about ±7–10 years; HDL, body fat), many to be "not predictable" (e.g. glucose). With ~5,400 proteins every person lies outside the others' range for ~300 proteins by chance; the calibration sheet shows whether the case is more unusual than the others.
 
 ### Step 10 – The dISF proteome vs the serum proteome (`10_matrix_comparison.R` → `matrix_comparison/`)
 **Question (aim 2):** What does skin fluid contain that blood doesn't, and do skin and blood show the same disease signals?
