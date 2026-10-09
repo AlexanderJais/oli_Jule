@@ -92,9 +92,20 @@ qc_font_setup <- function(font = "Nimbus Sans", font_dir = "fonts") {
       sysfonts::font_add("NimbusSansQC", regular = files[1], bold = files[2])
     return(list(mode = "showtext", family = "NimbusSansQC", message = NULL))
   }
-  if (font_installed(font) && capabilities("cairo")) return(list(mode = "cairo", family = font, message = NULL))
+  if (font_installed(font) && cairo_works()) return(list(mode = "cairo", family = font, message = NULL))
   list(mode = "builtin", family = "",
        message = sprintf("Font '%s' is not in fonts/ and not installed: the figure uses Helvetica instead.", font))
+}
+
+#' Can R open a cairo device? On a Mac without XQuartz, capabilities("cairo") can be TRUE although cairo fails to load.
+cairo_works <- function() {
+  if (!isTRUE(suppressWarnings(capabilities("cairo")))) return(FALSE)
+  f <- tempfile(fileext = ".png"); d <- grDevices::dev.cur()
+  suppressWarnings(try(grDevices::png(f, type = "cairo"), silent = TRUE))
+  ok <- grDevices::dev.cur() != d
+  if (ok) grDevices::dev.off()
+  unlink(f)
+  ok
 }
 
 #' Open a PDF / PNG device for the figure with the font set up; close it with close_device().
@@ -104,9 +115,16 @@ open_device <- function(file, type = c("pdf", "png"), fi = qc_font_setup(), widt
     if (fi$mode == "cairo") grDevices::cairo_pdf(file, width = width, height = height, family = fi$family)
     else grDevices::pdf(file, width = width, height = height, family = "Helvetica")
   } else {
-    grDevices::png(file, width = width, height = height, units = "in", res = 300,
-                   type = if (capabilities("cairo")) "cairo" else getOption("bitmapType"),
-                   family = if (fi$mode == "cairo") fi$family else "sans")
+    # first PNG type that opens: cairo for an installed font, quartz on a Mac (no XQuartz needed), then cairo / the default
+    types <- unique(c(if (fi$mode == "cairo") "cairo", if (Sys.info()[["sysname"]] == "Darwin") "quartz", "cairo", getOption("bitmapType")))
+    d <- grDevices::dev.cur()
+    for (ty in types) {
+      suppressWarnings(try(grDevices::png(file, width = width, height = height, units = "in", res = 300, type = ty,
+                                          family = if (fi$mode == "cairo") fi$family else "sans"), silent = TRUE))
+      if (grDevices::dev.cur() != d) break
+    }
+    if (grDevices::dev.cur() == d)
+      stop("Could not open a PNG device (tried ", paste(types, collapse = ", "), "). On a Mac, installing XQuartz (xquartz.org) also helps.", call. = FALSE)
   }
   if (fi$mode == "showtext") { showtext::showtext_opts(dpi = if (type == "png") 300 else 96); showtext::showtext_begin() }
   invisible(fi)
