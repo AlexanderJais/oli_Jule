@@ -12,8 +12,9 @@ if (is.na(old_cfg)) Sys.unsetenv("OLINK_CONFIG") else Sys.setenv(OLINK_CONFIG = 
 stopifnot("Leipzig analysis failed on simulated data" = run_ok)
 
 out <- "output_sim/leipzig"
-f <- file.path(out, "LEIP_35_results.xlsx")
-prof <- readxl::read_excel(f, "profile"); hits <- readxl::read_excel(f, "proteins") |> filter(hit)
+prof <- readxl::read_excel(file.path(out, "LEIP_35_profile.xlsx"), "profile")
+mk <- file.path(out, "LEIP_35_markers.xlsx")
+hits <- tibble(Assay = c(readxl::read_excel(mk, "elevated")$Assay, readxl::read_excel(mk, "decreased")$Assay))
 truth <- read.csv("data_sim/leip_case_truth.csv")
 shift <- read_csv("data_sim/truth.csv", show_col_types = FALSE) |> filter(role == "LEIP_case_shift") |> pull(Assay)
 age <- prof |> filter(parameter == "age")
@@ -24,6 +25,7 @@ stopifnot(
   "age not recovered" = age$verdict == "estimate" && age$lo80 <= truth$age && age$hi80 >= truth$age,
   "glucose should be not predictable" = prof$verdict[prof$parameter == "Gluc0_mg_dl"] == "not predictable",
   "raised proteins not found, or false hits" = sum(hits$Assay %in% shift) >= 3 && sum(!hits$Assay %in% shift) <= 1,
-  "PDF missing" = file.exists(file.path(out, "LEIP_35_profile.pdf"))
+  "raised proteins not in the elevated sheet" = all(readxl::read_excel(mk, "elevated")$Assay %in% shift),
+  "PDFs missing" = all(file.exists(file.path(out, c("LEIP_35_profile.pdf", "LEIP_35_markers.pdf", "LEIP_35_markers.png"))))
 )
 msg("All Leipzig checks passed.")

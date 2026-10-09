@@ -2,7 +2,8 @@
 # proteins differ, and what the proteome says about the person (sex, age, BMI, body fat, lipids, CRP, kidney function ...).
 # The case is the Leipzig sample without clinical data (leip_case$case: auto) or the SampleID / SubjectID in config.yml.
 # In:  output/leipzig/data/leipzig_npx.rds (part 1); reference/ (published protein models, see reference/README.md)
-# Out: output/leipzig/<case>_profile.pdf, <case>_profile.png, <case>_results.xlsx
+# Out: output/leipzig/<case>_markers.xlsx/.pdf/.png (proteins elevated / decreased vs the other Leipzig samples),
+#      <case>_profile.xlsx/.pdf/.png (what the proteome says about the person; checks)
 
 source("R/utils.R")
 source("R/report.R")
@@ -212,25 +213,42 @@ markers_tbl <- tibble(Assay = intersect(panel, colnames(X))) |>
          ref_median = map_dbl(Assay, \(a) median(X[ref_ids, a], na.rm = TRUE)),
          ref_max = map_dbl(Assay, \(a) max(X[ref_ids, a], na.rm = TRUE)))
 
-# ---- Excel ------------------------------------------------------------------------------------------------------------
-readme <- tibble(sheet = c("profile", "sex_markers", "proteins", "hits", "only_in_case", "calibration", "checks", "pathways", "markers", "model_check", "how"),
+# ---- Excel: markers -------------------------------------------------------------------------------------------------
+mk_tbl <- res |> transmute(Assay, OlinkID, UniProt, direction = if_else(diff > 0, "elevated", "decreased"),
+                           significant = hit, nominal_p_below_0.05 = p < 0.05,
+                           case_NPX = case_value, leipzig_median = ref_median, leipzig_min = ref_min, leipzig_max = ref_max,
+                           difference_log2 = diff, fold_change = 2^diff, z, robust_z, percentile_in_leipzig = percentile, p, FDR = q,
+                           outside_leipzig_range = outside_range, case_below_LOD, often_extreme_in_other_samples = often_extreme,
+                           linked_clinical_values = clinical_link) |>
+  mutate(across(where(is.double), \(v) signif(v, 4)))
+elevated <- mk_tbl |> filter(significant, direction == "elevated") |> arrange(desc(difference_log2))
+decreased <- mk_tbl |> filter(significant, direction == "decreased") |> arrange(difference_log2)
+rule <- sprintf("FDR < %.2f, at least %.1f-fold (|difference| >= %.1f NPX) and outside the range of the other %d Leipzig samples", fdr, 2^min_diff, min_diff, length(ref_ids))
+mk_readme <- tibble(sheet = c("elevated", "decreased", "all_proteins", "only_in_case", "calibration", "pathways"),
+  content = c(sprintf("%d proteins significantly HIGHER in %s than in the other Leipzig samples (%s)", nrow(elevated), case_name, rule),
+              sprintf("%d proteins significantly LOWER in %s than in the other Leipzig samples (same rule)", nrow(decreased), case_name),
+              sprintf("all %d tested proteins (detected in >= %.0f%% of the other Leipzig samples), sorted by p; test: Crawford-Howell single-case t-test, BH FDR", nrow(res), 100 * min_det),
+              sprintf("proteins detected only in %s, or not detected only in %s (not testable, descriptive)", case_name, case_name),
+              "number of significant proteins when each other Leipzig sample is tested against the rest in the same way (what is normal)",
+              "Hallmark pathways ranked by the t statistics (GSEA)"))
+writexl::write_xlsx(list(README = mk_readme, elevated = elevated, decreased = decreased, all_proteins = mk_tbl,
+                         only_in_case = only_case, calibration = calib_tbl, pathways = pw),
+                    out_path(cfg, "leipzig", paste0(case_name, "_markers.xlsx")))
+msg("%d proteins elevated, %d decreased -> %s_markers.xlsx / .pdf", nrow(elevated), nrow(decreased), case_name)
+
+# ---- Excel: profile -------------------------------------------------------------------------------------------------
+readme <- tibble(sheet = c("profile", "sex_markers", "checks", "single_markers", "model_check", "how"),
   content = c(sprintf("what the proteome says about %s: estimate with 80%% range, or low/middle/high third of the reference, or 'not predictable'", case_name),
               "the sex-specific proteins: value of the case (z vs the reference) and which sex each one points to",
-              sprintf("all %d tested proteins: Crawford-Howell single-case test against the %d other Leipzig samples", nrow(res), length(ref_ids)),
-              sprintf("proteins that differ: FDR < %.2f, |difference| >= %.1f NPX (log2) and outside the range of the reference", fdr, min_diff),
-              "proteins detected only in the case, or not detected only in the case (descriptive)",
-              "number of hits when every reference sample is tested against the others in the same way",
               "sample quality, duplicate check, handling scores",
-              "Hallmark pathways ranked by the case's t statistics (GSEA)",
               "selected single proteins as percentile among the reference",
               "leave-one-out predictions of each reference sample: how well each model works",
               paste("Estimates are calibrated on the Leipzig samples with clinical data, each model fixed in advance (reference/README.md).",
                     sprintf("A value is given as a number with an 80%% range only if the model explains >= %.0f%% of the variation in leave-one-out tests (r2_cv) and beats chance (permutation, BH q < 0.05);", 100 * r2_estimate),
                     sprintf("low/middle/high third if it explains %.0f-%.0f%%; otherwise 'not predictable'. Research use only.", 100 * r2_tertile, 100 * r2_estimate))))
 writexl::write_xlsx(list(README = readme, profile = profile_out, sex_markers = sx$markers |> mutate(across(where(is.double), \(v) round(v, 2))),
-                         proteins = res, hits = res |> filter(hit), only_in_case = only_case, calibration = calib_tbl, checks = checks,
-                         pathways = pw, markers = markers_tbl, model_check = bind_rows(loo_tbl) |> relocate(parameter, SampleID)),
-                    out_path(cfg, "leipzig", paste0(case_name, "_results.xlsx")))
+                         checks = checks, single_markers = markers_tbl, model_check = bind_rows(loo_tbl) |> relocate(parameter, SampleID)),
+                    out_path(cfg, "leipzig", paste0(case_name, "_profile.xlsx")))
 
 # ---- figures ------------------------------------------------------------------------------------------------------------
 fi <- qc_font_setup(cfg$qc_overview$font %||% "Nimbus Sans")
@@ -271,20 +289,29 @@ p_sex <- if (nrow(sexd)) ggplot(sexd, aes(score, grp, colour = grp == case_name)
 page1_note <- patchwork::plot_annotation(title = sprintf("%s: what the proteome says (calibrated on %d Leipzig samples)", case_name, nrow(clin)),
                              subtitle = "grey: reference samples; violet: estimate for the case with 80% range; shaded: estimated third of the reference")
 
-top <- res |> filter(hit) |> slice_head(n = 12)
-if (!nrow(top)) top <- res |> slice_head(n = 12)
-lab <- res |> filter(hit) |> slice_head(n = 25)
-p_volc <- ggplot(res, aes(diff, -log10(p))) + geom_point(aes(colour = hit), size = 1) +
-  scale_colour_manual(values = c(`FALSE` = "grey70", `TRUE` = violet), guide = "none") +
+# markers: every significant protein, the other Leipzig samples centred on their median (grey) and the case
+sig <- bind_rows(elevated, decreased)
+shown <- if (nrow(sig)) sig else mk_tbl |> slice_head(n = 20)
+shown <- shown |> arrange(difference_log2)
+ttl <- if (nrow(sig)) sprintf("%s vs %d other Leipzig samples: %d proteins elevated, %d decreased", case_name, length(ref_ids), nrow(elevated), nrow(decreased)) else
+  sprintf("%s vs %d other Leipzig samples: no protein significant - the 20 lowest p values are shown", case_name, length(ref_ids))
+marker_page <- function(a) {
+  d <- map(a, \(x) tibble(Assay = x, d = X[ref_ids, x] - median(X[ref_ids, x], na.rm = TRUE))) |> bind_rows() |> mutate(Assay = factor(Assay, a))
+  cs <- shown |> filter(Assay %in% a) |> mutate(Assay = factor(Assay, a))
+  ggplot(d, aes(d, Assay)) + geom_vline(xintercept = 0, colour = "grey80") +
+    geom_jitter(height = 0.15, width = 0, colour = "grey60", size = 1) +
+    geom_point(data = cs, aes(difference_log2, Assay, colour = direction), shape = 18, size = 3.5) +
+    scale_colour_manual(values = c(elevated = violet, decreased = pink), name = case_name) +
+    labs(x = "difference to the Leipzig median (NPX, log2; +1 = twice as high)", y = NULL, title = ttl,
+         subtitle = paste0("significant: ", rule, ". Grey: the other Leipzig samples")) + th
+}
+pages_mk <- split(as.character(shown$Assay), ceiling(seq_len(nrow(shown)) / 45)) |> map(marker_page)
+lab <- res |> filter(hit) |> slice_head(n = 30)
+p_volc <- ggplot(res |> mutate(cl = case_when(hit & diff > 0 ~ "elevated", hit ~ "decreased", TRUE ~ "not significant")), aes(diff, -log10(p))) +
+  geom_point(aes(colour = cl), size = 1) +
+  scale_colour_manual(values = c(elevated = violet, decreased = pink, `not significant` = "grey75"), name = NULL) +
   geom_text(data = lab, aes(label = Assay), size = 2.6, vjust = -0.6, check_overlap = TRUE) +
-  labs(x = "difference to the reference median (NPX, log2)", y = "-log10 p",
-       title = sprintf("%d of %d proteins differ (FDR < %.2f, >= %.1f NPX, outside the reference range)", sum(res$hit), nrow(res), fdr, min_diff)) + th
-strip_df <- map(top$Assay, \(a) tibble(Assay = a, value = X[c(ref_ids, case_id), a], is_case = c(ref_ids, case_id) == case_id)) |> bind_rows() |>
-  mutate(Assay = factor(Assay, top$Assay))
-p_strip <- ggplot(strip_df, aes(Assay, value)) + geom_jitter(data = \(d) filter(d, !is_case), width = 0.15, height = 0, colour = "grey55", size = 1.2) +
-  geom_point(data = \(d) filter(d, is_case), colour = violet, size = 3, shape = 18) +
-  labs(x = NULL, y = "NPX", title = if (any(res$hit)) "Strongest differences" else "No protein differs - lowest p values shown") + th +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+  labs(x = "difference to the Leipzig median (NPX, log2)", y = "-log10 p", title = sprintf("All %d tested proteins", nrow(res))) + th
 
 p_cor <- ggplot(tibble(r = r_pairs), aes(r)) + geom_histogram(bins = 40, fill = "grey75") +
   geom_vline(xintercept = r_case[1:3], colour = violet) +
@@ -300,14 +327,18 @@ p_cal <- ggplot(calib_tbl, aes(n_hits, fill = is_case)) + geom_histogram(binwidt
 fam <- fi$family
 sf <- function(p) set_family(p, fam)
 page1 <- patchwork::wrap_plots(compact(list(sf(p_sex), sf(p_prof))), ncol = 1, heights = if (is.null(p_sex)) 1 else c(1, 5)) + page1_note
-page2 <- sf(p_volc) / sf(p_strip)
 page3 <- (sf(p_cor) | sf(p_pca)) / sf(p_cal)
-if (nzchar(fam)) { page1 <- page1 & theme(text = element_text(family = fam)); page2 <- page2 & theme(text = element_text(family = fam)); page3 <- page3 & theme(text = element_text(family = fam)) }
-pdf_file <- out_path(cfg, "leipzig", paste0(case_name, "_profile.pdf"))
-open_device(pdf_file, "pdf", fi)
-for (pg in list(page1, page2, page3)) print(pg)
+if (nzchar(fam)) { page1 <- page1 & theme(text = element_text(family = fam)); page3 <- page3 & theme(text = element_text(family = fam)) }
+open_device(out_path(cfg, "leipzig", paste0(case_name, "_profile.pdf")), "pdf", fi)
+for (pg in list(page1, page3)) print(pg)
 close_device(fi)
 open_device(out_path(cfg, "leipzig", paste0(case_name, "_profile.png")), "png", fi)
 print(page1)
+close_device(fi)
+open_device(out_path(cfg, "leipzig", paste0(case_name, "_markers.pdf")), "pdf", fi)
+for (pg in c(pages_mk, list(p_volc))) print(sf(pg))
+close_device(fi)
+open_device(out_path(cfg, "leipzig", paste0(case_name, "_markers.png")), "png", fi)
+print(sf(pages_mk[[1]]))
 close_device(fi)
 msg("Leipzig case analysis: %s", file.path(cfg$paths$output, "leipzig"))

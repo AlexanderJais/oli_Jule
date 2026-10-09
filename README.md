@@ -453,10 +453,11 @@ source("run_leipzig.R")
 ```
 
 Results in `output/leipzig/`:
-- `LEIP_35_profile.pdf` – page 1: what the proteins say about the person (sex, age, BMI, body fat, lipids, CRP,
-  kidney function …: estimate with 80 % range, low / middle / high third of the 34, or "not predictable");
-  page 2: the proteins that differ from the other 34; page 3: checks (duplicate, sample handling).
-- `LEIP_35_results.xlsx` – all tables. Method: `docs/STEPS.md`, part G.
+- `LEIP_35_markers.pdf` / `.png` and `LEIP_35_markers.xlsx` – the proteins significantly **elevated** or
+  **decreased** in LEIP_35 compared with the other 34 (sheets `elevated`, `decreased`, `all_proteins`).
+- `LEIP_35_profile.pdf` / `.xlsx` – what the proteins say about the person (sex, age, BMI, body fat, lipids, CRP,
+  kidney function …: estimate with 80 % range, low / middle / high third of the 34, or "not predictable"), and
+  checks (duplicate, sample handling). Method: `docs/STEPS.md`, part G.
 
 ## 9. Something went wrong?
 
