@@ -1,4 +1,4 @@
-# Single-case analysis of one Leipzig biobank sample against the other Leipzig samples (step 08b):
+# Single-case analysis of one Leipzig biobank sample against the other Leipzig samples (run_leipzig.R):
 # which proteins differ, and what the proteome says about the person's clinical values.
 # Only Leipzig (LEIP) serum samples are used.
 
@@ -6,16 +6,14 @@ clinical_cols <- c("age", "sex", "BMI", "WHR", "c_fett", "HOMA_IR", "c_CRP", "C_
                    "C_TRIGLY", "c_apo", "MDRD_kurz", "Gluc0_mg_dl")
 
 #' The Leipzig sample to profile: "auto" = the one Leipzig sample without clinical data; otherwise a SampleID or SubjectID.
-#' Returns NULL (step skipped) if "auto" finds no such sample or several.
 resolve_case <- function(samples, case = "auto") {
   num <- intersect(setdiff(clinical_cols, "sex"), names(samples))
   if (identical(case, "auto") || is.null(case)) {
-    if (!length(num)) { msg("No LEIP clinical data (paths$leip_clinical) - step 08b skipped; set leip_case$case to profile a sample."); return(NULL) }
+    if (!length(num)) { stop("No LEIP clinical data (paths$leip_clinical): set leip_case$case to the sample to profile.", call. = FALSE) }
     no_clin <- samples$SampleID[rowSums(!is.na(samples[num])) == 0]
     if (length(no_clin) != 1) {
-      msg("leip_case$case = auto: %d Leipzig samples without clinical data (%s) - step 08b skipped; set leip_case$case in config.yml.",
-          length(no_clin), paste(no_clin, collapse = ", "))
-      return(NULL)
+      stop(sprintf("leip_case$case = auto: %d Leipzig samples without clinical data (%s); set leip_case$case in config.yml.",
+                   length(no_clin), paste(no_clin, collapse = ", ")), call. = FALSE)
     }
     return(no_clin)
   }

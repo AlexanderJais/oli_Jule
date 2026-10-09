@@ -16,7 +16,7 @@ if (cfg_run$config_file != "config.yml")
 rscript <- file.path(R.home("bin"), "Rscript")   # works on Windows/RStudio without Rscript on PATH
 steps <- c("scripts/01_metadata.R", "scripts/02_import_qc.R", "scripts/02b_qc_overview.R", "scripts/03_explore.R",
            "scripts/04_isf_models.R", "scripts/05_serum_models.R", "scripts/06_isf_vs_serum.R",
-           "scripts/07_enrichment.R", "scripts/08_leip_reference.R", "scripts/08b_leip_case.R", "scripts/09_isf_profile.R",
+           "scripts/07_enrichment.R", "scripts/08_leip_reference.R", "scripts/09_isf_profile.R",
            "scripts/10_matrix_comparison.R", "scripts/11_trajectories.R",
            "scripts/12_focus_proteins.R", "scripts/13_visit_course.R", "scripts/14_serum_vs_disf.R", "scripts/15_key_questions.R",
            "scripts/16_tnfrsf9_correlation.R", "scripts/17_disf_serum_signatures.R",

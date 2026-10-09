@@ -31,7 +31,7 @@ th2 <- c("CCL17", "CCL22", "CCL18", "IL13", "IL4", "POSTN", "CCL26", "IL5", "TSL
          "S100A9", "IL19", "IL22", "IL36G", "TNFRSF9")   # TNFRSF9 = CD137 (focus protein)
 focus_sim <- c("TNFSF9", "KITLG", "CPA4", "FCER1A", "TPSAB1", "TPSD1", "KIT",   # other focus proteins (step 12)
                "IL33", "CSF2", "IL6", "IL18", "CXCL8", "IL1RL1")                  # TNFRSF9 correlation targets (step 16)
-# proteins carrying sex / age / BMI / HDL biology in the Leipzig samples (step 08b), placed after the role blocks
+# proteins carrying sex / age / BMI / HDL biology in the Leipzig samples (tests/test_leipzig.R), placed after the role blocks
 leip_sex_m <- c("ACRV1", "EDDM3B", "INSL3", "SPINT3", "TEX101", "MSMB"); leip_sex_f <- c("XG", "PZP", "ZP4", "PAEP")
 leip_age <- c("EDA2R", "GDF15", "CXCL17", "ELN", "SCARF2", "LTBP2", "CDCP1", "NEFL", "GFAP", "PTPRR")
 leip_bmi <- c(LEP = 0.15, FABP4 = 0.12, IGFBP1 = -0.12, ADM = 0.08, AGER = -0.08)
@@ -53,7 +53,7 @@ role <- case_when(
   eff(76, 85)   ~ "Serum_relapse",       # RELAD/RELAD2 relapse
   eff(86, 95)   ~ "Biobank_shift",       # LEIP pre-analytical shift
   eff(96, 100)  ~ "ISF_lesion_restricted", # below LOD in ISF except in lesional skin
-  eff(150, 153) ~ "LEIP_case_shift",     # higher only in LEIP_35 (step 08b)
+  eff(150, 153) ~ "LEIP_case_shift",     # higher only in LEIP_35 (tests/test_leipzig.R)
   eff(n_assays - 19, n_assays) ~ "ISF_undetected",
   TRUE ~ "null"
 )

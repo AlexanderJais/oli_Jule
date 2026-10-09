@@ -1,6 +1,6 @@
-# Reference models and marker lists (step 08b)
+# Reference models and marker lists (Leipzig analysis, `run_leipzig.R`)
 
-Public, published information only – no study data. Used by `scripts/08b_leip_case.R` to estimate the
+Public, published information only – no study data. Used by `leipzig/02_case.R` to estimate the
 clinical values of one Leipzig sample from its proteins. Every model is fixed here in advance; the pipeline
 only re-scales it (offset and slope, plus sex where listed) on the Leipzig samples with clinical data.
 

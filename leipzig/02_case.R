@@ -1,9 +1,8 @@
-# 08b - One Leipzig sample against the other Leipzig samples: which proteins differ, and what the proteome
-#       says about the person (sex, age, BMI, body fat, lipids, CRP, kidney function, ...).
-# Only Leipzig (LEIP) serum samples are used. The case is the Leipzig sample without clinical data (leip_case$case: auto)
-# or the SampleID / SubjectID given in config.yml.
-# In:  output of steps 01-02; reference/ (published protein models and marker lists, see reference/README.md)
-# Out: output/leip_case/<case>_profile.pdf, <case>_profile.png, <case>_results.xlsx
+# Leipzig analysis, part 2 (run with run_leipzig.R): one Leipzig sample against the other Leipzig samples - which
+# proteins differ, and what the proteome says about the person (sex, age, BMI, body fat, lipids, CRP, kidney function ...).
+# The case is the Leipzig sample without clinical data (leip_case$case: auto) or the SampleID / SubjectID in config.yml.
+# In:  output/leipzig/data/leipzig_npx.rds (part 1); reference/ (published protein models, see reference/README.md)
+# Out: output/leipzig/<case>_profile.pdf, <case>_profile.png, <case>_results.xlsx
 
 source("R/utils.R")
 source("R/report.R")
@@ -11,7 +10,6 @@ source("R/qc_overview.R")
 source("R/leip_case.R")
 suppressPackageStartupMessages(library(patchwork))
 cfg <- load_config()
-clear_outputs(cfg, "leip_case")
 lc <- cfg$leip_case %||% list()
 fdr <- lc$fdr %||% 0.05; min_diff <- lc$min_diff %||% 0.5; n_perm <- lc$n_perm %||% 999
 min_det <- cfg$qc$min_detect_frac %||% 0.5
@@ -19,13 +17,11 @@ r2_estimate <- lc$r2_estimate %||% 0.3; r2_tertile <- lc$r2_tertile %||% 0.1
 colours <- cfg$qc_overview$colours %||% list(above = "#69005F", below = "#FF506E")
 set.seed(lc$seed %||% 1)
 
-clean <- read_step(cfg, "data", "npx_clean.rds", step = "scripts/02_import_qc.R")
-leip <- clean |> filter(matrix == "Serum", cohort == "LEIP")
-if (n_distinct(leip$SampleID) < 11) { msg("Fewer than 11 Leipzig serum samples - step 08b skipped."); quit(save = "no") }
+leip <- read_step(cfg, "leipzig", "data", "leipzig_npx.rds", step = "leipzig/01_import.R (source(\"run_leipzig.R\"))")
+if (n_distinct(leip$SampleID) < 11) stop("Fewer than 11 Leipzig serum samples - no analysis possible.", call. = FALSE)
 samples <- leip |> distinct(SampleID, .keep_all = TRUE) |> select(SampleID, SubjectID, plate, any_of(clinical_cols)) |>
   mutate(across(any_of(setdiff(clinical_cols, "sex")), parse_clinical), across(any_of("sex"), parse_sex))
 case_id <- resolve_case(samples, lc$case %||% "auto")
-if (is.null(case_id)) quit(save = "no")
 case_name <- coalesce(samples$SubjectID[samples$SampleID == case_id], case_id)
 ref_ids <- setdiff(samples$SampleID, case_id)
 clin <- samples |> filter(SampleID %in% ref_ids)
@@ -234,7 +230,7 @@ readme <- tibble(sheet = c("profile", "sex_markers", "proteins", "hits", "only_i
 writexl::write_xlsx(list(README = readme, profile = profile_out, sex_markers = sx$markers |> mutate(across(where(is.double), \(v) round(v, 2))),
                          proteins = res, hits = res |> filter(hit), only_in_case = only_case, calibration = calib_tbl, checks = checks,
                          pathways = pw, markers = markers_tbl, model_check = bind_rows(loo_tbl) |> relocate(parameter, SampleID)),
-                    out_path(cfg, "leip_case", paste0(case_name, "_results.xlsx")))
+                    out_path(cfg, "leipzig", paste0(case_name, "_results.xlsx")))
 
 # ---- figures ------------------------------------------------------------------------------------------------------------
 fi <- qc_font_setup(cfg$qc_overview$font %||% "Nimbus Sans")
@@ -307,11 +303,11 @@ page1 <- patchwork::wrap_plots(compact(list(sf(p_sex), sf(p_prof))), ncol = 1, h
 page2 <- sf(p_volc) / sf(p_strip)
 page3 <- (sf(p_cor) | sf(p_pca)) / sf(p_cal)
 if (nzchar(fam)) { page1 <- page1 & theme(text = element_text(family = fam)); page2 <- page2 & theme(text = element_text(family = fam)); page3 <- page3 & theme(text = element_text(family = fam)) }
-pdf_file <- out_path(cfg, "leip_case", paste0(case_name, "_profile.pdf"))
+pdf_file <- out_path(cfg, "leipzig", paste0(case_name, "_profile.pdf"))
 open_device(pdf_file, "pdf", fi)
 for (pg in list(page1, page2, page3)) print(pg)
 close_device(fi)
-open_device(out_path(cfg, "leip_case", paste0(case_name, "_profile.png")), "png", fi)
+open_device(out_path(cfg, "leipzig", paste0(case_name, "_profile.png")), "png", fi)
 print(page1)
 close_device(fi)
-msg("Leipzig case analysis: %s", file.path(cfg$paths$output, "leip_case"))
+msg("Leipzig case analysis: %s", file.path(cfg$paths$output, "leipzig"))
