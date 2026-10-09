@@ -54,6 +54,7 @@ role <- case_when(
   eff(86, 95)   ~ "Biobank_shift",       # LEIP pre-analytical shift
   eff(96, 100)  ~ "ISF_lesion_restricted", # below LOD in ISF except in lesional skin
   eff(150, 153) ~ "LEIP_case_shift",     # higher only in LEIP_35 (tests/test_leipzig.R)
+  eff(154, 156) ~ "LEIP_case_down",      # lower only in LEIP_35 (tests/test_leipzig.R)
   eff(n_assays - 19, n_assays) ~ "ISF_undetected",
   TRUE ~ "null"
 )
@@ -104,7 +105,7 @@ leip_bio <- function(s) {
   a <- assays$Assay
   (s$sex == "M") * 2 * (a %in% leip_sex_m) + (s$sex == "F") * 1.5 * (a %in% leip_sex_f) +
     0.05 * (s$age - 50) * (a %in% leip_age) + coalesce(unname(leip_bmi[a]), 0) * (s$BMI - 24) + (s$sex == "F") * (a == "LEP") +
-    1.2 * (s$C_HDL - 1.6) * (a %in% leip_hdl) + 3 * (s$SampleID == lt$Olink_SampleID) * (assays$role == "LEIP_case_shift")
+    1.2 * (s$C_HDL - 1.6) * (a %in% leip_hdl) + 3 * (s$SampleID == lt$Olink_SampleID) * ((assays$role == "LEIP_case_shift") - (assays$role == "LEIP_case_down"))
 }
 
 npx <- matrix(NA_real_, nrow(samples), n_assays)
