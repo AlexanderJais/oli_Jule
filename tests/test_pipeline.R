@@ -86,6 +86,7 @@ source("R/qc_overview.R")
 grDevices::pdf(NULL)
 draw_ok <- !inherits(try(draw_qc_overview(readRDS(file.path(out, "qc_overview/plots.rds"))$plots), silent = TRUE), "try-error")
 invisible(grDevices::dev.off())
+only_isf <- readxl::read_excel(file.path(out, "qc_overview/dISF_only_proteins.xlsx"), "dISF_only")
 st_demo <- c("scripts/01_x.R", "scripts/02_x.R", "scripts/02b_x.R", "scripts/03_x.R", "scripts/19_x.R")
 stopifnot(
   "QC overview: totals differ from the number of proteins per matrix (step 02b)" =
@@ -104,6 +105,8 @@ stopifnot(
     setequal(qo_nh$OlinkID, readLines("data_sim/hpa_missing.txt")),
   "QC overview: files missing (step 02b)" = all(c("README", "overall", "by_class", "definitions", "proteins") %in% qo_xl) &&
     file.exists(file.path(out, "qc_overview/qc_overview.pdf")) && file.exists(file.path(out, "qc_overview/qc_overview.png")),
+  "dISF-only proteins not listed (step 02b)" = setequal(only_isf$Assay, truth$Assay[truth$role == "Serum_undetected"]) &&
+    file.exists(file.path(out, "qc_overview/dISF_only_proteins.pdf")),
   "step selection by script number wrong (run_all.R)" =
     identical(select_steps(st_demo, 2), st_demo[2:5]) && identical(select_steps(st_demo, 3), st_demo[4:5]) &&
     identical(select_steps(st_demo, "02b"), st_demo[3:5]) && inherits(try(select_steps(st_demo, 20), silent = TRUE), "try-error"),

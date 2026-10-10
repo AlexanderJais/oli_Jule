@@ -6,6 +6,7 @@ with `source("run_all.R")`.
 
 | Date | Change | Rerun from | New packages? |
 |---|---|---|---|
+| 2026-10-10 | **Which proteins are measurable in dISF only?** On matched dISF / serum samples (same person and visit, skin types pooled): `qc_overview/dISF_only_proteins.xlsx` (overall, per protein class, serum only) and `dISF_only_proteins.pdf`. `run_qc_overview.R` runs only steps 01, 02 and 02b. | 02b (`source("run_qc_overview.R")`) | – |
 | 2026-10-08 | **QC overview figure fixed:** Nimbus Sans now comes from the project's `fonts/` folder and is drawn as outlines (before, the PDF only referred to the font and other computers showed a substitute; now it looks the same everywhere, but the figure text can't be selected). Ring-chart labels keep an even distance from the rings; rings always form full circles. | 02b | `showtext` |
 | 2026-10-08 | **New QC step 02b: proteins above / below LOD** → `qc_overview/`: ring charts (serum, dISF) and the distribution across 14 protein classes (Human Protein Atlas), Nimbus Sans, Helmholtz violet / pink. Also a page in the executive summary. `start_at` now uses script numbers (`start_at <- "02b"` works). For the classes run `source("tools/download_hpa.R")` once. | 02b | – (font Nimbus Sans optional) |
 | 2026-10-04 | **Easier navigation.** `output/00_FOLDER_GUIDE.pdf` (one page: what is in each folder). Model results also as Excel with one sheet per volcano panel: `models/ISF_results.xlsx`, `Serum_results.xlsx`, `ISF_by_visit_results.xlsx`. Heatmaps without plate bar. | 04 | – |

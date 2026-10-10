@@ -46,6 +46,7 @@ role <- case_when(
   eff(76, 85)   ~ "Serum_relapse",       # RELAD/RELAD2 relapse
   eff(86, 95)   ~ "Biobank_shift",       # LEIP pre-analytical shift
   eff(96, 100)  ~ "ISF_lesion_restricted", # below LOD in ISF except in lesional skin
+  eff(111, 115) ~ "Serum_undetected",    # above LOD in dISF, below LOD in serum (step 02b dISF-only list)
   eff(n_assays - 19, n_assays) ~ "ISF_undetected",
   TRUE ~ "null"
 )
@@ -60,6 +61,8 @@ isf_off[assays$role == "ISF_lesion_restricted"] <- -6.5
 isf_off[eff(101, 110)] <- 2        # clearly enriched in ISF relative to serum
 isf_off[assays$Assay == "IL4"] <- -5   # IL4 mostly below LOD in dISF (step 16 detectability check)
 nc_lvl <- base - 5.5                       # negative control background
+serum_off <- if_else(assays$role == "Serum_undetected", -5.5, 0)   # serum at background ...
+isf_off[assays$role == "Serum_undetected"] <- -1.5                 # ... dISF well above it
 
 # ---- samples and controls ------------------------------------------------------------
 ctrl <- layout |>
@@ -108,6 +111,7 @@ for (i in seq_len(nrow(samples))) {
   if (!is.na(s$visit) && s$cohort == "MicroAD") x <- x + z_sv[sv_key[i], ] * (assays$role == "ISF_serum_coupled")
   if (isf) x <- x + w_cd137[i] * (is_cd137 | is_il33)
   if (!isf) {
+    x <- x + serum_off
     if (s$group == "AD") x <- x + 0.7 * (assays$role == "Serum_AD_vs_HC")
     if (s$cohort %in% c("RELAD", "RELAD2") && identical(s$relapse, "relapse"))
       x <- x + 0.8 * (assays$role == "Serum_relapse")

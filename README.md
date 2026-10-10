@@ -210,6 +210,11 @@ LOD in at least 50 % of the samples of that matrix; serum = MicroAD samples (set
 `qc_overview`). The classes come from the Human Protein Atlas; a protein can belong to several classes.
 `qc_overview.xlsx` has the numbers, one row per protein with its classes, and the counts under other
 above-LOD definitions (e.g. the analysis filter of step 02).
+**Which proteins are measurable in dISF only?** Based on matched samples: every dISF sample with a serum sample of
+the same person and visit, and those serum samples (dISF against serum only, skin types pooled).
+`dISF_only_proteins.xlsx` lists every protein above LOD in ≥ 50 % of the matched dISF but < 50 % of the
+matched serum samples (sheet `dISF_only`, one sheet per protein class, plus `serum_only`);
+`dISF_only_proteins.pdf` shows them per class (% of serum vs % of dISF samples above LOD, the clearest labelled).
 
 ### `qc/` – quality control (step 02)
 | File | Content |

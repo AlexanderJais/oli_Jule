@@ -1,6 +1,7 @@
 # 02b - QC overview: how many Olink proteins are above / below LOD in serum and dISF, overall and per protein class
 # In:  output of steps 01-02; optional Human Protein Atlas table (paths$hpa, tools/download_hpa.R) for the protein classes
-# Out: output/qc_overview/qc_overview.pdf + .png (ring charts + class bars), qc_overview.xlsx, csv tables, plots.rds
+# Out: output/qc_overview/qc_overview.pdf + .png (ring charts + class bars), qc_overview.xlsx, csv tables, plots.rds;
+#      dISF_only_proteins.xlsx + .pdf/.png (which proteins are above LOD in dISF but not in serum: matched samples, per protein class)
 # Settings: config.yml -> qc_overview (rule, serum cohorts, font, colours); the threshold is qc$min_detect_frac.
 
 source("R/utils.R")
@@ -89,6 +90,32 @@ writexl::write_xlsx(Filter(\(x) nrow(x) > 0, list(README = readme, overall = ove
                                                  proteins = proteins, not_in_HPA = not_in_hpa)),
                     out_path(cfg, "qc_overview", "qc_overview.xlsx"))
 
+# ---- which proteins are above LOD in dISF only (matched dISF / serum samples, per protein class) ------------------------
+ms <- matched_samples(clean)
+samples_lab <- sprintf("Matched samples (same person and visit, MicroAD): %d dISF and %d serum samples of %d persons",
+                       sum(ms$matrix == "ISF"), sum(ms$matrix == "Serum"), n_distinct(ms$SubjectID))
+msg(samples_lab)
+dw <- detected_where(clean, ms, min_f, if ("in_HPA" %in% names(proteins)) proteins else NULL)
+only_isf <- dw |> filter(detected_in == "dISF only") |> arrange(desc(pct_dISF_above_LOD), pct_serum_above_LOD)
+info_cols <- setdiff(names(dw), names(qc_protein_classes))
+sheet_name <- function(x) str_sub(str_replace_all(str_trim(str_remove(x, " \\(.*$")), "[/\\\\?*:\\[\\]]", "-"), 1, 31)
+per_class <- if (is.null(cls)) list() else
+  map(set_names(names(qc_protein_classes), sheet_name(names(qc_protein_classes))), \(cl) only_isf |> filter(.data[[cl]] %in% TRUE) |> select(all_of(info_cols)))
+only_readme <- tibble(sheet = c("(samples used)", "dISF_only", "<class>", "serum_only", "all_proteins"),
+  content = c(samples_lab,
+              sprintf("%d proteins above LOD in >= %.0f%% of the matched dISF samples but in < %.0f%% of the matched serum samples, sorted by %% of dISF samples above LOD",
+                      nrow(only_isf), 100 * min_f, 100 * min_f),
+              "the same list for one protein class (Human Protein Atlas; a protein can be in several classes)",
+              sprintf("%d proteins above LOD in the matched serum samples but not in dISF", sum(dw$detected_in == "serum only")),
+              "every protein: % of matched dISF and serum samples above LOD and where it is above LOD"))
+writexl::write_xlsx(c(list(README = only_readme, dISF_only = only_isf |> select(all_of(info_cols))),
+                      Filter(\(x) nrow(x) > 0, per_class),
+                      list(serum_only = dw |> filter(detected_in == "serum only") |> select(all_of(info_cols)),
+                           all_proteins = dw |> select(all_of(info_cols)))),
+                    out_path(cfg, "qc_overview", "dISF_only_proteins.xlsx"))
+msg("%d proteins above LOD in dISF only, %d in serum only (matched samples) -> qc_overview/dISF_only_proteins.xlsx / .pdf",
+    nrow(only_isf), sum(dw$detected_in == "serum only"))
+
 # ---- figure -----------------------------------------------------------------------------------------------------------
 plots <- qc_overview_plots(st, cls, colours)
 note <- if (!is.null(cls)) NULL else if (is.null(hpa))
@@ -103,6 +130,12 @@ if (fi$mode != "showtext" && grepl("^nimbus ?sans", font, ignore.case = TRUE) &&
 for (type in c("pdf", "png")) {
   open_device(out_path(cfg, "qc_overview", paste0("qc_overview.", type)), type, fi)
   draw_qc_overview(plots, no_class_note = note, family = fi$family)
+  close_device(fi)
+}
+p_only <- set_family(dISF_only_plot(dw, cls, colours, min_f, samples_lab), fi$family)
+for (type in c("pdf", "png")) {
+  open_device(out_path(cfg, "qc_overview", paste0("dISF_only_proteins.", type)), type, fi)
+  print(p_only)
   close_device(fi)
 }
 msg("Font: %s (%s)", font, switch(fi$mode, showtext = "from fonts/, drawn as outlines - no font listed in the PDF, text not selectable",

@@ -214,3 +214,53 @@ draw_qc_overview <- function(plots, title = "Olink Explore HT: proteins above an
   else if (!is.null(no_class_note)) grid.text(no_class_note, vp = viewport(layout.pos.row = 3), gp = do.call(gpar, c(list(fontsize = 11, col = "grey30"), fg)))
   popViewport()
 }
+
+#' Matched dISF / serum samples: MicroAD dISF samples and serum samples of the same person and visit (skin types pooled).
+matched_samples <- function(clean) {
+  ms <- clean |> filter(cohort == "MicroAD") |> distinct(SampleID, matrix, SubjectID, visit, state, group) |>
+    mutate(key = paste(SubjectID, coalesce(as.character(visit), "")))
+  ms |> filter(key %in% intersect(key[matrix == "ISF"], key[matrix == "Serum"]))
+}
+
+#' Per protein: % of the matched dISF and serum samples above LOD, and where it is above LOD
+#' (>= min_f of the samples): dISF only, serum only, both or neither. Class columns are taken from `classes`.
+detected_where <- function(clean, ms, min_f, classes = NULL) {
+  x <- clean |> filter(SampleID %in% ms$SampleID, !is.na(below_lod))
+  pct <- x |> group_by(OlinkID, Assay, UniProt, matrix) |> summarise(p = 100 * mean(!below_lod), .groups = "drop") |>
+    pivot_wider(names_from = matrix, values_from = p) |> rename(pct_dISF_above_LOD = ISF, pct_serum_above_LOD = Serum)
+  cl <- if (is.null(classes)) character() else intersect(names(qc_protein_classes), names(classes))
+  out <- pct |> filter(!is.na(pct_dISF_above_LOD), !is.na(pct_serum_above_LOD)) |>
+    mutate(detected_in = case_when(pct_dISF_above_LOD >= 100 * min_f & pct_serum_above_LOD >= 100 * min_f ~ "both",
+                                   pct_dISF_above_LOD >= 100 * min_f ~ "dISF only", pct_serum_above_LOD >= 100 * min_f ~ "serum only",
+                                   TRUE ~ "neither"),
+           across(c(pct_dISF_above_LOD, pct_serum_above_LOD), \(v) round(v, 1)))
+  if (length(cl)) out <- out |> left_join(classes |> select(OlinkID, all_of(cl)), by = "OlinkID") |>
+    mutate(across(all_of(cl), \(v) coalesce(v, FALSE)),
+           protein_classes = apply(as.matrix(pick(all_of(cl))), 1, \(r) paste(cl[r %in% TRUE], collapse = "; ")))
+  else out$protein_classes <- NA_character_
+  out |> relocate(detected_in, .after = UniProt) |> relocate(protein_classes, .before = any_of(cl))
+}
+
+#' Proteins above LOD in dISF only, per protein class: % of serum vs % of dISF samples above LOD, dISF-only proteins
+#' in violet and the clearest ones labelled.
+dISF_only_plot <- function(dw, cls, colours, min_f, samples_lab) {
+  d <- if (is.null(cls)) dw |> mutate(class = "all proteins") else dw |> inner_join(cls, by = "OlinkID", relationship = "many-to-many")
+  lev <- intersect(c(names(qc_protein_classes), "all proteins"), unique(d$class))
+  n_only <- d |> group_by(class) |> summarise(n = sum(detected_in == "dISF only"), .groups = "drop")
+  d <- d |> left_join(n_only, by = "class") |>
+    mutate(panel = factor(sprintf("%s: %d", class, n), sprintf("%s: %d", lev, n_only$n[match(lev, n_only$class)])))
+  lab <- d |> filter(detected_in == "dISF only") |> group_by(panel) |>
+    slice_max(pct_dISF_above_LOD - pct_serum_above_LOD, n = 6, with_ties = FALSE) |> ungroup()
+  ggplot(d, aes(pct_serum_above_LOD, pct_dISF_above_LOD)) +
+    geom_hline(yintercept = 100 * min_f, linetype = 2, colour = "grey60") + geom_vline(xintercept = 100 * min_f, linetype = 2, colour = "grey60") +
+    geom_point(data = \(x) filter(x, detected_in != "dISF only"), colour = "grey80", size = 0.6) +
+    geom_point(data = \(x) filter(x, detected_in == "dISF only"), colour = colours$above, size = 1) +
+    geom_text(data = lab, aes(label = Assay), size = 2.1, hjust = 0, nudge_x = 2, check_overlap = TRUE) +
+    facet_wrap(~panel, ncol = 5) + coord_cartesian(xlim = c(0, 100), ylim = c(0, 100)) +
+    labs(x = "% of matched serum samples above LOD", y = "% of matched dISF samples above LOD",
+         title = sprintf("%d proteins above LOD in dISF only (>= %.0f%% of dISF samples, < %.0f%% of serum samples)",
+                         sum(dw$detected_in == "dISF only"), 100 * min_f, 100 * min_f),
+         subtitle = paste0(samples_lab, ". Violet: dISF only (number per class in the panel title); grey: all other proteins")) +
+    theme_bw(base_size = 9) + theme(panel.grid.minor = element_blank(), strip.background = element_rect(fill = "grey95", colour = NA),
+                                    strip.text = element_text(hjust = 0))
+}
