@@ -215,6 +215,8 @@ the same person and visit, and those serum samples (dISF against serum only, ski
 `dISF_only_proteins.xlsx` lists every protein above LOD in ≥ 50 % of the matched dISF but < 50 % of the
 matched serum samples (sheet `dISF_only`; `by_class`: all of them grouped by protein class; one sheet per class; `serum_only`);
 `dISF_only_proteins.pdf` shows them per class (% of serum vs % of dISF samples above LOD, the clearest labelled).
+**Which pathways?** Sheet `pathways` and `dISF_only_pathways.pdf`: gene sets (MSigDB Hallmark, Reactome, GO:BP)
+over-represented among the dISF-only proteins, tested against all proteins measured in both matrices (not the genome).
 
 ### `qc/` – quality control (step 02)
 | File | Content |
