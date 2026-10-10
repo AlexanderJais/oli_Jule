@@ -80,7 +80,9 @@ them 01 → 19.
 person and visit, and those serum samples; skin types pooled): above LOD in ≥ 50 % of the dISF but < 50 % of the serum
 samples, listed overall and per protein class → `dISF_only_proteins.xlsx`, `dISF_only_proteins.pdf`. Their pathways: over-representation
 (fgsea `fora`) of MSigDB gene sets (`enrichment$collections`) among the dISF-only proteins, against the background of all proteins measured
-in both matrices (the Olink panel, not the genome; FDR by Benjamini-Hochberg) → sheet `pathways`, `dISF_only_pathways.pdf`.
+in both matrices (the Olink panel, not the genome; FDR by Benjamini-Hochberg) → sheet `pathways`, `dISF_only_pathways.pdf`; and the same within
+transcription factors, enzymes and intracellular proteins (background = the measured proteins of that class; gene sets with ≥ 5 of them) →
+sheets `pathways_<class>`, `dISF_only_pathways_<class>.pdf`.
 
 **Output:** `qc_overview.pdf` and `.png` (font Nimbus Sans from the project's `fonts/` folder, drawn as outlines, so it looks the same on every computer - the text in the figure can't be selected; Helmholtz Munich violet / pink), `qc_overview.xlsx`
 (numbers, one row per protein with its classes, counts under other above-LOD definitions, proteins not found in the atlas).

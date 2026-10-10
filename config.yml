@@ -37,6 +37,8 @@ qc_overview:
   serum_cohorts: ["MicroAD"]  # serum samples counted; [] = all serum cohorts (RELAD, RELAD2, LEIP too)
   font: "Nimbus Sans"         # from fonts/, drawn as outlines by the package showtext (no installation of the font needed)
   colours: {above: "#69005F", below: "#FF506E", no_lod: "#BDBDBD"}   # Helmholtz Munich violet and pink
+  pathway_classes: ["Transcription factors", "Enzymes (incl. metabolic)", "Intracellular"]   # dISF-only pathways also within these classes
+  pathway_min_size_class: 5   # within a class: smallest gene set (measured proteins of that class); overall: enrichment$min_size
 
 # Statistics (steps 03-18; after changing fdr or min_group_n, rerun from step 04)
 stats:

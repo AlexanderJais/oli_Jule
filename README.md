@@ -217,6 +217,9 @@ matched serum samples (sheet `dISF_only`; `by_class`: all of them grouped by pro
 `dISF_only_proteins.pdf` shows them per class (% of serum vs % of dISF samples above LOD, the clearest labelled).
 **Which pathways?** Sheet `pathways` and `dISF_only_pathways.pdf`: gene sets (MSigDB Hallmark, Reactome, GO:BP)
 over-represented among the dISF-only proteins, tested against all proteins measured in both matrices (not the genome).
+The same within transcription factors, enzymes and intracellular proteins (background = the measured proteins of that
+class): sheets `pathways_transcription_factors`, `pathways_enzymes`, `pathways_intracellular` and
+`dISF_only_pathways_<class>.pdf` (classes: `config.yml` → `qc_overview$pathway_classes`).
 
 ### `qc/` – quality control (step 02)
 | File | Content |
