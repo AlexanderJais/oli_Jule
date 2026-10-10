@@ -213,7 +213,7 @@ above-LOD definitions (e.g. the analysis filter of step 02).
 **Which proteins are measurable in dISF only?** Based on matched samples: every dISF sample with a serum sample of
 the same person and visit, and those serum samples (dISF against serum only, skin types pooled).
 `dISF_only_proteins.xlsx` lists every protein above LOD in ≥ 50 % of the matched dISF but < 50 % of the
-matched serum samples (sheet `dISF_only`, one sheet per protein class, plus `serum_only`);
+matched serum samples (sheet `dISF_only`; `by_class`: all of them grouped by protein class; one sheet per class; `serum_only`);
 `dISF_only_proteins.pdf` shows them per class (% of serum vs % of dISF samples above LOD, the clearest labelled).
 
 ### `qc/` – quality control (step 02)

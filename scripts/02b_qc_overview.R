@@ -108,7 +108,12 @@ only_readme <- tibble(sheet = c("(samples used)", "dISF_only", "<class>", "serum
               "the same list for one protein class (Human Protein Atlas; a protein can be in several classes)",
               sprintf("%d proteins above LOD in the matched serum samples but not in dISF", sum(dw$detected_in == "serum only")),
               "every protein: % of matched dISF and serum samples above LOD and where it is above LOD"))
+by_class <- if (is.null(cls)) tibble() else
+  cls |> mutate(class = factor(class, names(qc_protein_classes))) |> inner_join(only_isf |> select(all_of(info_cols)), by = "OlinkID") |>
+  arrange(class, desc(pct_dISF_above_LOD)) |> mutate(class = as.character(class)) |> select(class, OlinkID, Assay, UniProt, pct_dISF_above_LOD, pct_serum_above_LOD)
+only_readme <- only_readme |> add_row(sheet = "by_class", content = "all dISF-only proteins in one table, grouped by protein class (a protein appears once per class)", .after = 2)
 writexl::write_xlsx(c(list(README = only_readme, dISF_only = only_isf |> select(all_of(info_cols))),
+                      if (nrow(by_class)) list(by_class = by_class),
                       Filter(\(x) nrow(x) > 0, per_class),
                       list(serum_only = dw |> filter(detected_in == "serum only") |> select(all_of(info_cols)),
                            all_proteins = dw |> select(all_of(info_cols)))),
