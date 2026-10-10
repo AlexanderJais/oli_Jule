@@ -202,6 +202,7 @@ RELAD/RELAD2 serum, as separate tests.)
 | `data_flags.csv` | Inconsistencies found in the manifest, e.g. contradicting relapse labels or low sample volume. They are **flagged, not corrected**. |
 
 ### `qc_overview/` – how many proteins are measurable? (step 02b)
+Only this figure: `source("run_qc_overview.R")` (runs steps 01, 02 and 02b, nothing else).
 One page (`qc_overview.pdf` / `.png`): ring charts with the share of Olink proteins above and below LOD
 (total in the middle; serum left, dISF right), and below them the distribution across 14 protein classes
 (enzymes, transcription factors … extracellular / secreted). A protein counts as above LOD if it is above
