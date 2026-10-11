@@ -3,7 +3,7 @@
 # Out: output/qc_overview/qc_overview.pdf + .png (ring charts + class bars), qc_overview.xlsx, csv tables, plots.rds;
 #      dISF_only_proteins.xlsx + .pdf/.png (which proteins are above LOD in dISF but not in serum: matched samples, per protein class)
 #      and dISF_only_pathways*.pdf/.png (gene sets over-represented among them, overall and within selected protein classes;
-#      sheets pathways*)
+#      sheets pathways*); dISF_only_KEGG.xlsx + dISF_only_KEGG*.pdf/.png (the same with KEGG pathways)
 # Settings: config.yml -> qc_overview (rule, serum cohorts, font, colours); the threshold is qc$min_detect_frac.
 
 source("R/utils.R")
@@ -133,9 +133,9 @@ gene_sets <- tryCatch(map(cfg$enrichment$collections %||% c("H", "C2:CP:REACTOME
        else msigdbr::msigdbr(species = "Homo sapiens", collection = parts[1], subcollection = parts[2])
   split(g$gene_symbol, g$gs_name)
 }) |> unlist(recursive = FALSE), error = \(e) { msg("Pathway analysis skipped: %s", conditionMessage(e)); NULL })
-run_ora <- function(genes, universe, min_size) {
-  if (is.null(gene_sets) || !length(genes)) return(tibble())
-  fgsea::fora(gene_sets, genes = genes, universe = universe, minSize = min_size, maxSize = cfg$enrichment$max_size %||% 500) |>
+run_ora <- function(genes, universe, min_size, sets = gene_sets) {
+  if (is.null(sets) || !length(genes)) return(tibble())
+  fgsea::fora(sets, genes = genes, universe = universe, minSize = min_size, maxSize = cfg$enrichment$max_size %||% 500) |>
     as_tibble() |>
     transmute(collection = str_extract(pathway, "^[A-Z]+"), pathway = str_replace_all(str_remove(pathway, "^[A-Z]+_"), "_", " "),
               proteins_in_set = size, dISF_only_in_set = overlap,
@@ -147,14 +147,14 @@ pw_classes <- intersect(pw_classes, names(dw))                  # needs the prot
 ora_runs <- c(list(list(name = "all classes", key = "", rows = rep(TRUE, nrow(dw)), min_size = cfg$enrichment$min_size %||% 10)),
               map(pw_classes, \(cl) list(name = cl, key = paste0("_", str_to_lower(str_replace_all(str_trim(str_remove(cl, " \\(.*$")), "\\W+", "_"))),
                                          rows = dw[[cl]] %in% TRUE, min_size = qo$pathway_min_size_class %||% 5)))
-ora_res <- map(ora_runs, \(r) {
+ora_all <- function(sets, what) map(ora_runs, \(r) {
   u <- genes_of(dw$Assay[r$rows]); g <- genes_of(dw$Assay[r$rows & dw$detected_in == "dISF only"])
-  pw <- run_ora(g, u, r$min_size)
-  msg("Pathways of the dISF-only proteins (%s): %d dISF-only of %d measured; %d gene sets tested, %d with FDR < %.2f",
-      r$name, length(g), length(u), nrow(pw), sum(pw$FDR < cfg$stats$fdr), cfg$stats$fdr)
+  pw <- run_ora(g, u, r$min_size, sets)
+  msg("%s of the dISF-only proteins (%s): %d dISF-only of %d measured; %d gene sets tested, %d with FDR < %.2f",
+      what, r$name, length(g), length(u), nrow(pw), sum(pw$FDR < cfg$stats$fdr), cfg$stats$fdr)
   c(r, list(pw = pw, n_genes = length(g), n_universe = length(u)))
-})
-ora_res <- keep(ora_res, \(r) nrow(r$pw) > 0)
+}) |> keep(\(r) nrow(r$pw) > 0)
+ora_res <- ora_all(gene_sets, "Pathways")
 if (length(ora_res)) {
   f_x <- out_path(cfg, "qc_overview", "dISF_only_proteins.xlsx")
   sheets <- map(set_names(readxl::excel_sheets(f_x)), \(sh) readxl::read_excel(f_x, sh))
@@ -163,6 +163,20 @@ if (length(ora_res)) {
     "gene sets over-represented among the %d dISF-only proteins of %s (MSigDB %s, sets with >= %d measured proteins); background: the %d proteins of %s measured in both matrices; FDR = Benjamini-Hochberg",
     r$n_genes, r$name, paste(cfg$enrichment$collections, collapse = ", "), r$min_size, r$n_universe, r$name)), .after = 2)
   writexl::write_xlsx(c(sheets[1:2], pw_sheets, sheets[-(1:2)]), f_x)
+}
+
+# KEGG pathways (MSigDB KEGG legacy collection), same tests, in their own files
+kegg_sets <- tryCatch({
+  k <- msigdbr::msigdbr(species = "Homo sapiens", collection = "C2", subcollection = "CP:KEGG_LEGACY")
+  split(k$gene_symbol, k$gs_name)
+}, error = \(e) { msg("KEGG analysis skipped: %s", conditionMessage(e)); NULL })
+kegg_res <- if (is.null(kegg_sets)) list() else ora_all(kegg_sets, "KEGG pathways")
+if (length(kegg_res)) {
+  kegg_sheets <- set_names(map(kegg_res, "pw"), map_chr(kegg_res, \(r) if (r$key == "") "all_classes" else str_sub(str_remove(r$key, "^_"), 1, 31)))
+  writexl::write_xlsx(c(list(README = tibble(sheet = names(kegg_sheets), content = map_chr(kegg_res, \(r) sprintf(
+    "KEGG pathways over-represented among the %d dISF-only proteins of %s (MSigDB KEGG legacy, %d pathways; sets with >= %d measured proteins); background: the %d proteins of %s measured in both matrices; FDR = Benjamini-Hochberg",
+    r$n_genes, r$name, length(kegg_sets), r$min_size, r$n_universe, r$name)))), kegg_sheets),
+    out_path(cfg, "qc_overview", "dISF_only_KEGG.xlsx"))
 }
 
 # ---- figure -----------------------------------------------------------------------------------------------------------
@@ -187,7 +201,8 @@ for (type in c("pdf", "png")) {
   print(p_only)
   close_device(fi)
 }
-for (r in ora_res) {
+for (r in c(map(ora_res, \(x) c(x, list(db = "pathways", file = "dISF_only_pathways", src = paste("MSigDB", paste(cfg$enrichment$collections, collapse = ", "))))),
+            map(kegg_res, \(x) c(x, list(db = "KEGG pathways", file = "dISF_only_KEGG", src = "KEGG, MSigDB legacy collection"))))) {
   sig_pw <- r$pw |> filter(FDR < cfg$stats$fdr)
   top <- (if (nrow(sig_pw)) sig_pw else r$pw) |> slice_head(n = 25) |>
     mutate(label = str_trunc(paste0(str_to_sentence(pathway), " (", collection, ")"), 70), label = factor(label, rev(unique(label))))
@@ -197,13 +212,13 @@ for (r in ora_res) {
     scale_colour_gradient(low = colours$below, high = colours$above, name = "-log10 FDR") +
     scale_size_area(max_size = 6, name = "dISF-only\nproteins", breaks = \(l) unique(pmax(1, round(pretty(l))))) +
     labs(x = "fold enrichment (share among dISF-only proteins / share among all measured proteins)", y = NULL,
-         title = if (nrow(sig_pw)) sprintf("Pathways of the %d %s: %d gene sets with FDR < %.2f (top %d)", r$n_genes, what, nrow(sig_pw), cfg$stats$fdr, nrow(top))
-                 else sprintf("Pathways of the %d %s: none with FDR < %.2f - the %d lowest p values", r$n_genes, what, cfg$stats$fdr, nrow(top)),
-         subtitle = sprintf("Over-representation against the %d %s measured in both matrices (MSigDB %s)", r$n_universe,
-                            if (r$name == "all classes") "proteins" else r$name, paste(cfg$enrichment$collections, collapse = ", "))) +
+         title = if (nrow(sig_pw)) sprintf("%s of the %d %s: %d with FDR < %.2f (top %d)", str_to_sentence(r$db), r$n_genes, what, nrow(sig_pw), cfg$stats$fdr, nrow(top))
+                 else sprintf("%s of the %d %s: none with FDR < %.2f - the %d lowest p values", str_to_sentence(r$db), r$n_genes, what, cfg$stats$fdr, nrow(top)),
+         subtitle = sprintf("Over-representation against the %d %s measured in both matrices (%s)", r$n_universe,
+                            if (r$name == "all classes") "proteins" else r$name, r$src)) +
     theme_bw(base_size = 10) + theme(panel.grid.minor = element_blank(), plot.title.position = "plot")
   for (type in c("pdf", "png")) {
-    open_device(out_path(cfg, "qc_overview", paste0("dISF_only_pathways", r$key, ".", type)), type, fi)
+    open_device(out_path(cfg, "qc_overview", paste0(r$file, r$key, ".", type)), type, fi)
     print(set_family(p_pw, fi$family))
     close_device(fi)
   }

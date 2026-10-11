@@ -107,7 +107,9 @@ stopifnot(
     file.exists(file.path(out, "qc_overview/qc_overview.pdf")) && file.exists(file.path(out, "qc_overview/qc_overview.png")),
   "dISF-only proteins not listed (step 02b)" = setequal(only_isf$Assay, truth$Assay[truth$role == "Serum_undetected"]) &&
     file.exists(file.path(out, "qc_overview/dISF_only_proteins.pdf")) && file.exists(file.path(out, "qc_overview/dISF_only_pathways.pdf")) &&
-    "pathways" %in% readxl::excel_sheets(file.path(out, "qc_overview/dISF_only_proteins.xlsx")),
+    "pathways" %in% readxl::excel_sheets(file.path(out, "qc_overview/dISF_only_proteins.xlsx")) &&
+    "all_classes" %in% readxl::excel_sheets(file.path(out, "qc_overview/dISF_only_KEGG.xlsx")) &&
+    file.exists(file.path(out, "qc_overview/dISF_only_KEGG.pdf")),
   "step selection by script number wrong (run_all.R)" =
     identical(select_steps(st_demo, 2), st_demo[2:5]) && identical(select_steps(st_demo, 3), st_demo[4:5]) &&
     identical(select_steps(st_demo, "02b"), st_demo[3:5]) && inherits(try(select_steps(st_demo, 20), silent = TRUE), "try-error"),

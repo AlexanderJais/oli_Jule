@@ -220,6 +220,9 @@ over-represented among the dISF-only proteins, tested against all proteins measu
 The same within transcription factors, enzymes and intracellular proteins (background = the measured proteins of that
 class): sheets `pathways_transcription_factors`, `pathways_enzymes`, `pathways_intracellular` and
 `dISF_only_pathways_<class>.pdf` (classes: `config.yml` → `qc_overview$pathway_classes`).
+**KEGG:** the same analyses with KEGG pathways (MSigDB KEGG legacy collection, 186 pathways) in their own files:
+`dISF_only_KEGG.xlsx` (sheets `all_classes`, `transcription_factors`, `enzymes`, `intracellular`) and
+`dISF_only_KEGG.pdf`, `dISF_only_KEGG_<class>.pdf`.
 
 ### `qc/` – quality control (step 02)
 | File | Content |
