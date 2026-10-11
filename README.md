@@ -426,6 +426,7 @@ used when dISF is compared with serum) and `RELAD_AD_vs_HC` (RELAD/RELAD2). Rela
 | `R/` | Shared functions used by the scripts |
 | `fonts/` | Nimbus Sans font files (free, URW) used for the QC overview figure |
 | `tools/download_hpa.R` | Optional: downloads the public Human Protein Atlas table for steps 02b and 17 |
+| `run_visit3.R`, `visit3/` | Separate visit 3 analysis (see section 8) |
 | `tools/download_kegg.R` | Optional: downloads the current KEGG human pathways (free for academic use) for the KEGG analysis of step 02b |
 | `data/` | Your input files (not uploaded to GitHub) – see `data/README.md` |
 | `output/` | All results (not uploaded to GitHub) |
@@ -459,7 +460,25 @@ used when dISF is compared with serum) and `RELAD_AD_vs_HC` (RELAD/RELAD2). Rela
 
 ---
 
-## 8. Something went wrong?
+## 8. Separate analysis: visit 3 (`run_visit3.R`)
+Not part of `run_all.R`; runs only the import / QC and this analysis: `source("run_visit3.R")`. MicroAD, visit 3
+(`config.yml` → `visit3`). Healthy volunteers are sampled once, so their samples are the healthy reference.
+
+| Matrix | Comparisons (log2FC) |
+|---|---|
+| dISF | lesion site vs healthy skin (lesional − healthy); lesion site vs non-lesional skin of the same patients (lesional − non-lesional, paired) |
+| serum | AD vs healthy (serum has no skin site, so no lesional vs non-lesional comparison) |
+
+The lesion site is taken as sampled at visit 3, whatever its clinical state then (the Excel README gives how many
+are still lesional and how many cleared). Results in `output/visit3/`:
+- `V3_DEGs_dISF.xlsx`, `V3_DEGs_serum.xlsx` – differential proteins (limma), one sheet per comparison, all tested
+  proteins sorted by p with log2FC, FDR, means and % above LOD per group.
+- `volcano/` – one volcano plot per comparison, the 25 most regulated proteins labelled.
+- `V3_GSEA.xlsx`, `gsea/` – GSEA per comparison (MSigDB Hallmark, Reactome, GO:BP, and KEGG).
+- `V3_dISF_vs_serum.xlsx` / `.pdf` – AD vs healthy in both matrices: which proteins change only in dISF (and whether
+  they are measurable in serum at all), the fold changes side by side, and which gene sets are significant only in dISF.
+
+## 9. Something went wrong?
 
 | Message | Fix |
 |---|---|

@@ -41,6 +41,12 @@ qc_overview:
   pathway_classes: ["Transcription factors", "Enzymes (incl. metabolic)", "Intracellular"]   # dISF-only pathways also within these classes
   pathway_min_size_class: 5   # within a class: smallest gene set (measured proteins of that class); overall: enrichment$min_size
 
+# Dedicated visit analysis (source("run_visit3.R"), not part of run_all.R): dISF lesion site vs healthy skin and vs
+# non-lesional skin, serum AD vs healthy, at one visit; volcano plots, GSEA, dISF vs serum.
+visit3:
+  visit: V3                   # the visit analysed (healthy volunteers: all their samples, they are sampled once)
+  top_labels: 25              # proteins labelled in the volcano plots
+
 # Statistics (steps 03-18; after changing fdr or min_group_n, rerun from step 04)
 stats:
   fdr: 0.05                   # a result is significant if its adjusted p-value (FDR) is below this

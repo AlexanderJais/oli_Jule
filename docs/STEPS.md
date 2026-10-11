@@ -389,3 +389,19 @@ Writes the Olink data as CSV files for use in Excel, Prism, SPSS …:
 - the RELAD2 samples separately.
 
 Values below LOD are exported as measured, which is Olink's recommendation; the long table marks them.
+
+---
+
+## G. Separate: visit 3 (`run_visit3.R` → `visit3/`)
+**Question:** At visit 3, which proteins differ between lesional, non-lesional and healthy skin (dISF) and between AD and healthy (serum), and what does dISF show that serum does not?
+
+**What it does** (MicroAD; `config.yml` → `visit3`):
+1. **Differential proteins** with limma, separately per matrix. dISF: lesion site vs healthy skin, and lesion site vs non-lesional skin of the same patients (paired). Serum: AD vs healthy. Healthy volunteers are sampled once; their samples are the healthy reference. A protein is tested if it is above LOD in ≥ 50 % of the samples of at least one of the two groups; significant = FDR < 0.05.
+2. **Volcano plots**, the 25 most regulated proteins labelled (significant ones by fold change, then lowest p).
+3. **GSEA** on the ranked proteins of each comparison (MSigDB Hallmark, Reactome, GO:BP, KEGG).
+4. **dISF vs serum** for AD vs healthy: proteins changed only in dISF (and whether they are measurable in serum), fold changes side by side, gene sets significant only in dISF.
+
+**Output:** `V3_DEGs_dISF.xlsx`, `V3_DEGs_serum.xlsx`, `volcano/`, `V3_GSEA.xlsx`, `gsea/`, `V3_dISF_vs_serum.xlsx` / `.pdf`.
+
+**Keep in mind:** the lesion site at visit 3 is mostly cleared in many patients; the README sheet gives the clinical states. The healthy samples are from a single visit, so time effects cannot be separated from AD vs healthy.
+
