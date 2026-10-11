@@ -109,6 +109,7 @@ stopifnot(
     file.exists(file.path(out, "qc_overview/dISF_only_proteins.pdf")) && file.exists(file.path(out, "qc_overview/dISF_only_pathways.pdf")) &&
     "pathways" %in% readxl::excel_sheets(file.path(out, "qc_overview/dISF_only_proteins.xlsx")) &&
     "all_classes" %in% readxl::excel_sheets(file.path(out, "qc_overview/dISF_only_KEGG.xlsx")) &&
+    grepl("simulated", readxl::read_excel(file.path(out, "qc_overview/dISF_only_KEGG.xlsx"), "README")$content[1]) &&
     file.exists(file.path(out, "qc_overview/dISF_only_KEGG.pdf")),
   "step selection by script number wrong (run_all.R)" =
     identical(select_steps(st_demo, 2), st_demo[2:5]) && identical(select_steps(st_demo, 3), st_demo[4:5]) &&

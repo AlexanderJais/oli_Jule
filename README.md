@@ -220,7 +220,9 @@ over-represented among the dISF-only proteins, tested against all proteins measu
 The same within transcription factors, enzymes and intracellular proteins (background = the measured proteins of that
 class): sheets `pathways_transcription_factors`, `pathways_enzymes`, `pathways_intracellular` and
 `dISF_only_pathways_<class>.pdf` (classes: `config.yml` → `qc_overview$pathway_classes`).
-**KEGG:** the same analyses with KEGG pathways (MSigDB KEGG legacy collection, 186 pathways) in their own files:
+**KEGG:** the same analyses with the current KEGG pathways (372 human pathways; download once with
+`source("tools/download_kegg.R")`, which stores the KEGG release date; without it the older MSigDB KEGG collection
+with 186 pathways is used) in their own files:
 `dISF_only_KEGG.xlsx` (sheets `all_classes`, `transcription_factors`, `enzymes`, `intracellular`) and
 `dISF_only_KEGG.pdf`, `dISF_only_KEGG_<class>.pdf`.
 
@@ -424,6 +426,7 @@ used when dISF is compared with serum) and `RELAD_AD_vs_HC` (RELAD/RELAD2). Rela
 | `R/` | Shared functions used by the scripts |
 | `fonts/` | Nimbus Sans font files (free, URW) used for the QC overview figure |
 | `tools/download_hpa.R` | Optional: downloads the public Human Protein Atlas table for steps 02b and 17 |
+| `tools/download_kegg.R` | Optional: downloads the current KEGG human pathways (free for academic use) for the KEGG analysis of step 02b |
 | `data/` | Your input files (not uploaded to GitHub) – see `data/README.md` |
 | `output/` | All results (not uploaded to GitHub) |
 | `tests/` | Test with invented data |

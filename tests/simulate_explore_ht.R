@@ -248,9 +248,16 @@ write_tsv(hpa_sim, file.path(sim_dir, "hpa_sim.tsv"))
 truth_hpa_missing <- assays$OlinkID[1:2]
 write_lines(truth_hpa_missing, file.path(sim_dir, "hpa_missing.txt"))
 
+# KEGG file in the format of tools/download_kegg.R (built from MSigDB's legacy KEGG: no internet needed)
+kg <- msigdbr::msigdbr(species = "Homo sapiens", collection = "C2", subcollection = "CP:KEGG_LEGACY")
+write_tsv(kg |> transmute(pathway_id = sprintf("hsa%05d", match(gs_name, unique(gs_name))),
+                          pathway_name = str_to_sentence(str_replace_all(str_remove(gs_name, "^KEGG_"), "_", " ")),
+                          gene_id = paste0("hsa:", ncbi_gene), gene_symbol, kegg_release = "KEGG pathway database (simulated)"),
+          file.path(sim_dir, "kegg_sim.tsv"))
+
 yaml::write_yaml(list(
   paths = list(manifest = cfg$paths$manifest, npx_dir = file.path(sim_dir, "npx"),
-               severity = file.path(sim_dir, "severity.csv"), hpa = file.path(sim_dir, "hpa_sim.tsv"),
+               severity = file.path(sim_dir, "severity.csv"), hpa = file.path(sim_dir, "hpa_sim.tsv"), kegg = file.path(sim_dir, "kegg_sim.tsv"),
                leip_clinical = cfg$paths$leip_clinical, fixed_lod = file.path(sim_dir, "fixed_lod.csv"),
                output = "output_sim"),
   npx_column = cfg$npx_column, qc = cfg$qc, stats = cfg$stats, enrichment = cfg$enrichment,

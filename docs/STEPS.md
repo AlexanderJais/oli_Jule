@@ -82,7 +82,8 @@ samples, listed overall and per protein class → `dISF_only_proteins.xlsx`, `dI
 (fgsea `fora`) of MSigDB gene sets (`enrichment$collections`) among the dISF-only proteins, against the background of all proteins measured
 in both matrices (the Olink panel, not the genome; FDR by Benjamini-Hochberg) → sheet `pathways`, `dISF_only_pathways.pdf`; and the same within
 transcription factors, enzymes and intracellular proteins (background = the measured proteins of that class; gene sets with ≥ 5 of them) →
-sheets `pathways_<class>`, `dISF_only_pathways_<class>.pdf`. The same with KEGG pathways (MSigDB KEGG legacy collection) in
+sheets `pathways_<class>`, `dISF_only_pathways_<class>.pdf`. The same with the current KEGG pathways (downloaded once with
+`source("tools/download_kegg.R")` from KEGG's REST server, release date stored; fallback: MSigDB's older KEGG collection) in
 `dISF_only_KEGG.xlsx` and `dISF_only_KEGG*.pdf`.
 
 **Output:** `qc_overview.pdf` and `.png` (font Nimbus Sans from the project's `fonts/` folder, drawn as outlines, so it looks the same on every computer - the text in the figure can't be selected; Helmholtz Munich violet / pink), `qc_overview.xlsx`

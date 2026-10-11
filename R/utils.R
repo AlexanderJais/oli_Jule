@@ -51,11 +51,11 @@ check_inputs <- function(cfg) {
   p <- cfg$paths
   npx <- if (dir.exists(p$npx_dir)) list.files(p$npx_dir, "\\.parquet$") else character()
   status <- tibble(
-    input = c("manifest", "NPX parquet files", "LEIP clinical data", "Olink fixed LOD file", "severity scores", "Human Protein Atlas"),
-    required = c("yes", "yes", "no", "recommended", "no", "no"),
-    path = c(p$manifest, file.path(p$npx_dir, "*.parquet"), p$leip_clinical %||% "", p$fixed_lod %||% "", p$severity %||% "", p$hpa %||% ""),
+    input = c("manifest", "NPX parquet files", "LEIP clinical data", "Olink fixed LOD file", "severity scores", "Human Protein Atlas", "KEGG pathways"),
+    required = c("yes", "yes", "no", "recommended", "no", "no", "no"),
+    path = c(p$manifest, file.path(p$npx_dir, "*.parquet"), p$leip_clinical %||% "", p$fixed_lod %||% "", p$severity %||% "", p$hpa %||% "", p$kegg %||% ""),
     found = c(file.exists(p$manifest %||% ""), length(npx) > 0, file.exists(p$leip_clinical %||% ""),
-              file.exists(p$fixed_lod %||% ""), file.exists(p$severity %||% ""), file.exists(p$hpa %||% ""))
+              file.exists(p$fixed_lod %||% ""), file.exists(p$severity %||% ""), file.exists(p$hpa %||% ""), file.exists(p$kegg %||% ""))
   )
   message("Input files (working directory: ", getwd(), "):")
   for (i in seq_len(nrow(status)))
@@ -95,6 +95,16 @@ read_hpa <- function(path) {
        else readr::read_tsv(path, show_col_types = FALSE, guess_max = 1e5)
   attr(h, "downloaded") <- format(as.Date(file.mtime(path)))
   h
+}
+
+#' Current KEGG human pathways (tools/download_kegg.R) as gene sets named "KEGG_<name> (<id>)"; NULL if the file is missing.
+read_kegg <- function(path) {
+  if (is.null(path) || !file.exists(path)) return(NULL)
+  k <- readr::read_tsv(path, show_col_types = FALSE)
+  sets <- split(k$gene_symbol, paste0("KEGG_", k$pathway_name, " (", k$pathway_id, ")"))
+  attr(sets, "release") <- k$kegg_release[1]
+  attr(sets, "downloaded") <- format(as.Date(file.mtime(path)))
+  sets
 }
 
 #' Path inside the output folder; creates the sub-folder if needed.

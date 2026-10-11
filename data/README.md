@@ -14,7 +14,8 @@ data/
 ├── LEIP_clinical_parameters_n35.xlsx      optional: LEIP clinical data (sheet "Key_parameters")
 ├── severity.xlsx                          optional: SubjectID, Visit (V1–V6 or 1–6), SCORAD / EASI / NRS ...
 └── reference/
-    └── proteinatlas.tsv.zip               optional: Human Protein Atlas table (public; tools/download_hpa.R) - protein classes (02b), tissue origin (17)
+    ├── proteinatlas.tsv.zip               optional: Human Protein Atlas table (public; tools/download_hpa.R) - protein classes (02b), tissue origin (17)
+    └── kegg_hsa_pathways.tsv              optional: current KEGG human pathways (tools/download_kegg.R) - KEGG analysis (02b)
 ```
 
 What each file needs:

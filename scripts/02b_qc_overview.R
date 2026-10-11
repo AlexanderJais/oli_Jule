@@ -165,17 +165,24 @@ if (length(ora_res)) {
   writexl::write_xlsx(c(sheets[1:2], pw_sheets, sheets[-(1:2)]), f_x)
 }
 
-# KEGG pathways (MSigDB KEGG legacy collection), same tests, in their own files
-kegg_sets <- tryCatch({
-  k <- msigdbr::msigdbr(species = "Homo sapiens", collection = "C2", subcollection = "CP:KEGG_LEGACY")
-  split(k$gene_symbol, k$gs_name)
-}, error = \(e) { msg("KEGG analysis skipped: %s", conditionMessage(e)); NULL })
+# KEGG pathways, same tests, in their own files: the current KEGG (tools/download_kegg.R); without that file the
+# KEGG legacy collection of MSigDB (186 pathways)
+kegg_sets <- read_kegg(cfg$paths$kegg)
+kegg_src <- if (!is.null(kegg_sets)) sprintf("%s, downloaded %s", attr(kegg_sets, "release"), attr(kegg_sets, "downloaded")) else
+  "KEGG legacy collection of MSigDB - for the current KEGG run source(\"tools/download_kegg.R\")"
+if (is.null(kegg_sets)) {
+  msg("No current KEGG file at %s - using the KEGG legacy collection of MSigDB (run source(\"tools/download_kegg.R\") once).", cfg$paths$kegg %||% "(not set)")
+  kegg_sets <- tryCatch({
+    k <- msigdbr::msigdbr(species = "Homo sapiens", collection = "C2", subcollection = "CP:KEGG_LEGACY")
+    split(k$gene_symbol, k$gs_name)
+  }, error = \(e) { msg("KEGG analysis skipped: %s", conditionMessage(e)); NULL })
+} else msg("KEGG: %s (%d pathways)", kegg_src, length(kegg_sets))
 kegg_res <- if (is.null(kegg_sets)) list() else ora_all(kegg_sets, "KEGG pathways")
 if (length(kegg_res)) {
   kegg_sheets <- set_names(map(kegg_res, "pw"), map_chr(kegg_res, \(r) if (r$key == "") "all_classes" else str_sub(str_remove(r$key, "^_"), 1, 31)))
   writexl::write_xlsx(c(list(README = tibble(sheet = names(kegg_sheets), content = map_chr(kegg_res, \(r) sprintf(
-    "KEGG pathways over-represented among the %d dISF-only proteins of %s (MSigDB KEGG legacy, %d pathways; sets with >= %d measured proteins); background: the %d proteins of %s measured in both matrices; FDR = Benjamini-Hochberg",
-    r$n_genes, r$name, length(kegg_sets), r$min_size, r$n_universe, r$name)))), kegg_sheets),
+    "KEGG pathways over-represented among the %d dISF-only proteins of %s (%s; %d pathways; sets with >= %d measured proteins); background: the %d proteins of %s measured in both matrices; FDR = Benjamini-Hochberg",
+    r$n_genes, r$name, kegg_src, length(kegg_sets), r$min_size, r$n_universe, r$name)))), kegg_sheets),
     out_path(cfg, "qc_overview", "dISF_only_KEGG.xlsx"))
 }
 
@@ -202,18 +209,19 @@ for (type in c("pdf", "png")) {
   close_device(fi)
 }
 for (r in c(map(ora_res, \(x) c(x, list(db = "pathways", file = "dISF_only_pathways", src = paste("MSigDB", paste(cfg$enrichment$collections, collapse = ", "))))),
-            map(kegg_res, \(x) c(x, list(db = "KEGG pathways", file = "dISF_only_KEGG", src = "KEGG, MSigDB legacy collection"))))) {
+            map(kegg_res, \(x) c(x, list(db = "KEGG pathways", file = "dISF_only_KEGG", src = kegg_src))))) {
   sig_pw <- r$pw |> filter(FDR < cfg$stats$fdr)
-  top <- (if (nrow(sig_pw)) sig_pw else r$pw) |> slice_head(n = 25) |>
-    mutate(label = str_trunc(paste0(str_to_sentence(pathway), " (", collection, ")"), 70), label = factor(label, rev(unique(label))))
+  top <- (if (nrow(sig_pw)) sig_pw else r$pw |> filter(dISF_only_in_set > 0)) |> slice_head(n = 25) |>
+    mutate(label = if_else(pathway == toupper(pathway), paste0(str_to_sentence(pathway), " (", collection, ")"), pathway),   # MSigDB names are upper case
+           label = factor(str_trunc(label, 75), rev(unique(str_trunc(label, 75)))))
   what <- if (r$name == "all classes") "proteins measurable in dISF only" else paste0(r$name, " measurable in dISF only")
   p_pw <- ggplot(top, aes(fold_enrichment, label)) +
     geom_point(aes(size = dISF_only_in_set, colour = -log10(FDR))) +
     scale_colour_gradient(low = colours$below, high = colours$above, name = "-log10 FDR") +
     scale_size_area(max_size = 6, name = "dISF-only\nproteins", breaks = \(l) unique(pmax(1, round(pretty(l))))) +
     labs(x = "fold enrichment (share among dISF-only proteins / share among all measured proteins)", y = NULL,
-         title = if (nrow(sig_pw)) sprintf("%s of the %d %s: %d with FDR < %.2f (top %d)", str_to_sentence(r$db), r$n_genes, what, nrow(sig_pw), cfg$stats$fdr, nrow(top))
-                 else sprintf("%s of the %d %s: none with FDR < %.2f - the %d lowest p values", str_to_sentence(r$db), r$n_genes, what, cfg$stats$fdr, nrow(top)),
+         title = if (nrow(sig_pw)) sprintf("%s of the %d %s: %d with FDR < %.2f (top %d)", sub("^(.)", "\\U\\1", r$db, perl = TRUE), r$n_genes, what, nrow(sig_pw), cfg$stats$fdr, nrow(top))
+                 else sprintf("%s of the %d %s: none with FDR < %.2f - the %d with the lowest p values", sub("^(.)", "\\U\\1", r$db, perl = TRUE), r$n_genes, what, cfg$stats$fdr, nrow(top)),
          subtitle = sprintf("Over-representation against the %d %s measured in both matrices (%s)", r$n_universe,
                             if (r$name == "all classes") "proteins" else r$name, r$src)) +
     theme_bw(base_size = 10) + theme(panel.grid.minor = element_blank(), plot.title.position = "plot")

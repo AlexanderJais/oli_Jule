@@ -12,6 +12,7 @@ paths:
   leip_clinical: data/LEIP_clinical_parameters_n35.xlsx # optional; sheet "Key_parameters"
   fixed_lod: data/Explore_HT_Fixed_LOD.csv              # recommended; Olink fixed LOD file (";"-separated, version >= 6.0.0)
   hpa: data/reference/proteinatlas.tsv.zip              # optional; Human Protein Atlas: protein classes (step 02b), tissue origin (step 17) - tools/download_hpa.R
+  kegg: data/reference/kegg_hsa_pathways.tsv            # optional; current KEGG human pathways (step 02b KEGG analysis) - tools/download_kegg.R
   severity: data/severity.xlsx                          # optional; columns SubjectID, Visit (V1..V6 or 1..6) + numeric scores (e.g. SCORAD, EASI, NRS)
   output: output                                        # folder for all results
 
