@@ -19,6 +19,8 @@ stopifnot(
   "simulated baseline markers not among the top 8 targets" = sum(head(up$Assay, 8) %in% real) >= 4,
   "simulated markers should persist at V2" = all(up$persists_V2_up[up$Assay %in% real]),
   "chance check missing" = any(ch$value == "210"),
-  "files missing" = all(file.exists(file.path(out, c("V1_relapse_volcano.pdf", "V1_relapse_targets_course.pdf", "V1_relapse_chance_check.pdf", "V1_relapse_GSEA.xlsx"))))
+  "prediction test missing or wrong" = grepl("better than chance", readxl::read_excel(f, "README")$note[2]) &&
+    all(c("loo_correct", "cutoff_NPX", "rho_time_to_relapse") %in% names(up)),
+  "files missing" = all(file.exists(file.path(out, c("V1_relapse_volcano.pdf", "V1_relapse_targets_course.pdf", "V1_relapse_chance_check.pdf", "V1_relapse_prediction_test.pdf", "V1_relapse_GSEA.xlsx"))))
 )
 msg("All V1 relapse checks passed.")

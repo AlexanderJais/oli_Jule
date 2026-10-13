@@ -408,15 +408,16 @@ Values below LOD are exported as measured, which is Olink's recommendation; the 
 ---
 
 ## H. Separate: V1 relapse screen (`run_relapse_v1.R` → `relapse_V1/`)
-**Question:** Which dISF proteins are already higher at V1, before the topical steroids, in the AD patients who later relapse ("actionable targets")?
+**Question:** Which dISF markers at V1, before the topical steroids, predict a later relapse ("actionable targets")?
 
 **What it does** (MicroAD AD patients with a relapse / non-relapse label, dropouts excluded; 4 vs 6):
 1. limma, relapse vs non-relapse: V1 lesion site (primary), V1 non-lesional skin, V1 lesion minus non-lesional (same patient), V2 cleared lesion site (before any relapse), V1 serum.
 2. **Exact relabelling check:** the V1 lesion analysis is repeated for all 210 ways to choose 4 of the 10 patients as "relapse". This gives an exact p per protein (smallest possible 1/210) and how many hits random labels produce.
 3. **Target (higher):** V1 lesion site p < 0.05 and exact p < 0.05, above LOD in ≥ 50 % of the relapsers. Ranked by AUC, then still higher at V2, then stable in every leave-one-patient-out refit, then fold change. Flags: also higher in V1 serum; approved / potential drug target, secreted, membrane (Human Protein Atlas).
-4. GSEA, volcano plot, each target per patient over the visits.
+4. **Prediction:** per marker, each patient is classified with a cut-off set on the other patients (leave one out: patients correct, sensitivity, specificity, the V1 cut-off in NPX) and its correlation with how soon the relapse comes. **Can V1 predict at all:** the whole search (pick the top 1 or top 5 proteins on the other patients, classify the left-out one) is repeated for all 210 labellings; it predicts better than chance only if few random labellings do as well. Also: how many proteins separate perfectly by chance. Ranking starts with patients predicted correctly.
+5. GSEA, volcano plot, each target per patient over the visits.
 
-**Output:** `V1_relapse_targets.xlsx` (`targets_up`, `targets_down`, `chance_check`, full results), `V1_relapse_volcano.pdf`, `V1_relapse_targets_course.pdf`, `V1_relapse_chance_check.pdf`, `V1_relapse_GSEA.xlsx` / `.pdf`.
+**Output:** `V1_relapse_targets.xlsx` (README with the answer, `can_V1_predict`, `targets_up`, `targets_down`, `chance_check`, full results), `V1_relapse_prediction_test.pdf`, `V1_relapse_volcano.pdf`, `V1_relapse_targets_course.pdf`, `V1_relapse_chance_check.pdf`, `V1_relapse_GSEA.xlsx` / `.pdf`.
 
 **Keep in mind:** with 4 vs 6 patients this picks candidates, it does not confirm them; `chance_check` says how many of the hits random labels would give. Candidates also measurable in serum can be checked in RELAD / RELAD2.
 

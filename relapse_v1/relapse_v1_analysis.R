@@ -61,6 +61,35 @@ chance <- tibble(item = c("patients", "relabellings (all ways to choose the rela
 msg("Chance check: %d proteins higher in relapse (p < 0.05); random labels give a median of %.0f; P = %.2f",
     rc$observed_hits, median(rc$hits), mean(rc$hits >= rc$observed_hits))
 
+# ---- can V1 dISF predict relapse? (honest test of the whole marker search, and per-marker prediction) -------------------
+combs <- utils::combn(length(is_rel), sum(is_rel))
+lab_of <- \(j) seq_along(is_rel) %in% combs[, j]
+ps_obs <- perfect_separators(M, matrix(which(is_rel)))
+ps_null <- perfect_separators(M, combs)
+pred_k <- unlist(rv$predict_k %||% c(1, 5))
+nested <- map(pred_k, \(k) {
+  obs <- nested_loo_correct(M, is_rel, k)
+  null <- map_int(seq_len(ncol(combs)), \(j) nested_loo_correct(M, lab_of(j), k))
+  list(k = k, obs = obs, null = null, p = mean(null >= obs))
+})
+walk(nested, \(x) msg("Prediction with the top %d protein(s), chosen without the predicted patient: %d of %d patients correct; random labels: median %.0f; P = %.3f",
+                      x$k, x$obs, length(is_rel), median(x$null), x$p))
+predict_tbl <- tibble(item = c(sprintf("proteins separating relapse and non-relapse perfectly (AUC 1 or 0)"),
+                               "the same under random labels: median (90th percentile)",
+                               map_chr(nested, \(x) sprintf("patients predicted correctly with the top %d protein(s), picked on the other patients (leave one out)", x$k)),
+                               map_chr(nested, \(x) sprintf("the same under random labels (top %d): median; P (at least as many correct)", x$k))),
+                      value = c(as.character(ps_obs), sprintf("%.0f (%.0f)", median(ps_null), quantile(ps_null, 0.9)),
+                                map_chr(nested, \(x) sprintf("%d of %d", x$obs, length(is_rel))),
+                                map_chr(nested, \(x) sprintf("%.0f; P = %.3f", median(x$null), x$p))))
+time_score <- s$V1_lesion |> distinct(SubjectID, relapse) |>
+  left_join(ad |> distinct(SubjectID, relapse_visit), by = "SubjectID") |>
+  mutate(t = if_else(relapse == "relapse", relapse_visit, max(ad$visit_num, na.rm = TRUE) + 1))
+tvec <- time_score$t[match(colnames(M), time_score$SubjectID)]
+rho_time <- apply(M, 1, \(v) suppressWarnings(cor(v, tvec, method = "spearman", use = "pairwise.complete.obs")))
+p_time <- apply(M, 1, \(v) tryCatch(suppressWarnings(cor.test(v, tvec, method = "spearman", exact = FALSE)$p.value), error = \(e) NA_real_))
+per_marker <- map(rownames(M), \(oid) loo_predict_marker(M[oid, ], is_rel) |> mutate(OlinkID = oid)) |> bind_rows() |>
+  mutate(rho_time_to_relapse = round(rho_time[OlinkID], 2), p_time_to_relapse = signif(p_time[OlinkID], 3))
+
 # ---- annotation: drug targets and location (Human Protein Atlas) --------------------------------------------------------
 hpa <- read_hpa(cfg$paths$hpa)
 anno <- if (is.null(hpa)) tibble(OlinkID = character()) else {
@@ -83,7 +112,7 @@ plate_check <- function(oid) {
 # ---- ranked lists -------------------------------------------------------------------------------------------------------
 side <- \(nm, pre) res[[nm]] |> select(OlinkID, logFC, p) |> rename_with(\(x) paste0(x, "_", pre), c(logFC, p))
 scr <- v1 |> left_join(rc$per_protein |> select(OlinkID, p_exact_up, p_exact_down, p_exact_two_sided), by = "OlinkID") |>
-  left_join(loo, by = "OlinkID") |> mutate(AUC = round(auc[OlinkID], 2)) |>
+  left_join(loo, by = "OlinkID") |> mutate(AUC = round(auc[OlinkID], 2)) |> left_join(per_marker, by = "OlinkID") |>
   left_join(side("V1_nonlesional", "V1_nonlesional"), by = "OlinkID") |>
   left_join(side("V1_lesion_minus_nonlesional", "V1_LminusNL"), by = "OlinkID") |>
   left_join(side("V2_cleared_lesion", "V2_cleared"), by = "OlinkID") |>
@@ -98,26 +127,30 @@ scr <- v1 |> left_join(rc$per_protein |> select(OlinkID, p_exact_up, p_exact_dow
          detected_in_nonrelapse = `pct_above_LOD_non-relapse` >= 100 * min_f,
          candidate_up = logFC > 0 & p < 0.05 & p_exact_up < 0.05 & detected_in_relapse,
          candidate_down = logFC < 0 & p < 0.05 & p_exact_down < 0.05 & detected_in_nonrelapse)
-cand_up <- scr |> filter(candidate_up) |> arrange(desc(AUC), desc(persists_V2_up), desc(loo_always_higher), desc(logFC))
+cand_up <- scr |> filter(candidate_up) |> arrange(desc(loo_correct), desc(AUC), desc(persists_V2_up), desc(loo_always_higher), desc(logFC))
 cand_up <- cand_up |> mutate(rank = row_number(), same_plate_check = map_chr(OlinkID, plate_check))
-cand_down <- scr |> filter(candidate_down) |> arrange(AUC, desc(persists_V2_down), logFC) |> mutate(rank = row_number(), same_plate_check = map_chr(OlinkID, plate_check))
-tcols <- c("rank", "Assay", "OlinkID", "UniProt", "logFC", "p", "p_exact_up", "p_exact_down", "AUC", "loo_always_higher", "loo_max_p",
+cand_down <- scr |> filter(candidate_down) |> arrange(desc(loo_correct), AUC, desc(persists_V2_down), logFC) |> mutate(rank = row_number(), same_plate_check = map_chr(OlinkID, plate_check))
+tcols <- c("rank", "Assay", "OlinkID", "UniProt", "loo_correct", "loo_n", "loo_sensitivity", "loo_specificity", "cutoff_NPX", "AUC",
+           "rho_time_to_relapse", "p_time_to_relapse", "logFC", "p", "p_exact_up", "p_exact_down", "loo_always_higher", "loo_max_p",
            "persists_V2_up", "persists_V2_down", "logFC_V2_cleared", "p_V2_cleared", "logFC_V1_nonlesional", "p_V1_nonlesional",
            "logFC_V1_LminusNL", "p_V1_LminusNL", "also_serum_up", "also_serum_down", "logFC_serum_V1", "p_serum_V1",
            "approved_drug_target", "potential_drug_target", "secreted", "membrane",
            "mean_NPX_relapse", "mean_NPX_non-relapse", "pct_above_LOD_relapse", "pct_above_LOD_non-relapse", "FDR", "same_plate_check")
 msg("Targets: %d higher, %d lower in relapsers at V1 (lesion site)", nrow(cand_up), nrow(cand_down))
 
-readme <- tibble(item = c("question", "patients", "relapse visits", "comparisons", "target (higher)", "ranking", "flags", "chance check", "caution"),
-  note = c("dISF proteins already higher (or lower) at V1, before the topical steroids, in AD patients who later relapse",
+answer <- if (any(map_lgl(nested, \(x) x$p < 0.05))) "V1 dISF predicts relapse better than chance in these patients (sheet can_V1_predict); the ranked candidates are in targets_up / targets_down" else
+  "With these patients, predicting relapse from V1 dISF is not better than chance once the search over all proteins is accounted for (sheet can_V1_predict); the targets are candidates to test in new patients, not proven predictors"
+readme <- tibble(item = c("question", "answer", "patients", "relapse visits", "comparisons", "target (higher)", "ranking", "prediction columns", "flags", "chance check", "caution"),
+  note = c("Which dISF markers at V1 (baseline, before the topical steroids) predict a later relapse?", answer,
            paste(n_txt, collapse = "; "), rel_visits,
            "limma per protein, relapse vs non-relapse: V1 lesion site (primary), V1 non-lesional skin, V1 lesion minus non-lesional (same patient), V2 cleared lesion site (before any relapse), V1 serum. log2FC = relapse - non-relapse",
            sprintf("V1 lesion site: log2FC > 0, p < 0.05, exact relabelling p < 0.05 (all %d ways to choose the relapse group), above LOD in >= %.0f%% of the relapsers", rc$n_labellings, 100 * min_f),
-           "AUC (1 = every relapser above every non-relapser), then still higher at V2 after treatment, then higher in every leave-one-patient-out refit, then fold change",
+           "patients predicted correctly when each is left out (loo_correct), then AUC, then still higher at V2 after treatment, then higher in every leave-one-patient-out refit, then fold change",
+           "loo_correct / loo_sensitivity / loo_specificity: each patient classified with a cut-off set on the other patients (midpoint of the group means); cutoff_NPX: that cut-off on all patients (V1 lesion site, NPX); rho_time_to_relapse: Spearman with the relapse visit (non-relapse = after the last visit), < 0 = higher value, earlier relapse",
            "persists_V2: still higher in the cleared lesion site at V2; also_serum: also higher in V1 serum; approved / potential drug target, secreted, membrane: Human Protein Atlas",
            "sheet chance_check: how many proteins random labels would give; if the observed number is not above that, the list is mostly chance",
            "4 vs 6 patients: a screen to pick candidates, not a confirmation; the smallest possible exact p is 1/210"))
-writexl::write_xlsx(list(README = readme, chance_check = chance,
+writexl::write_xlsx(list(README = readme, can_V1_predict = predict_tbl, chance_check = chance,
                          targets_up = cand_up |> select(any_of(tcols)) |> mutate(across(where(is.double), \(v) signif(v, 3))),
                          targets_down = cand_down |> select(any_of(tcols)) |> mutate(across(where(is.double), \(v) signif(v, 3))),
                          V1_lesion = res$V1_lesion, V1_nonlesional = res$V1_nonlesional, V1_lesion_minus_nonlesional = res$V1_lesion_minus_nonlesional,
@@ -174,5 +207,13 @@ save_fig(ggplot(tibble(hits = rc$hits), aes(hits)) + geom_histogram(binwidth = 1
                                 rc$observed_hits, rc$n_labellings, sum(is_rel), length(is_rel)),
                 subtitle = sprintf("%.0f%% of the random labellings give at least as many proteins", 100 * mean(rc$hits >= rc$observed_hits))) + th,
          "V1_relapse_chance_check", width = 9, height = 5)
+pn <- map(nested, \(x) tibble(k = sprintf("top %d protein(s)", x$k), correct = x$null, obs = x$obs)) |> bind_rows()
+save_fig(ggplot(pn, aes(correct)) + geom_histogram(binwidth = 1, fill = "grey75") +
+           geom_vline(data = distinct(pn, k, obs), aes(xintercept = obs), colour = colours$above, linewidth = 1) + facet_wrap(~k) +
+           scale_x_continuous(breaks = 0:length(is_rel)) +
+           labs(x = sprintf("patients predicted correctly (of %d), markers picked without the predicted patient", length(is_rel)), y = "relabellings",
+                title = "Can V1 dISF predict relapse? Observed (violet) vs all random labellings",
+                subtitle = paste(map_chr(nested, \(x) sprintf("top %d: %d correct, P = %.3f", x$k, x$obs, x$p)), collapse = "; ")) + th,
+         "V1_relapse_prediction_test", width = 9, height = 5)
 if (nrow(gsea$V1_lesion)) save_fig(gsea_plot(gsea$V1_lesion, "GSEA, dISF lesion site at V1, relapse vs non-relapse", colours, fdr), "V1_relapse_GSEA")
 msg("V1 relapse screen: %s", file.path(cfg$paths$output, out))

@@ -48,3 +48,34 @@ auc_rows <- function(M, is_rel) {
     mean(outer(a, b, ">") + 0.5 * outer(a, b, "=="))
   })
 }
+
+#' One marker as a predictor, leave one patient out: the cut-off (midpoint of the two group means) and the direction
+#' are set on the other patients, then the left-out patient is classified. Returns the cut-off on all patients too.
+loo_predict_marker <- function(v, is_rel) {
+  fit <- function(x, y) { a <- mean(x[y], na.rm = TRUE); b <- mean(x[!y], na.rm = TRUE); list(cut = (a + b) / 2, up = a > b) }
+  pred <- map_lgl(seq_along(v), \(i) { f <- fit(v[-i], is_rel[-i]); if (is.na(v[i])) NA else if (f$up) v[i] > f$cut else v[i] < f$cut })
+  f <- fit(v, is_rel)
+  tibble(cutoff_NPX = f$cut, loo_correct = sum(pred == is_rel, na.rm = TRUE), loo_n = sum(!is.na(pred)),
+         loo_sensitivity = sum(pred & is_rel, na.rm = TRUE) / sum(is_rel), loo_specificity = sum(!pred & !is_rel, na.rm = TRUE) / sum(!is_rel))
+}
+
+#' Can V1 predict relapse at all? The whole procedure inside leave-one-patient-out: on the other patients pick the k
+#' proteins with the largest |limma t|, score = mean of their signed z values, cut-off = midpoint of the group means,
+#' classify the left-out patient. Returns the number of correctly predicted patients.
+nested_loo_correct <- function(M, is_rel, k = 1) {
+  sum(map_lgl(seq_along(is_rel), \(i) {
+    tr <- M[, -i, drop = FALSE]; y <- is_rel[-i]
+    r <- limma_t(tr, y); top <- head(order(-abs(r$t)), k); sg <- sign(r$t[top])
+    mu <- rowMeans(tr[top, , drop = FALSE], na.rm = TRUE); sdv <- apply(tr[top, , drop = FALSE], 1, sd, na.rm = TRUE)
+    sc <- \(x) colMeans(sg * (x[top, , drop = FALSE] - mu) / sdv, na.rm = TRUE)
+    s_tr <- sc(tr); cut <- (mean(s_tr[y]) + mean(s_tr[!y])) / 2
+    (sc(M[, i, drop = FALSE]) > cut) == is_rel[i]
+  }))
+}
+
+#' Exact AUC of every protein for every labelling (ranks do not depend on the labels): number of proteins that
+#' separate the groups perfectly (AUC 1 or 0) per labelling.
+perfect_separators <- function(M, combs) {
+  R <- t(apply(M, 1, rank, na.last = "keep")); n1 <- nrow(combs); n0 <- ncol(M) - n1
+  apply(combs, 2, \(cm) { a <- (rowSums(R[, cm, drop = FALSE]) - n1 * (n1 + 1) / 2) / (n1 * n0); sum(a %in% c(0, 1), na.rm = TRUE) })
+}
