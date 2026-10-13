@@ -112,6 +112,8 @@ for (i in seq_len(nrow(samples))) {
   if (!is.na(s$visit) && s$cohort == "MicroAD") x <- x + z_sv[sv_key[i], ] * (assays$role == "ISF_serum_coupled")
   if (isf) x <- x + w_cd137[i] * (is_cd137 | is_il33)
   if (isf && identical(s$relapse, "relapse")) x <- x + 1.5 * (assays$role == "ISF_relapse_baseline")
+  # 3 of them also higher in the serum of MicroAD relapsers (markers in dISF and serum)
+  if (!isf && s$cohort == "MicroAD" && identical(s$relapse, "relapse")) x <- x + 1.5 * (assays$role == "ISF_relapse_baseline" & assays$idx <= 118)
   if (!isf) {
     x <- x + serum_off
     if (s$group == "AD") x <- x + 0.7 * (assays$role == "Serum_AD_vs_HC")

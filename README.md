@@ -480,7 +480,9 @@ are still lesional and how many cleared). Results in `output/visit3/`:
   they are measurable in serum at all), the fold changes side by side, and which gene sets are significant only in dISF.
 
 ## 9. Separate analysis: V1 relapse screen (`run_relapse_v1.R`)
-Which dISF markers at V1 (baseline, before the topical steroids at V2) predict a later relapse? `source("run_relapse_v1.R")` runs only the import / QC and this screen → `output/relapse_V1/`.
+Which markers at V1 (baseline, before the topical steroids at V2) predict a later relapse – in dISF, in serum, and in
+both? The same screen runs on the dISF lesion site and on the serum of the same patients; markers found in both
+matrices make the strongest case. `source("run_relapse_v1.R")` runs only the import / QC and this screen → `output/relapse_V1/`.
 MicroAD has 4 relapsers (relapse at V3, V4, V5, V6) and 6 non-relapsers, so this is a screen to pick candidates:
 - `V1_relapse_targets.xlsx`: README – the answer in one sentence; `can_V1_predict` – can V1 dISF predict relapse
   at all: patients predicted correctly when the marker is picked and its cut-off set without the predicted patient
@@ -491,11 +493,15 @@ MicroAD has 4 relapsers (relapse at V3, V4, V5, V6) and 6 non-relapsers, so this
   treatment, stable when any one patient is left out), with flags: also higher in V1 serum, approved / potential drug
   target, secreted / membrane (Human Protein Atlas); `targets_down`; `chance_check` – how many such proteins random
   labels give; full results for V1 lesion site, V1 non-lesional skin, V1 lesion minus non-lesional, V2 cleared
-  lesion site and V1 serum.
+  lesion site and V1 serum. Serum: `serum_targets_up` / `serum_targets_down`, `serum_can_V1_predict`;
+  **`dISF_and_serum`** – markers in both matrices (and markers in one supported in the other), with `overlap_chance`
+  (how many proteins random labels make "higher in both").
 - **`V1_relapse_executive_summary.pdf`** – start here: the answer, the prediction test, the ranked predictors
   (cut-off, sensitivity / specificity, V2, serum, drug target), their course over the visits, the gene sets higher
   in relapsers at V1 and V2, and the methods.
-- `V1_relapse_volcano.pdf`, `V1_relapse_targets_course.pdf` (each target per patient over V1–V6, relapse marked),
+- `V1_relapse_dISF_vs_serum.pdf` (fold changes in both matrices, the shared markers labelled),
+  `V1_relapse_markers_dISF_and_serum_course.pdf`, `V1_relapse_volcano_serum.pdf`,
+  `V1_relapse_volcano.pdf`, `V1_relapse_targets_course.pdf` (each target per patient over V1–V6, relapse marked),
   `V1_relapse_chance_check.pdf`, `V1_relapse_prediction_test.pdf`, `V1_relapse_GSEA.xlsx` / `.pdf`.
 
 ## 10. Something went wrong?

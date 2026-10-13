@@ -1,5 +1,6 @@
 # Test of the V1 relapse screen (run_relapse_v1.R) on simulated data: 5 proteins are simulated higher in the dISF of
-# relapsers at every visit; they must top the target list, persist at V2, and the chance check must run.
+# relapsers at every visit (3 of them also in serum); they must top the target list, persist at V2, the 3 must be the
+# markers in dISF and serum, and the chance checks must run.
 #   Rscript tests/test_relapse_v1.R
 source("R/utils.R")
 rscript <- file.path(R.home("bin"), "Rscript")
@@ -19,8 +20,14 @@ stopifnot(
   "simulated baseline markers not among the top 8 targets" = sum(head(up$Assay, 8) %in% real) >= 4,
   "simulated markers should persist at V2" = all(up$persists_V2_up[up$Assay %in% real]),
   "chance check missing" = any(ch$value == "210"),
+  "markers in dISF and serum not found" = {
+    o <- readxl::read_excel(f, "dISF_and_serum"); both <- o$Assay[o$category == "higher in relapse: marker in dISF and serum"]
+    in_serum <- truth$Assay[truth$role == "ISF_relapse_baseline"][1:3]
+    sum(both %in% real) >= 2 && sum(!both %in% real) <= 1 },
+  "serum screen missing" = all(c("serum_targets_up", "serum_can_V1_predict", "overlap_chance") %in% readxl::excel_sheets(f)),
   "prediction test missing or wrong" = grepl("better than chance", readxl::read_excel(f, "README")$note[2]) &&
     all(c("loo_correct", "cutoff_NPX", "rho_time_to_relapse") %in% names(up)),
-  "files missing" = all(file.exists(file.path(out, c("V1_relapse_volcano.pdf", "V1_relapse_targets_course.pdf", "V1_relapse_chance_check.pdf", "V1_relapse_prediction_test.pdf", "V1_relapse_GSEA.xlsx", "V1_relapse_executive_summary.pdf"))))
+  "files missing" = all(file.exists(file.path(out, c("V1_relapse_volcano.pdf", "V1_relapse_targets_course.pdf", "V1_relapse_chance_check.pdf", "V1_relapse_prediction_test.pdf", "V1_relapse_GSEA.xlsx", "V1_relapse_executive_summary.pdf",
+                                                     "V1_relapse_volcano_serum.pdf", "V1_relapse_dISF_vs_serum.pdf"))))
 )
 msg("All V1 relapse checks passed.")

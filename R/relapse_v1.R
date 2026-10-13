@@ -22,14 +22,17 @@ relabel_check <- function(M, is_rel) {
   n <- length(is_rel); combs <- utils::combn(n, sum(is_rel))
   obs <- limma_t(M, is_rel)
   ts <- matrix(NA_real_, nrow(M), ncol(combs)); hits <- integer(ncol(combs))
+  up_hits <- down_hits <- matrix(FALSE, nrow(M), ncol(combs), dimnames = list(rownames(M), NULL))
   for (j in seq_len(ncol(combs))) {
     lab <- seq_len(n) %in% combs[, j]
     r <- limma_t(M, lab)
     ts[, j] <- r$t; hits[j] <- sum(r$p < 0.05 & r$logFC > 0, na.rm = TRUE)
+    up_hits[, j] <- coalesce(r$p < 0.05 & r$logFC > 0, FALSE); down_hits[, j] <- coalesce(r$p < 0.05 & r$logFC < 0, FALSE)
   }
   list(per_protein = obs |> mutate(p_exact_up = rowMeans(ts >= t - 1e-12, na.rm = TRUE), p_exact_down = rowMeans(ts <= t + 1e-12, na.rm = TRUE),
                                    p_exact_two_sided = rowMeans(abs(ts) >= abs(t) - 1e-12, na.rm = TRUE)),
-       hits = hits, observed_hits = sum(obs$p < 0.05 & obs$logFC > 0, na.rm = TRUE), n_labellings = ncol(combs))
+       hits = hits, observed_hits = sum(obs$p < 0.05 & obs$logFC > 0, na.rm = TRUE), n_labellings = ncol(combs),
+       up_hits = up_hits, down_hits = down_hits, combs = combs)   # per labelling (same order for every matrix of the same patients)
 }
 
 #' Leave-one-patient-out: is the protein higher in relapse in every refit, and the largest p across refits.
