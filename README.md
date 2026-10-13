@@ -427,6 +427,7 @@ used when dISF is compared with serum) and `RELAD_AD_vs_HC` (RELAD/RELAD2). Rela
 | `fonts/` | Nimbus Sans font files (free, URW) used for the QC overview figure |
 | `tools/download_hpa.R` | Optional: downloads the public Human Protein Atlas table for steps 02b and 17 |
 | `run_visit3.R`, `visit3/` | Separate visit 3 analysis (see section 8) |
+| `run_relapse_v1.R`, `relapse_v1/` | Separate V1 relapse screen (see section 9) |
 | `tools/download_kegg.R` | Optional: downloads the current KEGG human pathways (free for academic use) for the KEGG analysis of step 02b |
 | `data/` | Your input files (not uploaded to GitHub) – see `data/README.md` |
 | `output/` | All results (not uploaded to GitHub) |
@@ -478,7 +479,20 @@ are still lesional and how many cleared). Results in `output/visit3/`:
 - `V3_dISF_vs_serum.xlsx` / `.pdf` – AD vs healthy in both matrices: which proteins change only in dISF (and whether
   they are measurable in serum at all), the fold changes side by side, and which gene sets are significant only in dISF.
 
-## 9. Something went wrong?
+## 9. Separate analysis: V1 relapse screen (`run_relapse_v1.R`)
+Which dISF proteins are already higher at V1 (baseline, before the topical steroids at V2) in the AD patients who
+later relapse? `source("run_relapse_v1.R")` runs only the import / QC and this screen → `output/relapse_V1/`.
+MicroAD has 4 relapsers (relapse at V3, V4, V5, V6) and 6 non-relapsers, so this is a screen to pick candidates:
+- `V1_relapse_targets.xlsx`: `targets_up` – the ranked candidate list (V1 lesion site p < 0.05 and exact
+  relabelling p < 0.05 over all 210 ways to choose 4 of the 10 patients; ranked by AUC, still higher at V2 after
+  treatment, stable when any one patient is left out), with flags: also higher in V1 serum, approved / potential drug
+  target, secreted / membrane (Human Protein Atlas); `targets_down`; `chance_check` – how many such proteins random
+  labels give; full results for V1 lesion site, V1 non-lesional skin, V1 lesion minus non-lesional, V2 cleared
+  lesion site and V1 serum.
+- `V1_relapse_volcano.pdf`, `V1_relapse_targets_course.pdf` (each target per patient over V1–V6, relapse marked),
+  `V1_relapse_chance_check.pdf`, `V1_relapse_GSEA.xlsx` / `.pdf`.
+
+## 10. Something went wrong?
 
 | Message | Fix |
 |---|---|

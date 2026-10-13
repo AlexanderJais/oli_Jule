@@ -47,6 +47,7 @@ role <- case_when(
   eff(86, 95)   ~ "Biobank_shift",       # LEIP pre-analytical shift
   eff(96, 100)  ~ "ISF_lesion_restricted", # below LOD in ISF except in lesional skin
   eff(111, 115) ~ "Serum_undetected",    # above LOD in dISF, below LOD in serum (step 02b dISF-only list)
+  eff(116, 120) ~ "ISF_relapse_baseline", # higher in dISF of relapsers at every visit, already at V1 (run_relapse_v1.R)
   eff(n_assays - 19, n_assays) ~ "ISF_undetected",
   TRUE ~ "null"
 )
@@ -110,6 +111,7 @@ for (i in seq_len(nrow(samples))) {
   }
   if (!is.na(s$visit) && s$cohort == "MicroAD") x <- x + z_sv[sv_key[i], ] * (assays$role == "ISF_serum_coupled")
   if (isf) x <- x + w_cd137[i] * (is_cd137 | is_il33)
+  if (isf && identical(s$relapse, "relapse")) x <- x + 1.5 * (assays$role == "ISF_relapse_baseline")
   if (!isf) {
     x <- x + serum_off
     if (s$group == "AD") x <- x + 0.7 * (assays$role == "Serum_AD_vs_HC")

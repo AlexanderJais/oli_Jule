@@ -47,6 +47,12 @@ visit3:
   visit: V3                   # the visit analysed (healthy volunteers: all their samples, they are sampled once)
   top_labels: 25              # proteins labelled in the volcano plots
 
+# V1 relapse screen (source("run_relapse_v1.R"), not part of run_all.R): dISF proteins already higher at V1 in patients
+# who later relapse, ranked as candidate targets.
+relapse_v1:
+  top_labels: 25              # proteins labelled in the volcano plot
+  n_course: 12                # targets shown over the visits
+
 # Statistics (steps 03-18; after changing fdr or min_group_n, rerun from step 04)
 stats:
   fdr: 0.05                   # a result is significant if its adjusted p-value (FDR) is below this

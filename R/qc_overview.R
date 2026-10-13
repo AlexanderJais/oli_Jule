@@ -24,7 +24,7 @@ qc_class_block <- setNames(rep(c("function", "relevance", "localisation"), c(6, 
 #' Protein classes per Olink assay (long: OlinkID, class). Matching per component of combined assays
 #' (e.g. "IL12A_IL12B"): UniProt first, then gene symbol, then gene synonym; an assay gets the union of the
 #' classes of its components. Returns list(classes = long table, matched = OlinkIDs found in the HPA).
-assay_protein_classes <- function(assays, hpa) {
+assay_protein_classes <- function(assays, hpa, classes = qc_protein_classes) {
   h <- hpa |> mutate(.row = row_number())
   col <- \(nm) if (nm %in% names(h)) h[[nm]] else rep(NA_character_, nrow(h))
   by_up  <- tibble(.row = h$.row, key = col("Uniprot")) |> separate_rows(key, sep = ",\\s*") |> filter(!is.na(key), key != "")
@@ -44,7 +44,7 @@ assay_protein_classes <- function(assays, hpa) {
   hit <- bind_rows(m1, m2, m3) |> distinct(OlinkID, .row)
   pc <- tibble(.row = h$.row, pc = col("Protein class")) |> separate_rows(pc, sep = ",\\s*") |> filter(!is.na(pc), pc != "")
   apc <- hit |> inner_join(pc, by = ".row", relationship = "many-to-many") |> distinct(OlinkID, pc)
-  cls <- imap(qc_protein_classes, \(v, nm) apc |> filter(pc %in% v) |> distinct(OlinkID) |> mutate(class = nm)) |> bind_rows()
+  cls <- imap(classes, \(v, nm) apc |> filter(pc %in% v) |> distinct(OlinkID) |> mutate(class = nm)) |> bind_rows()
   list(classes = cls, matched = unique(hit$OlinkID))
 }
 
