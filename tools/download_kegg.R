@@ -19,6 +19,7 @@ lnk <- split_tab(get("link/pathway/hsa"), 2)          # hsa:3558 | path:hsa04060
 gn  <- split_tab(get("list/hsa"), 4)                  # hsa:3558 | CDS | position | IL2, IL-2, TCGF; interleukin 2
 info <- get("info/kegg")
 release <- sub("^\\s*pathway\\s+[0-9,]+\\s+", "", grep("^\\s*pathway\\s", info, value = TRUE)[1])
+if (is.na(release) || !nzchar(release)) release <- paste("downloaded", Sys.Date())
 symbol <- ifelse(grepl(";", gn[, 4]), trimws(sub(",.*$", "", sub(";.*$", "", gn[, 4]))), NA_character_)
 out <- data.frame(pathway_id = sub("^path:", "", lnk[, 2]), gene_id = lnk[, 1])
 out$pathway_name <- sub(" - Homo sapiens \\(human\\)$", "", pw[match(out$pathway_id, pw[, 1]), 2])

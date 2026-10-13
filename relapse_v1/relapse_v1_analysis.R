@@ -22,12 +22,12 @@ set.seed(1)
 
 clean <- read_step(cfg, "data", "npx_clean.rds", step = "scripts/02_import_qc.R")
 ad <- clean |> filter(cohort == "MicroAD", group == "AD", relapse %in% c("relapse", "non-relapse"))
-pick <- function(...) ad |> filter(...) |> distinct(SampleID, SubjectID, relapse, plate) |>
+samples_where <- function(...) ad |> filter(...) |> distinct(SampleID, SubjectID, relapse, plate) |>
   mutate(grp = factor(relapse, c("non-relapse", "relapse")))
-s <- list(V1_lesion = pick(matrix == "ISF", visit_num == 1, site == "L"),
-          V1_nonlesional = pick(matrix == "ISF", visit_num == 1, site == "NL"),
-          V2_cleared_lesion = pick(matrix == "ISF", visit_num == 2, site == "L", is.na(relapse_visit) | visit_num < relapse_visit),
-          serum_V1 = pick(matrix == "Serum", visit_num == 1))
+s <- list(V1_lesion = samples_where(matrix == "ISF", visit_num == 1, site == "L"),
+          V1_nonlesional = samples_where(matrix == "ISF", visit_num == 1, site == "NL"),
+          V2_cleared_lesion = samples_where(matrix == "ISF", visit_num == 2, site == "L", is.na(relapse_visit) | visit_num < relapse_visit),
+          serum_V1 = samples_where(matrix == "Serum", visit_num == 1))
 n_txt <- imap_chr(s, \(x, nm) sprintf("%s: %d relapse, %d non-relapse", nm, sum(x$grp == "relapse"), sum(x$grp == "non-relapse")))
 walk(n_txt, \(x) msg(x))
 if (min(table(s$V1_lesion$grp)) < 3) stop("Fewer than 3 patients in a group at the V1 lesion site.", call. = FALSE)

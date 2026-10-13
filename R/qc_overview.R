@@ -234,9 +234,10 @@ detected_where <- function(clean, ms, min_f, classes = NULL) {
                                    pct_dISF_above_LOD >= 100 * min_f ~ "dISF only", pct_serum_above_LOD >= 100 * min_f ~ "serum only",
                                    TRUE ~ "neither"),
            across(c(pct_dISF_above_LOD, pct_serum_above_LOD), \(v) round(v, 1)))
-  if (length(cl)) out <- out |> left_join(classes |> select(OlinkID, all_of(cl)), by = "OlinkID") |>
-    mutate(across(all_of(cl), \(v) coalesce(v, FALSE)),
-           protein_classes = apply(as.matrix(pick(all_of(cl))), 1, \(r) paste(cl[r %in% TRUE], collapse = "; ")))
+  if (length(cl)) {
+    out <- out |> left_join(classes |> select(OlinkID, all_of(cl)), by = "OlinkID") |> mutate(across(all_of(cl), \(v) coalesce(v, FALSE)))
+    out$protein_classes <- apply(as.matrix(out[cl]), 1, \(r) paste(cl[r %in% TRUE], collapse = "; "))
+  }
   else out$protein_classes <- NA_character_
   out |> relocate(detected_in, .after = UniProt) |> relocate(protein_classes, .before = any_of(cl))
 }

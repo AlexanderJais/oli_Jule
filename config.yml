@@ -52,6 +52,7 @@ visit3:
 relapse_v1:
   top_labels: 25              # proteins labelled in the volcano plot
   n_course: 12                # targets shown over the visits
+  predict_k: [1, 5]           # prediction test: the top 1 and the top 5 proteins, picked without the predicted patient
 
 # Statistics (steps 03-18; after changing fdr or min_group_n, rerun from step 04)
 stats:

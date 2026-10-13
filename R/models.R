@@ -135,6 +135,8 @@ write_results_xlsx <- function(res, summ, cfg, prefix) {
     # single-comparison models: the model name; otherwise a shortened model name plus the comparison
     mutate(sheet = if_else(one, model, paste(recode(model, states_all_visits = "all_visits", baseline_V1 = "V1"), contrast)),
            sheet = str_trunc(str_replace_all(sheet, "[\\[\\]:*?/\\\\]", "_"), 31, ellipsis = ""),
+           # names that became equal by the cut: shorter, so make.unique's "_1" still fits Excel's 31 characters
+           sheet = if_else(duplicated(sheet) | duplicated(sheet, fromLast = TRUE), str_trunc(sheet, 28, ellipsis = ""), sheet),
            sheet = make.unique(sheet, sep = "_"))
   tabs <- map(seq_len(nrow(keys)), \(i) res |>
                 filter(model == keys$model[i], contrast == keys$contrast[i]) |> arrange(P.Value) |>

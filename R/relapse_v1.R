@@ -69,7 +69,7 @@ nested_loo_correct <- function(M, is_rel, k = 1) {
     mu <- rowMeans(tr[top, , drop = FALSE], na.rm = TRUE); sdv <- apply(tr[top, , drop = FALSE], 1, sd, na.rm = TRUE)
     sc <- \(x) colMeans(sg * (x[top, , drop = FALSE] - mu) / sdv, na.rm = TRUE)
     s_tr <- sc(tr); cut <- (mean(s_tr[y]) + mean(s_tr[!y])) / 2
-    (sc(M[, i, drop = FALSE]) > cut) == is_rel[i]
+    isTRUE((sc(M[, i, drop = FALSE]) > cut) == is_rel[i])          # no value for the left-out patient = not predicted
   }))
 }
 

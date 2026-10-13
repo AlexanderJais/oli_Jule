@@ -16,6 +16,8 @@ the [README](../README.md#2-words-you-will-meet). The statistical details are in
 | D. The three study aims | 09 aim 1 (dISF profile) · 11 aim 3 (disease course) · 13 visit by visit · *aim 2 = step 10, see part C* |
 | E. Specific proteins and questions | 12 focus proteins · 15 key questions · 16 TNFRSF9 correlations · 17 serum vs dISF signatures |
 | F. Reporting | 18 executive summary · 19 data export |
+| G. Separate: visit 3 | `run_visit3.R` – dISF and serum at visit 3, GSEA, dISF vs serum |
+| H. Separate: V1 relapse screen | `run_relapse_v1.R` – dISF markers at V1 that predict relapse |
 
 The steps are grouped by topic, so below they are not in number order; `run_all.R` always runs
 them 01 → 19.

@@ -87,7 +87,7 @@ write_output_guide <- function(cfg) {
     "(top level)",         "18",  "Executive summary of all results and the full lists behind it",           "Executive_summary.pdf",
     "metadata",            "01",  "Sample list from the manifest; flagged inconsistencies",                  "data_flags.csv",
     "qc",                  "02",  "Quality control: samples, LOD, which proteins are detectable",            "assay_detection.csv",
-    "qc_overview",         "02b", "Proteins above / below LOD in serum and dISF, by protein class",          "qc_overview.pdf",
+    "qc_overview",         "02b", "Proteins above / below LOD; which are measurable in dISF only; pathways", "qc_overview.pdf, dISF_only_proteins.xlsx",
     "explore",             "03",  "PCA plots and sources of variation",                                      "pca_*.png",
     "models",              "4,5,13", "Group comparisons per protein (dISF, serum, per visit); volcano/", "*_results.xlsx (one sheet per volcano)",
     "relad",               "05",  "All RELAD / RELAD2 serum results",                                        "RELAD_RELAD2_serum_results.xlsx",
@@ -104,6 +104,8 @@ write_output_guide <- function(cfg) {
     "tnfrsf9_correlation", "16",  "Proteins correlating with TNFRSF9 (CD137) in dISF",                       "TNFRSF9_correlation.xlsx",
     "signatures",          "17",  "Same or different biology in serum and dISF? (MicroAD)",                  "signatures.xlsx",
     "export",              "19",  "All Olink data as CSV (for Excel, Prism ...); RELAD2 separately",         "ISF_NPX_wide.csv, Serum_NPX_wide.csv",
+    "visit3",              "-",   "Separate (run_visit3.R): visit 3, dISF and serum DEGs, GSEA, dISF vs serum", "V3_DEGs_dISF.xlsx, V3_dISF_vs_serum.xlsx",
+    "relapse_V1",          "-",   "Separate (run_relapse_v1.R): dISF markers at V1 predicting relapse",     "V1_relapse_targets.xlsx",
     "data",                "02",  "Internal files used by the scripts - no need to open",                    "-")
   g <- g |> filter(folder == "(top level)" | dir.exists(file.path(cfg$paths$output, folder)))
   f <- out_path(cfg, "00_FOLDER_GUIDE.pdf")
