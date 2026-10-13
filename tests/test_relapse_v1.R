@@ -21,6 +21,6 @@ stopifnot(
   "chance check missing" = any(ch$value == "210"),
   "prediction test missing or wrong" = grepl("better than chance", readxl::read_excel(f, "README")$note[2]) &&
     all(c("loo_correct", "cutoff_NPX", "rho_time_to_relapse") %in% names(up)),
-  "files missing" = all(file.exists(file.path(out, c("V1_relapse_volcano.pdf", "V1_relapse_targets_course.pdf", "V1_relapse_chance_check.pdf", "V1_relapse_prediction_test.pdf", "V1_relapse_GSEA.xlsx"))))
+  "files missing" = all(file.exists(file.path(out, c("V1_relapse_volcano.pdf", "V1_relapse_targets_course.pdf", "V1_relapse_chance_check.pdf", "V1_relapse_prediction_test.pdf", "V1_relapse_GSEA.xlsx", "V1_relapse_executive_summary.pdf"))))
 )
 msg("All V1 relapse checks passed.")

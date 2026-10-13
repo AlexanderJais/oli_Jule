@@ -492,6 +492,9 @@ MicroAD has 4 relapsers (relapse at V3, V4, V5, V6) and 6 non-relapsers, so this
   target, secreted / membrane (Human Protein Atlas); `targets_down`; `chance_check` – how many such proteins random
   labels give; full results for V1 lesion site, V1 non-lesional skin, V1 lesion minus non-lesional, V2 cleared
   lesion site and V1 serum.
+- **`V1_relapse_executive_summary.pdf`** – start here: the answer, the prediction test, the ranked predictors
+  (cut-off, sensitivity / specificity, V2, serum, drug target), their course over the visits, the gene sets higher
+  in relapsers at V1 and V2, and the methods.
 - `V1_relapse_volcano.pdf`, `V1_relapse_targets_course.pdf` (each target per patient over V1–V6, relapse marked),
   `V1_relapse_chance_check.pdf`, `V1_relapse_prediction_test.pdf`, `V1_relapse_GSEA.xlsx` / `.pdf`.
 

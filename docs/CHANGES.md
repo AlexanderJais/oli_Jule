@@ -6,6 +6,7 @@ with `source("run_all.R")`.
 
 | Date | Change | Rerun from | New packages? |
 |---|---|---|---|
+| 2026-10-13 | **V1 relapse screen: executive summary PDF** `relapse_V1/V1_relapse_executive_summary.pdf` – the answer, the prediction test, the ranked predictors, the gene sets higher in relapsers (V1, V2) and the methods. | – (`run_relapse_v1.R`) | – |
 | 2026-10-13 | **Code audit** of the new analyses: the relapse prediction test counts a left-out patient without a value as not predicted (it could stop the count); the dISF-only class table no longer uses `dplyr::pick()`; KEGG download keeps working if KEGG changes its release line; model workbook sheet names always fit Excel's 31 characters; the folder guide lists `dISF_only_proteins.xlsx`, `visit3/` and `relapse_V1/`. | – | – |
 | 2026-10-13 | **New separate V1 relapse screen**, `source("run_relapse_v1.R")` → `output/relapse_V1/`: dISF proteins already higher at V1 in patients who later relapse, ranked as candidate targets with an exact relabelling check, leave-one-out, AUC, persistence at V2, serum and drug-target flags; volcano, per-patient course plots, GSEA. | – (`run_relapse_v1.R`) | – |
 | 2026-10-11 | **New separate visit 3 analysis**, `source("run_visit3.R")` → `output/visit3/`: differential proteins in dISF (lesion site vs healthy, lesion site vs non-lesional) and serum (AD vs healthy) as Excel files, volcano plots with the 25 most regulated proteins labelled, GSEA (incl. KEGG), and dISF vs serum (proteins and gene sets seen only in dISF). | – (`run_visit3.R`) | `ggrepel` |

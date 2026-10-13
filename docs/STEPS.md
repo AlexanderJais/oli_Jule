@@ -419,7 +419,7 @@ Values below LOD are exported as measured, which is Olink's recommendation; the 
 4. **Prediction:** per marker, each patient is classified with a cut-off set on the other patients (leave one out: patients correct, sensitivity, specificity, the V1 cut-off in NPX) and its correlation with how soon the relapse comes. **Can V1 predict at all:** the whole search (pick the top 1 or top 5 proteins on the other patients, classify the left-out one) is repeated for all 210 labellings; it predicts better than chance only if few random labellings do as well. Also: how many proteins separate perfectly by chance. Ranking starts with patients predicted correctly.
 5. GSEA, volcano plot, each target per patient over the visits.
 
-**Output:** `V1_relapse_targets.xlsx` (README with the answer, `can_V1_predict`, `targets_up`, `targets_down`, `chance_check`, full results), `V1_relapse_prediction_test.pdf`, `V1_relapse_volcano.pdf`, `V1_relapse_targets_course.pdf`, `V1_relapse_chance_check.pdf`, `V1_relapse_GSEA.xlsx` / `.pdf`.
+**Output:** `V1_relapse_executive_summary.pdf` (answer, predictors, gene sets, methods), `V1_relapse_targets.xlsx` (README with the answer, `can_V1_predict`, `targets_up`, `targets_down`, `chance_check`, full results), `V1_relapse_prediction_test.pdf`, `V1_relapse_volcano.pdf`, `V1_relapse_targets_course.pdf`, `V1_relapse_chance_check.pdf`, `V1_relapse_GSEA.xlsx` / `.pdf`.
 
 **Keep in mind:** with 4 vs 6 patients this picks candidates, it does not confirm them; `chance_check` says how many of the hits random labels would give. Candidates also measurable in serum can be checked in RELAD / RELAD2.
 

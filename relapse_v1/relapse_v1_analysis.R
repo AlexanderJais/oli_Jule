@@ -5,7 +5,8 @@
 #   V2 cleared lesion site (still higher after treatment?), V1 serum (also visible in blood?)
 # In:  output of steps 01-02 (data/npx_clean.rds); Human Protein Atlas (drug targets, location); MSigDB / KEGG gene sets
 # Out: output/relapse_V1/ - V1_relapse_targets.xlsx, V1_relapse_GSEA.xlsx, V1_relapse_volcano.pdf/.png,
-#      V1_relapse_targets_course.pdf/.png, V1_relapse_chance_check.pdf/.png, V1_relapse_GSEA.pdf/.png
+#      V1_relapse_targets_course.pdf/.png, V1_relapse_chance_check.pdf/.png, V1_relapse_GSEA.pdf/.png,
+#      V1_relapse_executive_summary.pdf (answer, predictors, gene sets, methods)
 
 source("R/utils.R")
 source("R/qc_overview.R")
@@ -166,15 +167,18 @@ writexl::write_xlsx(c(list(README = tibble(note = "GSEA (fgsea) on the limma t s
 
 # ---- figures --------------------------------------------------------------------------------------------------------------
 fi <- qc_font_setup(cfg$qc_overview$font %||% "Nimbus Sans")
-save_fig <- function(p, file, width = 11.69, height = 8.27) for (type in c("pdf", "png")) {
-  open_device(out_path(cfg, out, paste0(file, ".", type)), type, fi, width, height)
-  print(set_family(p, fi$family))
-  close_device(fi)
+save_fig <- function(p, file, width = 11.69, height = 8.27) {
+  for (type in c("pdf", "png")) {
+    open_device(out_path(cfg, out, paste0(file, ".", type)), type, fi, width, height)
+    print(set_family(p, fi$family))
+    close_device(fi)
+  }
+  invisible(p)
 }
 th <- theme_bw(base_size = 10) + theme(panel.grid.minor = element_blank(), plot.title.position = "plot")
 vol <- scr |> mutate(cl = case_when(candidate_up ~ "higher in relapse (target)", candidate_down ~ "lower in relapse", TRUE ~ "other"))
 lab <- vol |> arrange(desc(candidate_up | candidate_down), p) |> slice_head(n = n_lab)
-save_fig(ggplot(vol, aes(logFC, -log10(p))) +
+p_volcano <- save_fig(ggplot(vol, aes(logFC, -log10(p))) +
            geom_point(aes(colour = cl), size = 1.1) +
            ggrepel::geom_text_repel(data = lab, aes(label = Assay), size = 2.6, max.overlaps = Inf, min.segment.length = 0, segment.colour = "grey60", segment.size = 0.3) +
            scale_colour_manual(values = c(`higher in relapse (target)` = colours$above, `lower in relapse` = colours$below, other = "grey75"), name = NULL) +
@@ -189,7 +193,7 @@ show <- (if (nrow(cand_up)) cand_up else scr |> filter(logFC > 0) |> arrange(p))
 course <- clean |> filter(cohort == "MicroAD", matrix == "ISF", site == "L", SubjectID %in% s$V1_lesion$SubjectID, OlinkID %in% show$OlinkID) |>
   select(SubjectID, OlinkID, Assay, visit_num, value, relapse, relapse_visit) |>
   mutate(Assay = factor(Assay, unique(show$Assay)), at_relapse = !is.na(relapse_visit) & visit_num == relapse_visit)
-save_fig(ggplot(course, aes(visit_num, value, group = SubjectID, colour = relapse)) +
+p_course <- save_fig(ggplot(course, aes(visit_num, value, group = SubjectID, colour = relapse)) +
            geom_line(alpha = 0.8) + geom_point(size = 1.2) +
            geom_point(data = \(d) filter(d, at_relapse), shape = 4, size = 3, stroke = 1.1, colour = "black") +
            scale_colour_manual(values = c(relapse = colours$above, `non-relapse` = "grey60"), name = NULL) +
@@ -200,7 +204,7 @@ save_fig(ggplot(course, aes(visit_num, value, group = SubjectID, colour = relaps
                 subtitle = "violet: patients who relapse (x = relapse visit); grey: non-relapse. V1 baseline, V2 after topical steroids") + th,
          "V1_relapse_targets_course")
 
-save_fig(ggplot(tibble(hits = rc$hits), aes(hits)) + geom_histogram(binwidth = 1, fill = "grey75") +
+p_chance <- save_fig(ggplot(tibble(hits = rc$hits), aes(hits)) + geom_histogram(binwidth = 1, fill = "grey75") +
            geom_vline(xintercept = rc$observed_hits, colour = colours$above, linewidth = 1) +
            labs(x = "proteins higher in the 'relapse' group with p < 0.05", y = "relabellings",
                 title = sprintf("Chance check: observed %d (violet) vs all %d ways to choose %d of the %d patients as relapse",
@@ -208,12 +212,85 @@ save_fig(ggplot(tibble(hits = rc$hits), aes(hits)) + geom_histogram(binwidth = 1
                 subtitle = sprintf("%.0f%% of the random labellings give at least as many proteins", 100 * mean(rc$hits >= rc$observed_hits))) + th,
          "V1_relapse_chance_check", width = 9, height = 5)
 pn <- map(nested, \(x) tibble(k = sprintf("top %d protein(s)", x$k), correct = x$null, obs = x$obs)) |> bind_rows()
-save_fig(ggplot(pn, aes(correct)) + geom_histogram(binwidth = 1, fill = "grey75") +
+p_pred <- save_fig(ggplot(pn, aes(correct)) + geom_histogram(binwidth = 1, fill = "grey75") +
            geom_vline(data = distinct(pn, k, obs), aes(xintercept = obs), colour = colours$above, linewidth = 1) + facet_wrap(~k) +
            scale_x_continuous(breaks = 0:length(is_rel)) +
            labs(x = sprintf("patients predicted correctly (of %d), markers picked without the predicted patient", length(is_rel)), y = "relabellings",
                 title = "Can V1 dISF predict relapse? Observed (violet) vs all random labellings",
                 subtitle = paste(map_chr(nested, \(x) sprintf("top %d: %d correct, P = %.3f", x$k, x$obs, x$p)), collapse = "; ")) + th,
          "V1_relapse_prediction_test", width = 9, height = 5)
-if (nrow(gsea$V1_lesion)) save_fig(gsea_plot(gsea$V1_lesion, "GSEA, dISF lesion site at V1, relapse vs non-relapse", colours, fdr), "V1_relapse_GSEA")
+p_gsea <- if (nrow(gsea$V1_lesion)) save_fig(gsea_plot(gsea$V1_lesion, "GSEA, dISF lesion site at V1, relapse vs non-relapse", colours, fdr), "V1_relapse_GSEA") else NULL
+
+# ---- executive summary PDF ------------------------------------------------------------------------------------------------
+source("R/report.R")
+fmt_p <- \(x) ifelse(is.na(x), "", formatC(x, digits = 2, format = "g"))
+yn <- \(x) ifelse(x %in% TRUE, "yes", "")
+pretty_gs <- \(x) if_else(x == toupper(x), str_to_sentence(x), x)        # MSigDB names are upper case
+gs_up <- \(g) if (is.null(g) || !nrow(g)) tibble() else g |> filter(NES > 0) |> arrange(p) |> mutate(gene_set = pretty_gs(gene_set))
+g1 <- gs_up(gsea$V1_lesion); g2 <- gs_up(gsea$V2_cleared_lesion)
+top_t <- head(cand_up, 5)
+pred_line <- map_chr(nested, \(x) sprintf("top %d protein(s): %d of %d patients correct (random labels: median %.0f; P = %.3f)",
+                                          x$k, x$obs, length(is_rel), median(x$null), x$p))
+drug_n <- sum(cand_up$approved_drug_target | cand_up$potential_drug_target)
+pdf_open(out_path(cfg, out, "V1_relapse_executive_summary.pdf"))
+section("Summary", page_text("dISF markers at V1 that predict relapse - executive summary", c(
+  "## Question",
+  "Which dISF proteins at V1 (baseline, before the topical steroids at V2) predict that an AD patient relapses later?",
+  "## Patients",
+  sprintf("MicroAD, dISF lesion site at V1: %d patients who relapse later (relapse at %s) vs %d who do not (dropouts excluded).",
+          sum(is_rel), rel_visits, sum(!is_rel)),
+  "## Answer",
+  answer,
+  paste("Can V1 dISF predict relapse? Each patient was predicted with markers picked and cut-offs set on the other patients:",
+        paste(pred_line, collapse = "; "), "."),
+  sprintf("Chance check: %d proteins are higher in relapsers with p < 0.05; random labels give a median of %.0f, so about %.0f of them are expected by chance.",
+          rc$observed_hits, median(rc$hits), min(median(rc$hits), rc$observed_hits)),
+  "## Markers (higher in relapsers at V1)",
+  if (nrow(cand_up)) sprintf("%d candidate markers (%d lower in relapsers). Top: %s.", nrow(cand_up), nrow(cand_down),
+                             paste(sprintf("%s (%d/%d correct, AUC %.2f)", top_t$Assay, top_t$loo_correct, top_t$loo_n, top_t$AUC), collapse = ", "))
+  else "No protein passed the marker criteria.",
+  sprintf("Still higher after treatment (V2, cleared skin): %d; also higher in V1 serum: %d; approved or potential drug target: %d; secreted or membrane: %d.",
+          sum(cand_up$persists_V2_up), sum(cand_up$also_serum_up), drug_n, sum(cand_up$secreted | cand_up$membrane)),
+  "## Gene sets (higher in relapsers)",
+  sprintf("V1 lesion site: %d gene sets with FDR < %.2f%s.", sum(g1$FDR < fdr), fdr,
+          if (nrow(g1)) paste0("; top: ", paste(head(g1$gene_set, 5), collapse = "; ")) else ""),
+  sprintf("V2 cleared lesion site: %d gene sets with FDR < %.2f%s.", sum(g2$FDR < fdr), fdr,
+          if (nrow(g2)) paste0("; top: ", paste(head(g2$gene_set, 5), collapse = "; ")) else ""),
+  "## Keep in mind",
+  sprintf("%d vs %d patients: these are candidates to test in new patients, not confirmed predictors. The smallest possible exact p is 1/%d.",
+          sum(is_rel), sum(!is_rel), rc$n_labellings),
+  "Full tables: V1_relapse_targets.xlsx (targets_up, targets_down, can_V1_predict, chance_check, all comparisons) and V1_relapse_GSEA.xlsx."),
+  subtitle = sprintf("O-MicroAD, Olink Explore HT, dISF. Generated %s.", format(Sys.Date()))))
+section("Prediction test", { page_plot(p_pred); page_plot(p_chance) })
+section("Markers", page_table("Predictors: markers higher in relapsers at V1 (ranked)",
+  cand_up |> head(30) |> transmute(rank, marker = Assay, correct = sprintf("%d/%d", loo_correct, loo_n), sens = round(loo_sensitivity, 2),
+                                   spec = round(loo_specificity, 2), cutoff_NPX = round(cutoff_NPX, 2), AUC, log2FC = round(logFC, 2), p = fmt_p(p),
+                                   exact_p = fmt_p(p_exact_up), V2 = yn(persists_V2_up), serum = yn(also_serum_up),
+                                   drug = if_else(approved_drug_target, "approved", if_else(potential_drug_target, "potential", "")),
+                                   location = if_else(secreted, "secreted", if_else(membrane, "membrane", ""))),
+  subtitle = "Ranked by patients predicted correctly, then AUC. correct: each patient predicted with a cut-off set on the other patients (leave one out)",
+  note = "cutoff_NPX: V1 lesion site. V2: still higher at V2 (cleared skin). serum: also higher in V1 serum. drug / location: Human Protein Atlas", rows_per_page = 25))
+section("Course", page_plot(p_course))
+section("Volcano", page_plot(p_volcano))
+section("Gene sets V1", page_table("Gene sets higher in relapsers: dISF lesion site at V1 (GSEA)",
+  g1 |> head(25) |> transmute(collection, gene_set = str_trunc(gene_set, 60), proteins = measured_proteins_in_set, NES, FDR = fmt_p(FDR),
+                              leading_edge = str_trunc(leading_edge, 45)),
+  subtitle = "NES > 0: higher in relapsers; sorted by p", rows_per_page = 25))
+if (!is.null(p_gsea)) section("GSEA plot", page_plot(p_gsea))
+section("Gene sets V2", page_table("Gene sets higher in relapsers after treatment: cleared lesion site at V2 (GSEA)",
+  g2 |> head(20) |> transmute(collection, gene_set = str_trunc(gene_set, 60), proteins = measured_proteins_in_set, NES, FDR = fmt_p(FDR),
+                              leading_edge = str_trunc(leading_edge, 45)),
+  subtitle = "NES > 0: higher in relapsers; sorted by p", rows_per_page = 20))
+if (nrow(cand_down)) section("Lower", page_table("Markers lower in relapsers at V1",
+  cand_down |> head(20) |> transmute(rank, marker = Assay, correct = sprintf("%d/%d", loo_correct, loo_n), AUC, log2FC = round(logFC, 2), p = fmt_p(p),
+                                     exact_p = fmt_p(p_exact_down), V2 = yn(persists_V2_down), serum = yn(also_serum_down)), rows_per_page = 20))
+section("Methods", page_text("Methods", c(
+  "Data: Olink Explore HT, PCNormalizedNPX, dISF of the MicroAD AD patients with a relapse / non-relapse label. Proteins above LOD in >= 50% of the samples of at least one group were tested.",
+  "Differential test: limma, relapse vs non-relapse, at the V1 lesion site (primary), V1 non-lesional skin, V1 lesion minus non-lesional of the same patient, the V2 cleared lesion site (before any relapse) and V1 serum.",
+  sprintf("Exact relabelling: the V1 lesion analysis was repeated for all %d ways to choose the relapse group; exact p per protein and the number of hits under random labels.", rc$n_labellings),
+  "Marker criteria: higher in relapsers at the V1 lesion site with p < 0.05 and exact p < 0.05, above LOD in >= 50% of the relapsers. Ranked by patients predicted correctly (leave one out), AUC, persistence at V2, leave-one-out stability, fold change.",
+  "Prediction: per marker, each patient classified with the cut-off (midpoint of the group means) set on the other patients. Whole-search test: the top 1 / top 5 proteins picked on the other patients, the left-out patient classified, repeated for every random labelling.",
+  "Gene sets: GSEA (fgsea) on the limma t statistics, MSigDB Hallmark, Reactome, GO biological processes and KEGG.",
+  "Annotation: Human Protein Atlas protein classes (approved / potential drug targets, predicted secreted / membrane proteins).")))
+invisible(grDevices::dev.off())
 msg("V1 relapse screen: %s", file.path(cfg$paths$output, out))
