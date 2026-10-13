@@ -109,13 +109,15 @@ anno <- if (is.null(hpa)) tibble(OlinkID = character()) else {
 }
 for (cl in c("approved_drug_target", "potential_drug_target", "secreted", "membrane")) if (!cl %in% names(anno)) anno[[cl]] <- logical(nrow(anno))
 
-# same-plate check: the relapsers' V1 lesion samples may share one Olink plate; a target should not simply be higher on it
-rel_plate <- names(which.max(table(s$V1_lesion$plate[s$V1_lesion$grp == "relapse"])))
-nr <- s$V1_lesion |> filter(grp == "non-relapse") |> mutate(same = plate == rel_plate)
-plate_check <- function(oid) {
-  if (sum(nr$same) < 2 || sum(!nr$same) < 2 || n_distinct(s$V1_lesion$plate[s$V1_lesion$grp == "relapse"]) > 1) return("not needed / not testable")
-  v <- M[oid, nr$SubjectID]; p <- tryCatch(t.test(v[nr$same], v[!nr$same])$p.value, error = \(e) NA)
-  if (!is.na(p) && p < 0.05 && mean(v[nr$same], na.rm = TRUE) > mean(v[!nr$same], na.rm = TRUE)) "also higher in non-relapsers on that plate" else "ok"
+# same-plate check: the relapsers' samples may share one Olink plate; a marker should not simply be higher on it
+# (compared among the non-relapsers: on that plate vs on the others)
+plate_check <- function(oid, smp, Mx, up = TRUE) {
+  rel_plate <- names(which.max(table(smp$plate[smp$grp == "relapse"])))
+  nr <- smp |> filter(grp == "non-relapse", SubjectID %in% colnames(Mx)) |> mutate(same = plate == rel_plate)
+  if (sum(nr$same) < 2 || sum(!nr$same) < 2 || n_distinct(smp$plate[smp$grp == "relapse"]) > 1) return("not needed / not testable")
+  v <- Mx[oid, nr$SubjectID]; p <- tryCatch(t.test(v[nr$same], v[!nr$same])$p.value, error = \(e) NA)
+  d <- mean(v[nr$same], na.rm = TRUE) - mean(v[!nr$same], na.rm = TRUE)
+  if (!is.na(p) && p < 0.05 && (if (up) d > 0 else d < 0)) "same difference among non-relapsers on that plate" else "ok"
 }
 
 # ---- ranked lists -------------------------------------------------------------------------------------------------------
@@ -133,8 +135,9 @@ scr <- sd$per |>
 rank_up <- \(x) x |> filter(candidate_up) |> arrange(desc(loo_correct), desc(AUC), desc(loo_always_higher), desc(logFC)) |> mutate(rank = row_number())
 rank_down <- \(x) x |> filter(candidate_down) |> arrange(desc(loo_correct), AUC, logFC) |> mutate(rank = row_number())
 cand_up <- scr |> filter(candidate_up) |> arrange(desc(loo_correct), desc(AUC), desc(persists_V2_up), desc(loo_always_higher), desc(logFC))
-cand_up <- cand_up |> mutate(rank = row_number(), same_plate_check = map_chr(OlinkID, plate_check))
-cand_down <- scr |> filter(candidate_down) |> arrange(desc(loo_correct), AUC, desc(persists_V2_down), logFC) |> mutate(rank = row_number(), same_plate_check = map_chr(OlinkID, plate_check))
+cand_up <- cand_up |> mutate(rank = row_number(), same_plate_check = map_chr(OlinkID, \(o) plate_check(o, s$V1_lesion, sd$M, TRUE)))
+cand_down <- scr |> filter(candidate_down) |> arrange(desc(loo_correct), AUC, desc(persists_V2_down), logFC) |>
+  mutate(rank = row_number(), same_plate_check = map_chr(OlinkID, \(o) plate_check(o, s$V1_lesion, sd$M, FALSE)))
 tcols <- c("rank", "Assay", "OlinkID", "UniProt", "loo_correct", "loo_n", "loo_sensitivity", "loo_specificity", "cutoff_NPX", "AUC",
            "rho_time_to_relapse", "p_time_to_relapse", "logFC", "p", "p_exact_up", "p_exact_down", "loo_always_higher", "loo_max_p",
            "persists_V2_up", "persists_V2_down", "logFC_V2_cleared", "p_V2_cleared", "logFC_V1_nonlesional", "p_V1_nonlesional",
@@ -147,7 +150,8 @@ msg("dISF targets: %d higher, %d lower in relapsers at V1 (lesion site)", nrow(c
 # serum at V1: the same screen, with the dISF lesion site result next to it
 scr_s <- ss$per |> left_join(side("V1_lesion", "dISF_V1"), by = "OlinkID") |> flags() |>
   mutate(also_dISF_up = coalesce(logFC_dISF_V1 > 0 & p_dISF_V1 < 0.05, FALSE), also_dISF_down = coalesce(logFC_dISF_V1 < 0 & p_dISF_V1 < 0.05, FALSE))
-ser_up <- rank_up(scr_s); ser_down <- rank_down(scr_s)
+ser_up <- rank_up(scr_s) |> mutate(same_plate_check = map_chr(OlinkID, \(o) plate_check(o, s$serum_V1, ss$M, TRUE)))
+ser_down <- rank_down(scr_s) |> mutate(same_plate_check = map_chr(OlinkID, \(o) plate_check(o, s$serum_V1, ss$M, FALSE)))
 msg("Serum targets: %d higher, %d lower in relapsers at V1", nrow(ser_up), nrow(ser_down))
 
 # ---- dISF and serum together: markers in both matrices ------------------------------------------------------------------
@@ -215,10 +219,25 @@ writexl::write_xlsx(list(README = readme, can_V1_predict = predict_tbl, chance_c
 
 # ---- GSEA ---------------------------------------------------------------------------------------------------------------
 sets <- v3_gene_sets(cfg)
-gsea <- map(res[c("V1_lesion", "V1_lesion_minus_nonlesional", "V2_cleared_lesion")],
+gsea <- map(res[c("V1_lesion", "V1_lesion_minus_nonlesional", "V2_cleared_lesion", "serum_V1")],
             \(r) run_gsea(r, sets, cfg$enrichment$min_size %||% 10, cfg$enrichment$max_size %||% 500))
-writexl::write_xlsx(c(list(README = tibble(note = "GSEA (fgsea) on the limma t statistics, relapse vs non-relapse; NES > 0 = higher in relapsers. MSigDB collections of config enrichment$collections and KEGG")),
-                      gsea), out_path(cfg, out, "V1_relapse_GSEA.xlsx"))
+gs_both <- if (nrow(gsea$V1_lesion) && nrow(gsea$serum_V1))
+  inner_join(gsea$V1_lesion |> select(collection, gene_set, NES_dISF = NES, p_dISF = p, FDR_dISF = FDR, leading_edge_dISF = leading_edge),
+             gsea$serum_V1 |> select(collection, gene_set, NES_serum = NES, p_serum = p, FDR_serum = FDR, leading_edge_serum = leading_edge),
+             by = c("collection", "gene_set")) |>
+  mutate(category = case_when(sign(NES_dISF) != sign(NES_serum) ~ NA_character_,
+                              FDR_dISF < fdr & FDR_serum < fdr ~ "FDR < 0.05 in both",
+                              FDR_dISF < fdr & p_serum < 0.05 ~ "FDR < 0.05 in dISF, p < 0.05 in serum",
+                              FDR_serum < fdr & p_dISF < 0.05 ~ "FDR < 0.05 in serum, p < 0.05 in dISF",
+                              p_dISF < 0.05 & p_serum < 0.05 ~ "p < 0.05 in both"),
+         direction = if_else(NES_dISF > 0, "higher in relapsers", "lower in relapsers")) |>
+  filter(!is.na(category)) |> arrange(direction, factor(category, c("FDR < 0.05 in both", "FDR < 0.05 in dISF, p < 0.05 in serum",
+                                                                    "FDR < 0.05 in serum, p < 0.05 in dISF", "p < 0.05 in both")), p_dISF) |>
+  relocate(direction, category, .after = gene_set) else tibble()
+msg("Gene sets changed in the same direction in dISF and serum (V1): %d", nrow(gs_both))
+writexl::write_xlsx(c(list(README = tibble(note = c("GSEA (fgsea) on the limma t statistics, relapse vs non-relapse; NES > 0 = higher in relapsers. MSigDB collections of config enrichment$collections and KEGG",
+                                                    "gene_sets_dISF_and_serum: gene sets changed in the same direction at V1 in the dISF lesion site and in serum"))),
+                      gsea, list(gene_sets_dISF_and_serum = gs_both)), out_path(cfg, out, "V1_relapse_GSEA.xlsx"))
 
 # ---- figures --------------------------------------------------------------------------------------------------------------
 fi <- qc_font_setup(cfg$qc_overview$font %||% "Nimbus Sans")
@@ -231,7 +250,8 @@ save_fig <- function(p, file, width = 11.69, height = 8.27) {
   invisible(p)
 }
 th <- theme_bw(base_size = 10) + theme(panel.grid.minor = element_blank(), plot.title.position = "plot")
-volcano_screen <- function(x, what, rcx, file) {
+volcano_screen <- function(x, what, scx, file) {
+  rcx <- scx$rc
   v <- x |> mutate(cl = case_when(candidate_up ~ "higher in relapse (marker)", candidate_down ~ "lower in relapse (marker)", TRUE ~ "other"))
   lab <- v |> arrange(desc(candidate_up | candidate_down), p) |> slice_head(n = n_lab)
   save_fig(ggplot(v, aes(logFC, -log10(p))) +
@@ -240,12 +260,12 @@ volcano_screen <- function(x, what, rcx, file) {
              scale_colour_manual(values = c(`higher in relapse (marker)` = colours$above, `lower in relapse (marker)` = colours$below, other = "grey75"), name = NULL) +
              labs(x = "log2 fold change (relapse - non-relapse)", y = "-log10 p",
                   title = sprintf("%s at V1: %d later relapse vs %d non-relapse - %d proteins higher, %d lower (markers)",
-                                  what, sum(is_rel), sum(!is_rel), sum(v$candidate_up), sum(v$candidate_down)),
+                                  what, sum(scx$is_rel), sum(!scx$is_rel), sum(v$candidate_up), sum(v$candidate_down)),
                   subtitle = sprintf("Marker: p < 0.05 and exact relabelling p < 0.05. %d proteins higher with p < 0.05; random labels give a median of %.0f. Labelled: %d proteins (markers first, then lowest p)",
                                      rcx$observed_hits, median(rcx$hits), n_lab)) + th, file)
 }
-p_volcano <- volcano_screen(scr, "dISF lesion site", rc, "V1_relapse_volcano")
-p_volcano_s <- volcano_screen(scr_s, "Serum", ss$rc, "V1_relapse_volcano_serum")
+p_volcano <- volcano_screen(scr, "dISF lesion site", sd, "V1_relapse_volcano")
+p_volcano_s <- volcano_screen(scr_s, "Serum", ss, "V1_relapse_volcano_serum")
 
 show <- (if (nrow(cand_up)) cand_up else scr |> filter(logFC > 0) |> arrange(p)) |> slice_head(n = n_course)
 course <- clean |> filter(cohort == "MicroAD", matrix == "ISF", site == "L", SubjectID %in% s$V1_lesion$SubjectID, OlinkID %in% show$OlinkID) |>
@@ -358,6 +378,9 @@ section("Summary", page_text("Markers at V1 that predict relapse (dISF and serum
           if (nrow(g1)) paste0("; top: ", paste(head(g1$gene_set, 5), collapse = "; ")) else ""),
   sprintf("V2 cleared lesion site: %d gene sets with FDR < %.2f%s.", sum(g2$FDR < fdr), fdr,
           if (nrow(g2)) paste0("; top: ", paste(head(g2$gene_set, 5), collapse = "; ")) else ""),
+  { gb <- if (nrow(gs_both)) gs_both |> filter(direction == "higher in relapsers") else tibble()
+    sprintf("Higher in relapsers in both dISF and serum (V1): %d gene sets%s.", nrow(gb),
+            if (nrow(gb)) paste0("; top: ", paste(head(pretty_gs(gb$gene_set), 5), collapse = "; ")) else "") },
   "## Keep in mind",
   sprintf("%d vs %d patients: these are candidates to test in new patients, not confirmed predictors. The smallest possible exact p is 1/%d.",
           sum(is_rel), sum(!is_rel), rc$n_labellings),
@@ -393,6 +416,10 @@ section("Gene sets V1", page_table("Gene sets higher in relapsers: dISF lesion s
                               leading_edge = str_trunc(leading_edge, 45)),
   subtitle = "NES > 0: higher in relapsers; sorted by p", rows_per_page = 25))
 if (!is.null(p_gsea)) section("GSEA plot", page_plot(p_gsea))
+if (nrow(gs_both)) section("Gene sets both", page_table("Gene sets changed in the same direction in dISF and serum at V1",
+  gs_both |> head(30) |> transmute(direction = str_remove(direction, " in relapsers"), category, collection, gene_set = str_trunc(pretty_gs(gene_set), 55),
+                                   NES_dISF, FDR_dISF = fmt_p(FDR_dISF), NES_serum, FDR_serum = fmt_p(FDR_serum)),
+  subtitle = "GSEA relapse vs non-relapse in each matrix; NES > 0 = higher in relapsers", rows_per_page = 30))
 section("Gene sets V2", page_table("Gene sets higher in relapsers after treatment: cleared lesion site at V2 (GSEA)",
   g2 |> head(20) |> transmute(collection, gene_set = str_trunc(gene_set, 60), proteins = measured_proteins_in_set, NES, FDR = fmt_p(FDR),
                               leading_edge = str_trunc(leading_edge, 45)),

@@ -5,7 +5,7 @@ study: about 5,400 proteins measured in **dermal interstitial fluid (dISF)** and
 patients with atopic dermatitis (AD) and control persons.
 
 This page tells you how to run the analysis and **where to find which result**. Two more pages:
-- [`docs/STEPS.md`](docs/STEPS.md) – what each step does (01–19, plus 02b), in plain words;
+- [`docs/STEPS.md`](docs/STEPS.md) – what each step does (01–19, plus 02b, and the dedicated analyses), in plain words;
 - [`docs/TECHNICAL.md`](docs/TECHNICAL.md) – technical details (models, design decisions);
 - [`docs/CHANGES.md`](docs/CHANGES.md) – what changed in each version and which steps to rerun.
 
@@ -14,6 +14,16 @@ This page tells you how to run the analysis and **where to find which result**. 
 > **Start here:** after a run, open **`output/Executive_summary.pdf`**. It summarises all
 > results (the answers to the key questions come right after the overview page) and tells you
 > which folder holds the details.
+
+**Dedicated analyses** – each runs on its own (import / QC plus that analysis only), not as part of `run_all.R`:
+
+| Question | Run | Open first |
+|---|---|---|
+| How many proteins are measurable in serum and dISF, which only in dISF, and in which pathways? | `source("run_qc_overview.R")` | `output/qc_overview/qc_overview.pdf`, `dISF_only_proteins.xlsx`, `dISF_only_pathways.pdf`, `dISF_only_KEGG.pdf` |
+| Visit 3: lesional vs healthy / non-lesional skin, AD vs healthy serum – and what does dISF show that serum does not? | `source("run_visit3.R")` | `output/visit3/V3_dISF_vs_serum.pdf`, `V3_DEGs_dISF.xlsx`, `V3_DEGs_serum.xlsx` |
+| Which markers at V1 predict a later relapse – in dISF, in serum, and in both? | `source("run_relapse_v1.R")` | **`output/relapse_V1/V1_relapse_executive_summary.pdf`** |
+
+Details: [section 4](#qc_overview--how-many-proteins-are-measurable-step-02b) (QC overview), [section 8](#8-separate-analysis-visit-3-run_visit3r) (visit 3), [section 9](#9-separate-analysis-v1-relapse-screen-run_relapse_v1r) (relapse).
 
 ---
 
@@ -62,6 +72,10 @@ in others it doesn't (*non-relapse*).
 | **Partial correlation** | The correlation left after removing differences due to skin state / group, visit and plate, so two proteins that are merely both higher in lesional skin don't count as linked. |
 | **Within-patient correlation** | Do two values go up and down together from visit to visit in the same patient? Differences between patients don't count. Also called repeated-measures correlation (rmcorr). |
 | **AUC** | How well a value separates two groups: 0.5 = no better than chance; the further from 0.5 (towards 1 or towards 0), the better. In `key_questions/`, above 0.5 = higher in the patients who later relapse, below 0.5 = lower. |
+| **Relapser** | An AD patient whose lesion site, after clearing, becomes lesional again (MicroAD: 4 patients, relapse at V3, V4, V5 or V6; they leave the study at relapse). |
+| **Leave one out** | Each patient is predicted by a rule (marker, cut-off) set on all other patients only – an honest test of prediction in small groups. |
+| **Exact relabelling / chance check** | The analysis is repeated for every possible way to choose the relapse group (210 for 4 of 10 patients). It shows how many "hits" random labels give, and an exact p-value (smallest possible 1/210). |
+| **GSEA / over-representation** | Gene set analyses: GSEA asks whether a gene set (pathway) sits at the top or bottom of all proteins ranked by their change; over-representation asks whether a list (e.g. the dISF-only proteins) contains more members of a set than expected. Gene sets: MSigDB Hallmark, Reactome, GO biological processes, and KEGG. |
 
 ---
 
@@ -74,9 +88,13 @@ in others it doesn't (*non-relapse*).
    **Data files are never uploaded to GitHub.**
 3. The first time only, run `source("install_packages.R")` (needs R 4.3 or newer).
 4. Optional, once (needs internet): `source("tools/download_hpa.R")` downloads the public Human Protein
-   Atlas table. Step 02b uses it for the protein classes, step 17 for the tissue origin of proteins.
-   Without it, both steps still run but leave these parts out.
+   Atlas table. Step 02b uses it for the protein classes, step 17 for the tissue origin of proteins, the relapse
+   screen for drug targets. Without it, these steps still run but leave these parts out.
+   `source("tools/download_kegg.R")` downloads the current KEGG human pathways (free for academic use) for the
+   KEGG analyses; without it the older MSigDB KEGG collection is used. Both files stay in `data/reference/`.
 5. Run `source("run_all.R")`. The full run can take an hour or more, and the results appear in `output/`.
+   For one of the dedicated analyses only, run its script instead (`run_qc_overview.R`, `run_visit3.R`,
+   `run_relapse_v1.R`; see the table at the top). They take a few minutes.
 6. **To resume** from a later step, e.g. after changing a setting for step 12: `start_at <- 12; source("run_all.R")`.
    Step numbers are the script numbers; for step 02b use `start_at <- "02b"`.
    Earlier results are reused, and all later steps run again (including the summary, step 18). Start
@@ -88,7 +106,8 @@ The first lines of the run list the input files: `[ok]` = found, `[MISSING]` = r
 missing (the run stops), `[--]` = optional or recommended file not found (the run continues).
 
 To check that R and the packages work, run `source("tests/test_pipeline.R")`. It uses invented data
-only, takes about 15 minutes, and must end with "All pipeline checks passed". Its results go to
+only, takes about 15 minutes, and must end with "All pipeline checks passed". The dedicated analyses have their own
+quick tests: `tests/test_visit3.R` and `tests/test_relapse_v1.R` (a few minutes each). Its results go to
 `output_sim/` and are **invented**: never use them as study results. The test switches its settings
 off again when it finishes; the first lines of every run say which settings file and output folder are used.
 
@@ -431,7 +450,7 @@ used when dISF is compared with serum) and `RELAD_AD_vs_HC` (RELAD/RELAD2). Rela
 | `tools/download_kegg.R` | Optional: downloads the current KEGG human pathways (free for academic use) for the KEGG analysis of step 02b |
 | `data/` | Your input files (not uploaded to GitHub) – see `data/README.md` |
 | `output/` | All results (not uploaded to GitHub) |
-| `tests/` | Test with invented data |
+| `tests/` | Tests with invented data: `test_pipeline.R` (all steps), `test_visit3.R`, `test_relapse_v1.R` |
 | `docs/STEPS.md` | What each step does, in plain words |
 | `docs/CHANGES.md` | What changed, and what to rerun after an update |
 | `docs/TECHNICAL.md` | Statistical methods and design decisions |
@@ -495,7 +514,8 @@ MicroAD has 4 relapsers (relapse at V3, V4, V5, V6) and 6 non-relapsers, so this
   labels give; full results for V1 lesion site, V1 non-lesional skin, V1 lesion minus non-lesional, V2 cleared
   lesion site and V1 serum. Serum: `serum_targets_up` / `serum_targets_down`, `serum_can_V1_predict`;
   **`dISF_and_serum`** – markers in both matrices (and markers in one supported in the other), with `overlap_chance`
-  (how many proteins random labels make "higher in both").
+  (how many proteins random labels make "higher in both"). `V1_relapse_GSEA.xlsx` also lists the gene sets
+  changed in the same direction in dISF and serum (`gene_sets_dISF_and_serum`).
 - **`V1_relapse_executive_summary.pdf`** – start here: the answer, the prediction test, the ranked predictors
   (cut-off, sensitivity / specificity, V2, serum, drug target), their course over the visits, the gene sets higher
   in relapsers at V1 and V2, and the methods.
