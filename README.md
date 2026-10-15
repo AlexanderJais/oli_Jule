@@ -10,7 +10,8 @@ This page tells you how to run the analysis and **where to find which result**. 
 - [`docs/CHANGES.md`](docs/CHANGES.md) – what changed in each version and which steps to rerun.
 
 > **Which script do I run? Only `source("run_all.R")`.** It runs everything: all steps, the QC overview, visit 3,
-> the V1 relapse screen and the relapse follow-up, and then the executive summary.
+> the V1 relapse screen and the relapse follow-up (these three right after the import, so their folders appear in the
+> first minutes), and at the end the executive summary.
 >
 > **Lost in the output folder?** Open **`output/00_FOLDER_GUIDE.pdf`**: one page, one line per folder.
 >

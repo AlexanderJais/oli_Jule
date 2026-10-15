@@ -21,7 +21,7 @@ the [README](../README.md#2-words-you-will-meet). The statistical details are in
 | I. Dedicated: relapse follow-up | in `run_all.R` (shortcut: `run_relapse_followup.R`) – eight follow-up questions on relapse vs non-relapse |
 
 The steps are grouped by topic, so below they are not in number order; `run_all.R` always runs
-them 01 → 19, with the dedicated analyses G–I just before step 18. **`run_all.R` is the only script you need to run.**
+them 01 → 19, with the dedicated analyses G–I right after step 02b (they only need the imported data). **`run_all.R` is the only script you need to run.**
 
 ---
 
