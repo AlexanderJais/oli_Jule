@@ -348,7 +348,7 @@ section("Relapse predictors over visits", {
   if (!file.exists(f)) {
     page_text("Relapse predictors over the visits", c(
       "These plots come from the separate V1 relapse screen, which run_all.R does not run.",
-      "To include them: source(\"run_relapse_v1.R\"), then rerun this summary: start_at <- 18; source(\"run_all.R\")."))
+      "To include them: source(\"run_relapse_v1.R\") - it also rebuilds this summary."))
   } else {
     pl <- readRDS(f)
     cap <- sprintf("From the V1 relapse screen (run_relapse_v1.R, generated %s). Details: relapse_V1/V1_relapse_executive_summary.pdf", format(pl$made))

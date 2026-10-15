@@ -16,12 +16,12 @@ the [README](../README.md#2-words-you-will-meet). The statistical details are in
 | D. The three study aims | 09 aim 1 (dISF profile) · 11 aim 3 (disease course) · 13 visit by visit · *aim 2 = step 10, see part C* |
 | E. Specific proteins and questions | 12 focus proteins · 15 key questions · 16 TNFRSF9 correlations · 17 serum vs dISF signatures |
 | F. Reporting | 18 executive summary · 19 data export |
-| G. Separate: visit 3 | `run_visit3.R` – dISF and serum at visit 3, GSEA, dISF vs serum |
-| H. Separate: V1 relapse screen | `run_relapse_v1.R` – dISF markers at V1 that predict relapse |
-| I. Separate: relapse follow-up | `run_relapse_followup.R` – eight follow-up questions on relapse vs non-relapse |
+| G. Dedicated: visit 3 | in `run_all.R` (shortcut: `run_visit3.R`) – dISF and serum at visit 3, GSEA, dISF vs serum |
+| H. Dedicated: V1 relapse screen | in `run_all.R` (shortcut: `run_relapse_v1.R`) – dISF markers at V1 that predict relapse |
+| I. Dedicated: relapse follow-up | in `run_all.R` (shortcut: `run_relapse_followup.R`) – eight follow-up questions on relapse vs non-relapse |
 
 The steps are grouped by topic, so below they are not in number order; `run_all.R` always runs
-them 01 → 19.
+them 01 → 19, with the dedicated analyses G–I just before step 18. **`run_all.R` is the only script you need to run.**
 
 ---
 
@@ -379,7 +379,7 @@ Collects everything in one PDF:
 2. answers to the key questions with evidence, then the TNFRSF9 correlations (step 16) and the serum vs dISF signatures (step 17);
 3. key findings per aim;
 4. all comparisons in one table;
-5. visit course, the relapse predictors over the visits (from the separate V1 relapse screen: run `run_relapse_v1.R` first, otherwise the page says so), volcano plots, pathways, dISF vs serum, serum, serum vs dISF per visit (step 14) and focus proteins;
+5. visit course, the relapse predictors over the visits (from the separate V1 relapse screen: `run_relapse_v1.R` adds them and rebuilds this summary; without it the page says so), volcano plots, pathways, dISF vs serum, serum, serum vs dISF per visit (step 14) and focus proteins;
 6. methods and caveats.
 
 Where the PDF shows a shortened list, the complete list is in `Executive_summary_tables.xlsx`. The first sheet, `index`, explains each sheet. If an earlier step did not run, its page says so instead of stopping the report.

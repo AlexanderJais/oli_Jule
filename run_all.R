@@ -1,4 +1,6 @@
-# Run the whole pipeline in order.
+# Run the whole pipeline in order - the ONE script to run. It includes the dedicated analyses (QC overview = step 02b,
+# visit 3, V1 relapse screen, relapse follow-up; they run just before the executive summary, step 18). The separate
+# run_*.R scripts are only shortcuts to rerun one of them quickly.
 #   Rscript run_all.R                 # real data (config.yml)
 #   OLINK_CONFIG=data_sim/config_sim.yml Rscript run_all.R   # simulated data
 # Resume from a later step (earlier results are reused): in R/RStudio
@@ -24,6 +26,10 @@ steps <- c("scripts/01_metadata.R", "scripts/02_import_qc.R", "scripts/02b_qc_ov
 if (!exists("start_at")) start_at <- 1
 run_steps <- select_steps(steps, start_at)      # by script number: start_at <- 3 runs 03, 04, ...; "02b" starts at 02b
 if (length(run_steps) < length(steps)) message("Starting at ", basename(run_steps[1]), " (reusing earlier results)")
+# dedicated analyses (not numbered): run whenever the executive summary runs, just before it, so it includes their results
+dedicated <- c("visit3/visit3_analysis.R", "relapse_v1/relapse_v1_analysis.R", "relapse_followup/relapse_followup_analysis.R")
+i18 <- match("scripts/18_summary_report.R", run_steps)
+if (!is.na(i18)) run_steps <- append(run_steps, dedicated, after = i18 - 1)
 for (s in run_steps) {
   message("\n==== ", s, " ====")
   status <- system2(rscript, s)
@@ -31,4 +37,4 @@ for (s in run_steps) {
 }
 # forget start_at after a successful run, so the next source("run_all.R") is a full run again
 if (exists("start_at", envir = globalenv(), inherits = FALSE)) rm("start_at", envir = globalenv())
-message("\nAll steps finished. Results are in: ", cfg_run$paths$output, "/")
+message("\nAll steps finished. Results are in: ", cfg_run$paths$output, "/  (start with Executive_summary.pdf)")

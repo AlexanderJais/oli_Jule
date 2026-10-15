@@ -9,15 +9,19 @@ This page tells you how to run the analysis and **where to find which result**. 
 - [`docs/TECHNICAL.md`](docs/TECHNICAL.md) – technical details (models, design decisions);
 - [`docs/CHANGES.md`](docs/CHANGES.md) – what changed in each version and which steps to rerun.
 
+> **Which script do I run? Only `source("run_all.R")`.** It runs everything: all steps, the QC overview, visit 3,
+> the V1 relapse screen and the relapse follow-up, and then the executive summary.
+>
 > **Lost in the output folder?** Open **`output/00_FOLDER_GUIDE.pdf`**: one page, one line per folder.
 >
 > **Start here:** after a run, open **`output/Executive_summary.pdf`**. It summarises all
 > results (the answers to the key questions come right after the overview page) and tells you
 > which folder holds the details.
 
-**Dedicated analyses** – each runs on its own (import / QC plus that analysis only), not as part of `run_all.R`:
+**Dedicated analyses** – all included in `run_all.R`. Each also has its own script, **only** as a shortcut to rerun that one
+analysis quickly (import / QC plus that analysis, a few minutes) – you never need these for a full run:
 
-| Question | Run | Open first |
+| Question | Shortcut (optional) | Open first |
 |---|---|---|
 | How many proteins are measurable in serum and dISF, which only in dISF, and in which pathways? | `source("run_qc_overview.R")` | `output/qc_overview/qc_overview.pdf`, `dISF_only_proteins.xlsx`, `dISF_only_pathways.pdf`, `dISF_only_KEGG.pdf` |
 | Visit 3: lesional vs healthy / non-lesional skin, AD vs healthy serum – and what does dISF show that serum does not? | `source("run_visit3.R")` | `output/visit3/V3_dISF_vs_serum.pdf`, `V3_DEGs_dISF.xlsx`, `V3_DEGs_serum.xlsx` |
@@ -93,9 +97,10 @@ in others it doesn't (*non-relapse*).
    screen for drug targets. Without it, these steps still run but leave these parts out.
    `source("tools/download_kegg.R")` downloads the current KEGG human pathways (free for academic use) for the
    KEGG analyses; without it the older MSigDB KEGG collection is used. Both files stay in `data/reference/`.
-5. Run `source("run_all.R")`. The full run can take an hour or more, and the results appear in `output/`.
-   For one of the dedicated analyses only, run its script instead (`run_qc_overview.R`, `run_visit3.R`,
-   `run_relapse_v1.R`, `run_relapse_followup.R`; see the table at the top). They take a few minutes.
+5. Run `source("run_all.R")`. This is the only script you need: it runs every step and every dedicated analysis
+   (QC overview, visit 3, V1 relapse screen, relapse follow-up). The full run can take an hour or more, and the results
+   appear in `output/`. Optional shortcut to rerun just one dedicated analysis: its own script (`run_qc_overview.R`,
+   `run_visit3.R`, `run_relapse_v1.R`, `run_relapse_followup.R`; see the table at the top) – a few minutes each.
 6. **To resume** from a later step, e.g. after changing a setting for step 12: `start_at <- 12; source("run_all.R")`.
    Step numbers are the script numbers; for step 02b use `start_at <- "02b"`.
    Earlier results are reused, and all later steps run again (including the summary, step 18). Start
@@ -128,7 +133,7 @@ First an overview of the samples and the quality control, the proteins above / b
 (step 02b), then the answers to the key questions
 with the data behind them, the TNFRSF9 correlations (step 16) and the serum vs dISF signatures
 (step 17), key numbers and findings for each aim, all comparisons in one table, the most important
-figures (including the relapse predictors over the visits, if `run_relapse_v1.R` was run before), and the methods and caveats. **Read this first.**
+figures (including the relapse predictors over the visits: `run_relapse_v1.R` adds them and rebuilds this summary), and the methods and caveats. **Read this first.**
 
 ### `Executive_summary_tables.xlsx` – the full lists behind the summary (step 18)
 Wherever the PDF shows a shortened list ("up: TNC, LAIR2 …"), the complete list is in this
@@ -503,7 +508,8 @@ are still lesional and how many cleared). Results in `output/visit3/`:
 ## 9. Separate analysis: V1 relapse screen (`run_relapse_v1.R`)
 Which markers at V1 (baseline, before the topical steroids at V2) predict a later relapse – in dISF, in serum, and in
 both? The same screen runs on the dISF lesion site and on the serum of the same patients; markers found in both
-matrices make the strongest case. `source("run_relapse_v1.R")` runs only the import / QC and this screen → `output/relapse_V1/`.
+matrices make the strongest case. `source("run_relapse_v1.R")` runs only the import / QC and this screen → `output/relapse_V1/`, and then rebuilds the main
+`Executive_summary.pdf` with the predictor plots (if `run_all.R` has been run once before).
 MicroAD has 4 relapsers (relapse at V3, V4, V5, V6) and 6 non-relapsers, so this is a screen to pick candidates:
 - `V1_relapse_targets.xlsx`: README – the answer in one sentence; `can_V1_predict` – can V1 dISF predict relapse
   at all: patients predicted correctly when the marker is picked and its cut-off set without the predicted patient
