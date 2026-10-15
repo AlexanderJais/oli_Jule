@@ -24,6 +24,8 @@ stopifnot(
     o <- readxl::read_excel(f, "dISF_and_serum"); both <- o$Assay[o$category == "higher in relapse: marker in dISF and serum"]
     in_serum <- truth$Assay[truth$role == "ISF_relapse_baseline"][1:3]
     sum(both %in% real) >= 2 && sum(!both %in% real) <= 1 },
+  "the Olink plate must not appear in the outputs" = !any(map_lgl(list.files(out, "xlsx$", full.names = TRUE), \(f) any(map_lgl(readxl::excel_sheets(f), \(sh) {
+    x <- readxl::read_excel(f, sh); any(grepl("\\bplate\\b|same_plate", c(sh, names(x), unlist(keep(x, is.character))), ignore.case = TRUE)) })))),
   "serum screen missing" = all(c("serum_targets_up", "serum_can_V1_predict", "overlap_chance") %in% readxl::excel_sheets(f)),
   "prediction test missing or wrong" = grepl("better than chance", readxl::read_excel(f, "README")$note[2]) &&
     all(c("loo_correct", "cutoff_NPX", "rho_time_to_relapse") %in% names(up)),

@@ -24,7 +24,7 @@ set.seed(1)
 
 clean <- read_step(cfg, "data", "npx_clean.rds", step = "scripts/02_import_qc.R")
 ad <- clean |> filter(cohort == "MicroAD", group == "AD", relapse %in% c("relapse", "non-relapse"))
-samples_where <- function(...) ad |> filter(...) |> distinct(SampleID, SubjectID, relapse, plate) |>
+samples_where <- function(...) ad |> filter(...) |> distinct(SampleID, SubjectID, relapse) |>
   mutate(grp = factor(relapse, c("non-relapse", "relapse")))
 s <- list(V1_lesion = samples_where(matrix == "ISF", visit_num == 1, site == "L"),
           V1_nonlesional = samples_where(matrix == "ISF", visit_num == 1, site == "NL"),
@@ -109,17 +109,6 @@ anno <- if (is.null(hpa)) tibble(OlinkID = character()) else {
 }
 for (cl in c("approved_drug_target", "potential_drug_target", "secreted", "membrane")) if (!cl %in% names(anno)) anno[[cl]] <- logical(nrow(anno))
 
-# same-plate check: the relapsers' samples may share one Olink plate; a marker should not simply be higher on it
-# (compared among the non-relapsers: on that plate vs on the others)
-plate_check <- function(oid, smp, Mx, up = TRUE) {
-  rel_plate <- names(which.max(table(smp$plate[smp$grp == "relapse"])))
-  nr <- smp |> filter(grp == "non-relapse", SubjectID %in% colnames(Mx)) |> mutate(same = plate == rel_plate)
-  if (sum(nr$same) < 2 || sum(!nr$same) < 2 || n_distinct(smp$plate[smp$grp == "relapse"]) > 1) return("not needed / not testable")
-  v <- Mx[oid, nr$SubjectID]; p <- tryCatch(t.test(v[nr$same], v[!nr$same])$p.value, error = \(e) NA)
-  d <- mean(v[nr$same], na.rm = TRUE) - mean(v[!nr$same], na.rm = TRUE)
-  if (!is.na(p) && p < 0.05 && (if (up) d > 0 else d < 0)) "same difference among non-relapsers on that plate" else "ok"
-}
-
 # ---- ranked lists -------------------------------------------------------------------------------------------------------
 side <- \(nm, pre) res[[nm]] |> select(OlinkID, logFC, p) |> rename_with(\(x) paste0(x, "_", pre), c(logFC, p))
 flags <- \(x) x |> left_join(anno, by = "OlinkID") |> mutate(across(c(approved_drug_target, potential_drug_target, secreted, membrane), \(v) coalesce(v, FALSE)))
@@ -135,23 +124,23 @@ scr <- sd$per |>
 rank_up <- \(x) x |> filter(candidate_up) |> arrange(desc(loo_correct), desc(AUC), desc(loo_always_higher), desc(logFC)) |> mutate(rank = row_number())
 rank_down <- \(x) x |> filter(candidate_down) |> arrange(desc(loo_correct), AUC, logFC) |> mutate(rank = row_number())
 cand_up <- scr |> filter(candidate_up) |> arrange(desc(loo_correct), desc(AUC), desc(persists_V2_up), desc(loo_always_higher), desc(logFC))
-cand_up <- cand_up |> mutate(rank = row_number(), same_plate_check = map_chr(OlinkID, \(o) plate_check(o, s$V1_lesion, sd$M, TRUE)))
+cand_up <- cand_up |> mutate(rank = row_number())
 cand_down <- scr |> filter(candidate_down) |> arrange(desc(loo_correct), AUC, desc(persists_V2_down), logFC) |>
-  mutate(rank = row_number(), same_plate_check = map_chr(OlinkID, \(o) plate_check(o, s$V1_lesion, sd$M, FALSE)))
+  mutate(rank = row_number())
 tcols <- c("rank", "Assay", "OlinkID", "UniProt", "loo_correct", "loo_n", "loo_sensitivity", "loo_specificity", "cutoff_NPX", "AUC",
            "rho_time_to_relapse", "p_time_to_relapse", "logFC", "p", "p_exact_up", "p_exact_down", "loo_always_higher", "loo_max_p",
            "persists_V2_up", "persists_V2_down", "logFC_V2_cleared", "p_V2_cleared", "logFC_V1_nonlesional", "p_V1_nonlesional",
            "logFC_V1_LminusNL", "p_V1_LminusNL", "also_serum_up", "also_serum_down", "logFC_serum_V1", "p_serum_V1",
            "also_dISF_up", "also_dISF_down", "logFC_dISF_V1", "p_dISF_V1",
            "approved_drug_target", "potential_drug_target", "secreted", "membrane",
-           "mean_NPX_relapse", "mean_NPX_non-relapse", "pct_above_LOD_relapse", "pct_above_LOD_non-relapse", "FDR", "same_plate_check")
+           "mean_NPX_relapse", "mean_NPX_non-relapse", "pct_above_LOD_relapse", "pct_above_LOD_non-relapse", "FDR")
 msg("dISF targets: %d higher, %d lower in relapsers at V1 (lesion site)", nrow(cand_up), nrow(cand_down))
 
 # serum at V1: the same screen, with the dISF lesion site result next to it
 scr_s <- ss$per |> left_join(side("V1_lesion", "dISF_V1"), by = "OlinkID") |> flags() |>
   mutate(also_dISF_up = coalesce(logFC_dISF_V1 > 0 & p_dISF_V1 < 0.05, FALSE), also_dISF_down = coalesce(logFC_dISF_V1 < 0 & p_dISF_V1 < 0.05, FALSE))
-ser_up <- rank_up(scr_s) |> mutate(same_plate_check = map_chr(OlinkID, \(o) plate_check(o, s$serum_V1, ss$M, TRUE)))
-ser_down <- rank_down(scr_s) |> mutate(same_plate_check = map_chr(OlinkID, \(o) plate_check(o, s$serum_V1, ss$M, FALSE)))
+ser_up <- rank_up(scr_s)
+ser_down <- rank_down(scr_s)
 msg("Serum targets: %d higher, %d lower in relapsers at V1", nrow(ser_up), nrow(ser_down))
 
 # ---- dISF and serum together: markers in both matrices ------------------------------------------------------------------

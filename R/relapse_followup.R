@@ -5,17 +5,18 @@
 assay_ids <- function(info, genes) {
   hit <- info |> mutate(gene = str_split(Assay, "_")) |> unnest(gene) |> filter(gene %in% genes) |>
     group_by(gene) |> slice_head(n = 1) |> ungroup()
-  hit[match(intersect(genes, hit$gene), hit$gene), ] |> select(gene, OlinkID, Assay)
+  hit[match(intersect(genes, hit$gene), hit$gene), ] |> select(gene, OlinkID, Assay) |> distinct(OlinkID, .keep_all = TRUE)
 }
 
-#' Exact two-sided p of the difference in means: share of all ways to choose the relapse group with a difference at
-#' least as large (patients without a value are left out).
-exact_p_diff <- function(v, is_rel) {
+#' Exact p of the difference in means: share of all ways to choose the relapse group with a difference at least as large
+#' (two-sided: in absolute value; "greater": higher in relapse). Patients without a value are left out.
+exact_p_diff <- function(v, is_rel, alternative = c("two.sided", "greater")) {
+  alternative <- match.arg(alternative)
   ok <- !is.na(v); v <- v[ok]; y <- is_rel[ok]
   if (sum(y) < 2 || sum(!y) < 2) return(NA_real_)
   obs <- mean(v[y]) - mean(v[!y])
   d <- apply(utils::combn(length(v), sum(y)), 2, \(i) mean(v[i]) - mean(v[-i]))
-  mean(abs(d) >= abs(obs) - 1e-9)
+  if (alternative == "greater") mean(d >= obs - 1e-9) else mean(abs(d) >= abs(obs) - 1e-9)
 }
 
 #' Relapse vs non-relapse for one per-patient value (a protein or a score, log2 scale): group means, log2FC
@@ -32,15 +33,6 @@ compare_groups <- function(v, is_rel) {
          p_t = tryCatch(t.test(a, b)$p.value, error = \(e) NA_real_), p_exact = exact_p_diff(v, is_rel),
          AUC = mean(outer(a, b, ">") + 0.5 * outer(a, b, "==")),
          same_sign_without_any_one_patient = all(sign(loo) == sign(d), na.rm = TRUE))
-}
-
-#' Per-patient score of a protein set (rows of M = OlinkIDs): mean of the centred NPX (each protein minus its mean over
-#' the patients), so it stays on the log2 scale. NULL if no member is in M.
-set_score <- function(M, ids) {
-  ids <- intersect(ids, rownames(M))
-  if (!length(ids)) return(NULL)
-  X <- M[ids, , drop = FALSE]
-  colMeans(X - rowMeans(X, na.rm = TRUE), na.rm = TRUE)
 }
 
 #' GSEA result with the original gene set key (pathway), so sets can be re-tested; same names as run_gsea().
@@ -66,7 +58,7 @@ volcano_all_p <- function(r, title, colours, p_label = 0.05, fdr = 0.05, gsea_us
   v <- r |> mutate(minus_log10_p = -log10(p),
                    class = case_when(p < p_label & logFC > 0 ~ sprintf("higher in relapse (p < %.2g)", p_label),
                                      p < p_label & logFC < 0 ~ sprintf("lower in relapse (p < %.2g)", p_label), TRUE ~ "not significant"),
-                   labelled = p < p_label, FDR_significant = FDR < fdr)
+                   labelled = coalesce(p < p_label, FALSE), FDR_significant = coalesce(FDR < fdr, FALSE))
   lab <- v |> filter(labelled)
   pal <- set_names(c(colours$above, colours$below, "grey75"), c(sprintf("higher in relapse (p < %.2g)", p_label),
                                                                  sprintf("lower in relapse (p < %.2g)", p_label), "not significant"))

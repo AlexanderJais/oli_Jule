@@ -61,7 +61,7 @@ relapse_followup:
                               # question 1: gene sets (regular expressions, any case) checked when lower in relapsers
   n_check_gene_sets: 12       # at most this many of them (lowest p first)
   leukocyte_markers: ["PTPRC"]                                          # question 3: CD45, the pan-immune marker
-  leukocyte_support: ["CD48", "ITGB2", "LCP1", "CORO1A", "CD53", "SPN"] # further leukocyte proteins (pan-leukocyte score)
+  leukocyte_support: ["CD48", "ITGB2", "LCP1", "CORO1A", "CD53", "SPN"] # further leukocyte proteins, each shown on its own
   t_cell_markers: ["LCK", "CD3E", "CD3D", "CD3G", "CD247", "ZAP70", "LAT", "ITK", "CD2", "CD5", "CD6", "CD28"]   # question 4
   t_cell_activation: ["CD69", "IL2RA", "IL2", "IFNG", "TNFRSF9", "TNFRSF4", "ICOS", "CD40LG", "CTLA4", "PDCD1", "LAG3", "HAVCR2", "GZMB", "CRTAM", "CD70"]
   cytokines: ["IL4", "CCL27", "CCL5", "CCL8"]                           # question 5: heatmaps over the visits

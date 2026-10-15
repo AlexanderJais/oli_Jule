@@ -22,13 +22,15 @@ cyt <- rd("5_cytokines_over_visits.xlsx", "group_means")
 v6 <- rd("6_volcano_dISF_lesion_V1_data.xlsx", "volcano_data"); v7 <- rd("7_volcano_serum_V1_data.xlsx", "volcano_data")
 tg <- rd("8_druggable_targets.xlsx", "targets")
 t_low <- truth$Assay[truth$role == "ISF_T_cell_relapse_low"]
+# no sheet name, column name or text cell of any workbook mentions the plate ("platelet" is fine)
+no_plate <- \(dir) !any(map_lgl(list.files(dir, "xlsx$", full.names = TRUE), \(f) any(map_lgl(readxl::excel_sheets(f), \(sh) {
+  x <- readxl::read_excel(f, sh); any(grepl("\\bplate\\b|same_plate", c(sh, names(x), unlist(keep(x, is.character))), ignore.case = TRUE)) }))))
 stopifnot(
   "label check flags consistent simulated labels" = all(lab$check[lab$in_comparison] == "ok"),
   "direction check failed" = all(dirn$same_sign),
   "simulated T-cell markers not lower in relapsers" = with(mkr |> filter(Assay %in% t_low), all(log2FC < 0) && mean(p_exact < 0.05) >= 0.75),
   "CD45 missing" = any(mkr$Assay == "PTPRC" & !is.na(mkr$log2FC)),
-  "plate must not appear in the outputs" = !any(grepl("plate", unlist(map(c("1_check_relapse_vs_nonrelapse.xlsx", "3_4_leukocytes_T_cells.xlsx"),
-                                                                         \(f) map(readxl::excel_sheets(file.path(out, f)), \(sh) names(rd(f, sh))))), ignore.case = TRUE)),
+  "the Olink plate must not appear in the outputs" = no_plate(out),
   "cytokines missing from the heatmap data" = all(c("IL4", "CCL27", "CCL5", "CCL8") %in% cyt$Assay),
   "volcano labels must be exactly the p < 0.05 proteins" = all(v6$labelled == (v6$p < 0.05)) && all(v7$labelled == (v7$p < 0.05)),
   "simulated AD-and-relapse targets not found" = all(both$OlinkID %in% tg$OlinkID[substr(tg$tier, 1, 1) %in% c("1", "2")]),
