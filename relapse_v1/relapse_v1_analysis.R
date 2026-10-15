@@ -5,7 +5,8 @@
 #   V2 cleared lesion site (still higher after treatment?), V1 serum (also visible in blood?)
 # In:  output of steps 01-02 (data/npx_clean.rds); Human Protein Atlas (drug targets, location); MSigDB / KEGG gene sets
 # Out: output/relapse_V1/ - V1_relapse_targets.xlsx, V1_relapse_GSEA.xlsx, V1_relapse_volcano.pdf/.png,
-#      V1_relapse_targets_course.pdf/.png, V1_relapse_chance_check.pdf/.png, V1_relapse_GSEA.pdf/.png,
+#      V1_relapse_targets_course.pdf/.png, V1_relapse_predictors_higher_over_visits.pdf/.png, V1_relapse_predictors_lower_over_visits.pdf/.png,
+#      V1_relapse_predictors_over_visits.xlsx, V1_relapse_chance_check.pdf/.png, V1_relapse_GSEA.pdf/.png,
 #      V1_relapse_volcano_serum.pdf/.png, V1_relapse_dISF_vs_serum.pdf/.png, V1_relapse_markers_dISF_and_serum_course.pdf/.png,
 #      V1_relapse_executive_summary.pdf (answer, predictors in dISF / serum / both, gene sets, methods)
 
@@ -271,7 +272,46 @@ p_course <- save_fig(ggplot(course, aes(visit_num, value, group = SubjectID, col
                 subtitle = "violet: patients who relapse (x = relapse visit); grey: non-relapse. V1 baseline, V2 after topical steroids") + th,
          "V1_relapse_targets_course")
 
-p_chance <- save_fig(ggplot(tibble(hits = rc$hits), aes(hits)) + geom_histogram(binwidth = 1, fill = "grey75") +
+# predictors higher / lower in relapsers over the visits, as the step 13 time course: mean +/- SE per visit at the lesion site
+# (red) and in non-lesional skin (blue), relapsers (solid) and non-relapsers (dashed); grey band = healthy skin (mean +/- SE)
+hc_isf <- clean |> filter(cohort == "MicroAD", group == "HC", matrix == "ISF")
+predictor_levels <- function(cand, up, file) {
+  show <- (if (nrow(cand)) cand else scr |> filter(if (up) logFC > 0 else logFC < 0) |> arrange(p)) |> slice_head(n = n_course)
+  if (!nrow(show)) return(list(plot = NULL, data = tibble()))
+  as_f <- \(x) factor(x, unique(show$Assay))
+  d <- ad |> filter(matrix == "ISF", site %in% c("L", "NL"), OlinkID %in% show$OlinkID, !is.na(visit_num)) |>
+    group_by(Assay, visit_num, site, relapse) |>
+    summarise(mean_NPX = mean(value, na.rm = TRUE), n = sum(!is.na(value)), se = sd(value, na.rm = TRUE) / sqrt(n), .groups = "drop") |>
+    mutate(Assay = as_f(Assay), site = recode(site, L = "lesion site", NL = "non-lesional"), relapse = factor(relapse, c("relapse", "non-relapse")))
+  hb <- hc_isf |> filter(OlinkID %in% show$OlinkID) |> group_by(Assay) |>
+    summarise(mean_NPX = mean(value, na.rm = TRUE), se = sd(value, na.rm = TRUE) / sqrt(sum(!is.na(value))), .groups = "drop") |> mutate(Assay = as_f(Assay))
+  pd <- position_dodge(width = 0.3)
+  dir_txt <- if (up) "higher" else "lower"
+  p <- ggplot(d, aes(visit_num, mean_NPX, colour = site, linetype = relapse, shape = relapse, group = interaction(site, relapse))) +
+    geom_rect(data = hb, aes(xmin = -Inf, xmax = Inf, ymin = mean_NPX - se, ymax = mean_NPX + se), inherit.aes = FALSE, fill = "grey85") +
+    geom_hline(data = hb, aes(yintercept = mean_NPX), colour = "grey50", linetype = 2) +
+    geom_line(position = pd) + geom_linerange(aes(ymin = mean_NPX - se, ymax = mean_NPX + se), position = pd, linetype = 1, na.rm = TRUE) +
+    geom_point(position = pd, size = 1.6, fill = "white") +
+    scale_colour_manual(values = c(`lesion site` = "firebrick", `non-lesional` = "steelblue"), name = NULL) +
+    scale_linetype_manual(values = c(relapse = "solid", `non-relapse` = "22"), name = NULL) +
+    scale_shape_manual(values = c(relapse = 16, `non-relapse` = 21), name = NULL) +
+    scale_x_continuous(breaks = 1:6, labels = paste0("V", 1:6)) + facet_wrap(~Assay, scales = "free_y", ncol = 4) +
+    labs(x = NULL, y = "NPX",
+         title = if (nrow(cand)) sprintf("Predictors %s in relapsers at V1 (top %d): dISF levels over visits (mean +/- SE; grey band: healthy skin)", dir_txt, nrow(show))
+                 else sprintf("No predictor %s in relapsers passed - the %d proteins with the lowest p: dISF levels over visits (mean +/- SE; grey band: healthy skin)", dir_txt, nrow(show)),
+         subtitle = "red: lesion site, blue: non-lesional skin; solid line / filled dot: patients who relapse later, dashed / open: non-relapse. Relapsers leave the study at relapse, so fewer at later visits") +
+    th + theme(legend.position = "bottom")
+  list(plot = save_fig(p, file), data = bind_rows(d |> mutate(group = paste(site, relapse)), hb |> mutate(group = "healthy skin (all visits)")) |>
+         transmute(Assay, group, visit = if_else(is.na(visit_num), "-", paste0("V", visit_num)), n, mean_NPX = round(mean_NPX, 3), se = round(se, 3)))
+}
+lvl_up <- predictor_levels(cand_up, TRUE, "V1_relapse_predictors_higher_over_visits")
+lvl_down <- predictor_levels(cand_down, FALSE, "V1_relapse_predictors_lower_over_visits")
+writexl::write_xlsx(list(README = tibble(note = c("Data of V1_relapse_predictors_higher_over_visits and V1_relapse_predictors_lower_over_visits: dISF mean NPX +/- SE per visit, lesion site and non-lesional skin, relapse and non-relapse; healthy skin = all healthy-volunteer dISF samples (grey band)",
+                                                  "Proteins = the ranked predictors (targets_up / targets_down of V1_relapse_targets.xlsx), top n_course")),
+                         predictors_higher = lvl_up$data, predictors_lower = lvl_down$data),
+                    out_path(cfg, out, "V1_relapse_predictors_over_visits.xlsx"))
+
+p_chance <-save_fig(ggplot(tibble(hits = rc$hits), aes(hits)) + geom_histogram(binwidth = 1, fill = "grey75") +
            geom_vline(xintercept = rc$observed_hits, colour = colours$above, linewidth = 1) +
            labs(x = "proteins higher in the 'relapse' group with p < 0.05", y = "relabellings",
                 title = sprintf("Chance check: observed %d (violet) vs all %d ways to choose %d of the %d patients as relapse",
@@ -385,6 +425,7 @@ section("Markers", page_table("Predictors: markers higher in relapsers at V1 (ra
   subtitle = "Ranked by patients predicted correctly, then AUC. correct: each patient predicted with a cut-off set on the other patients (leave one out)",
   note = "cutoff_NPX: V1 lesion site. V2: still higher at V2 (cleared skin). serum: also higher in V1 serum. drug / location: Human Protein Atlas", rows_per_page = 25))
 section("Course", page_plot(p_course))
+section("Predictors over visits", { page_plot(lvl_up$plot); page_plot(lvl_down$plot) })
 section("dISF and serum", {
   page_table("Markers in dISF and serum (relapse vs non-relapse at V1)",
     ovl |> head(30) |> transmute(marker = Assay, category = str_remove(category, "^(higher|lower) in relapse: "), dISF = sprintf("%d/%d, AUC %.2f", dISF_correct, dISF_n, dISF_AUC),

@@ -524,6 +524,9 @@ MicroAD has 4 relapsers (relapse at V3, V4, V5, V6) and 6 non-relapsers, so this
 - `V1_relapse_dISF_vs_serum.pdf` (fold changes in both matrices, the shared markers labelled),
   `V1_relapse_markers_dISF_and_serum_course.pdf`, `V1_relapse_volcano_serum.pdf`,
   `V1_relapse_volcano.pdf`, `V1_relapse_targets_course.pdf` (each target per patient over V1–V6, relapse marked),
+  `V1_relapse_predictors_higher_over_visits.pdf` / `V1_relapse_predictors_lower_over_visits.pdf` (the predictors higher / lower in
+  relapsers over V1–V6: mean ± SE at the lesion site and in non-lesional skin, relapsers and non-relapsers, grey band = healthy skin;
+  data in `V1_relapse_predictors_over_visits.xlsx`),
   `V1_relapse_chance_check.pdf`, `V1_relapse_prediction_test.pdf`, `V1_relapse_GSEA.xlsx` / `.pdf`.
 
 ## 10. Separate analysis: relapse follow-up (`run_relapse_followup.R`)
