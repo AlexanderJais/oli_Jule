@@ -379,7 +379,7 @@ Collects everything in one PDF:
 2. answers to the key questions with evidence, then the TNFRSF9 correlations (step 16) and the serum vs dISF signatures (step 17);
 3. key findings per aim;
 4. all comparisons in one table;
-5. visit course, volcano plots, pathways, dISF vs serum, serum, serum vs dISF per visit (step 14) and focus proteins;
+5. visit course, the relapse predictors over the visits (from the separate V1 relapse screen: run `run_relapse_v1.R` first, otherwise the page says so), volcano plots, pathways, dISF vs serum, serum, serum vs dISF per visit (step 14) and focus proteins;
 6. methods and caveats.
 
 Where the PDF shows a shortened list, the complete list is in `Executive_summary_tables.xlsx`. The first sheet, `index`, explains each sheet. If an earlier step did not run, its page says so instead of stopping the report.

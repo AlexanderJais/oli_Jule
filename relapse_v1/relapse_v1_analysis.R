@@ -6,7 +6,7 @@
 # In:  output of steps 01-02 (data/npx_clean.rds); Human Protein Atlas (drug targets, location); MSigDB / KEGG gene sets
 # Out: output/relapse_V1/ - V1_relapse_targets.xlsx, V1_relapse_GSEA.xlsx, V1_relapse_volcano.pdf/.png,
 #      V1_relapse_targets_course.pdf/.png, V1_relapse_predictors_higher_over_visits.pdf/.png, V1_relapse_predictors_lower_over_visits.pdf/.png,
-#      V1_relapse_predictors_over_visits.xlsx, V1_relapse_chance_check.pdf/.png, V1_relapse_GSEA.pdf/.png,
+#      V1_relapse_predictors_over_visits.xlsx / .rds (the .rds for the main executive summary, step 18), V1_relapse_chance_check.pdf/.png, V1_relapse_GSEA.pdf/.png,
 #      V1_relapse_volcano_serum.pdf/.png, V1_relapse_dISF_vs_serum.pdf/.png, V1_relapse_markers_dISF_and_serum_course.pdf/.png,
 #      V1_relapse_executive_summary.pdf (answer, predictors in dISF / serum / both, gene sets, methods)
 
@@ -310,6 +310,7 @@ writexl::write_xlsx(list(README = tibble(note = c("Data of V1_relapse_predictors
                                                   "Proteins = the ranked predictors (targets_up / targets_down of V1_relapse_targets.xlsx), top n_course")),
                          predictors_higher = lvl_up$data, predictors_lower = lvl_down$data),
                     out_path(cfg, out, "V1_relapse_predictors_over_visits.xlsx"))
+saveRDS(list(up = lvl_up$plot, down = lvl_down$plot, made = Sys.Date()), out_path(cfg, out, "V1_relapse_predictors_over_visits.rds"))   # for the main summary (step 18)
 
 p_chance <-save_fig(ggplot(tibble(hits = rc$hits), aes(hits)) + geom_histogram(binwidth = 1, fill = "grey75") +
            geom_vline(xintercept = rc$observed_hits, colour = colours$above, linewidth = 1) +

@@ -342,6 +342,20 @@ section("Visit course", {
   }
 })
 
+# ---- relapse predictors over the visits (from the separate V1 relapse screen, run_relapse_v1.R) --------------------
+section("Relapse predictors over visits", {
+  f <- file.path(cfg$paths$output, "relapse_V1", "V1_relapse_predictors_over_visits.rds")
+  if (!file.exists(f)) {
+    page_text("Relapse predictors over the visits", c(
+      "These plots come from the separate V1 relapse screen, which run_all.R does not run.",
+      "To include them: source(\"run_relapse_v1.R\"), then rerun this summary: start_at <- 18; source(\"run_all.R\")."))
+  } else {
+    pl <- readRDS(f)
+    cap <- sprintf("From the V1 relapse screen (run_relapse_v1.R, generated %s). Details: relapse_V1/V1_relapse_executive_summary.pdf", format(pl$made))
+    for (p in compact(pl[c("up", "down")])) page_plot(p + labs(caption = cap))
+  }
+})
+
 # ---- 5. volcano plots, all visits ---------------------------------------------------------------------------------
 section("dISF volcano plots", {
   if (is.null(isf)) stop("step 04 results not found")

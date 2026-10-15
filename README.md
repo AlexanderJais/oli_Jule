@@ -128,7 +128,7 @@ First an overview of the samples and the quality control, the proteins above / b
 (step 02b), then the answers to the key questions
 with the data behind them, the TNFRSF9 correlations (step 16) and the serum vs dISF signatures
 (step 17), key numbers and findings for each aim, all comparisons in one table, the most important
-figures, and the methods and caveats. **Read this first.**
+figures (including the relapse predictors over the visits, if `run_relapse_v1.R` was run before), and the methods and caveats. **Read this first.**
 
 ### `Executive_summary_tables.xlsx` – the full lists behind the summary (step 18)
 Wherever the PDF shows a shortened list ("up: TNC, LAIR2 …"), the complete list is in this
