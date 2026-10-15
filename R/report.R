@@ -106,6 +106,7 @@ write_output_guide <- function(cfg) {
     "export",              "19",  "All Olink data as CSV (for Excel, Prism ...); RELAD2 separately",         "ISF_NPX_wide.csv, Serum_NPX_wide.csv",
     "visit3",              "-",   "Separate (run_visit3.R): visit 3, dISF and serum DEGs, GSEA, dISF vs serum", "V3_DEGs_dISF.xlsx, V3_dISF_vs_serum.xlsx",
     "relapse_V1",          "-",   "Separate (run_relapse_v1.R): dISF markers at V1 predicting relapse",     "V1_relapse_targets.xlsx",
+    "relapse_followup",    "-",   "Separate (run_relapse_followup.R): relapse checks, CD45 / T cells, targets", "Relapse_followup_executive_summary.pdf",
     "data",                "02",  "Internal files used by the scripts - no need to open",                    "-")
   g <- g |> filter(folder == "(top level)" | dir.exists(file.path(cfg$paths$output, folder)))
   f <- out_path(cfg, "00_FOLDER_GUIDE.pdf")

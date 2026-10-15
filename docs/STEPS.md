@@ -18,6 +18,7 @@ the [README](../README.md#2-words-you-will-meet). The statistical details are in
 | F. Reporting | 18 executive summary · 19 data export |
 | G. Separate: visit 3 | `run_visit3.R` – dISF and serum at visit 3, GSEA, dISF vs serum |
 | H. Separate: V1 relapse screen | `run_relapse_v1.R` – dISF markers at V1 that predict relapse |
+| I. Separate: relapse follow-up | `run_relapse_followup.R` – eight follow-up questions on relapse vs non-relapse |
 
 The steps are grouped by topic, so below they are not in number order; `run_all.R` always runs
 them 01 → 19.
@@ -423,4 +424,22 @@ Values below LOD are exported as measured, which is Olink's recommendation; the 
 **Output:** `V1_relapse_executive_summary.pdf` (answer, predictors, gene sets, methods), `V1_relapse_targets.xlsx` (README with the answer, `can_V1_predict`, `targets_up`, `targets_down`, `chance_check`, full results), `V1_relapse_prediction_test.pdf`, `V1_relapse_volcano.pdf`, `V1_relapse_targets_course.pdf`, `V1_relapse_chance_check.pdf`, `V1_relapse_GSEA.xlsx` / `.pdf`.
 
 **Keep in mind:** with 4 vs 6 patients this picks candidates, it does not confirm them; `chance_check` says how many of the hits random labels would give. Candidates also measurable in serum can be checked in RELAD / RELAD2.
+
+---
+
+## I. Separate: relapse follow-up (`run_relapse_followup.R` → `relapse_followup/`)
+**Question:** Eight follow-up questions on relapse vs non-relapse, for the patients of the V1 relapse screen.
+
+**What it does** (`config.yml` → `relapse_followup`):
+1. **Check of the comparison.** Labels: the relapse label of each patient against the skin course of the lesion site (relapse = lesional again after clearing). Direction: the limma log2FC must equal the mean of the relapsers minus the mean of the non-relapsers, for every protein; the NES sign must agree with the fold changes of the set's proteins. The immune signalling gene sets lower in relapsers (TCR, death receptor, NF-κB, TNF, kinase cascades): the proteins that drive them (leading edge), each tested on its own (and whether one patient drives it), and the same sets re-tested after removing each sample's overall level (median NPX) and in AD lesional vs healthy skin (positive control). Also the overall level, % above LOD and volume of the samples, and the V1 severity if a severity file is given.
+2. **How it is calculated**, in plain words, with the protein with the lowest p as a worked example.
+3. **Leukocytes:** CD45 (PTPRC) and the other selected leukocyte proteins, each on its own.
+4. **T cells:** LCK, CD3 and the other selected T-cell and activation markers, each on its own, and each T-cell marker minus CD45 (the T-cell share of leukocytes). Per marker: means, log2FC, t-test, exact relabelling p, AUC, limma p, % above LOD, and whether one patient drives it. Summary scores (average of the listed markers) only as a secondary table.
+5. **IL4, CCL27, CCL5, CCL8 over the visits:** group means per visit (heatmap: protein × visit, relapse and non-relapse side by side; dISF lesion site and serum), per-patient heatmap clustered, and the relapse vs non-relapse test at each visit.
+6. / 7. **Volcano plots** (dISF lesion site V1, serum V1) with every protein with p < 0.05 labelled, and the plotted data as Excel. The GSEA uses the same limma result (all tested proteins ranked by `t`).
+8. **Druggable targets:** higher in relapsers at the V1 lesion site (p < 0.05) and higher in AD lesional and non-lesional dISF than in healthy dISF (V1, all AD patients; p < 0.05); druggable = Human Protein Atlas approved / potential drug target or a known drug in `relapse_followup/ad_drugs.csv`. Tier 1 = all of it; tier 2 = all criteria, no drug flag; tier 3 = relapse and one AD skin type, druggable.
+
+**Output:** `Relapse_followup_executive_summary.pdf` (all eight answers on page 1, then one section per question), `1_check_relapse_vs_nonrelapse.xlsx`, `3_4_leukocytes_T_cells.xlsx`, `5_cytokines_over_visits.xlsx`, `6_volcano_dISF_lesion_V1_data.xlsx`, `7_volcano_serum_V1_data.xlsx`, `8_druggable_targets.xlsx`, and the figures `1_*`, `3_*`, `4_*`, `5_*`, `6_*`, `7_*`, `8_*` (.pdf / .png). The markers are chosen in `config.yml` → `relapse_followup`.
+
+**Keep in mind:** 4 vs 6 patients; Olink measures proteins in the fluid, so CD45, LCK and CD3 are proxies of cell content. The known-drug list is short and curated: check the status of a drug before using it.
 

@@ -22,8 +22,9 @@ This page tells you how to run the analysis and **where to find which result**. 
 | How many proteins are measurable in serum and dISF, which only in dISF, and in which pathways? | `source("run_qc_overview.R")` | `output/qc_overview/qc_overview.pdf`, `dISF_only_proteins.xlsx`, `dISF_only_pathways.pdf`, `dISF_only_KEGG.pdf` |
 | Visit 3: lesional vs healthy / non-lesional skin, AD vs healthy serum – and what does dISF show that serum does not? | `source("run_visit3.R")` | `output/visit3/V3_dISF_vs_serum.pdf`, `V3_DEGs_dISF.xlsx`, `V3_DEGs_serum.xlsx` |
 | Which markers at V1 predict a later relapse – in dISF, in serum, and in both? | `source("run_relapse_v1.R")` | **`output/relapse_V1/V1_relapse_executive_summary.pdf`** |
+| Relapse vs non-relapse, follow-up: is it calculated right, CD45 / T cells, IL4 · CCL27 · CCL5 · CCL8 over the visits, volcano plots with every p < 0.05 labelled, druggable targets? | `source("run_relapse_followup.R")` | **`output/relapse_followup/Relapse_followup_executive_summary.pdf`** |
 
-Details: [section 4](#qc_overview--how-many-proteins-are-measurable-step-02b) (QC overview), [section 8](#8-separate-analysis-visit-3-run_visit3r) (visit 3), [section 9](#9-separate-analysis-v1-relapse-screen-run_relapse_v1r) (relapse).
+Details: [section 4](#qc_overview--how-many-proteins-are-measurable-step-02b) (QC overview), [section 8](#8-separate-analysis-visit-3-run_visit3r) (visit 3), [section 9](#9-separate-analysis-v1-relapse-screen-run_relapse_v1r) (relapse), [section 10](#10-separate-analysis-relapse-follow-up-run_relapse_followupr) (relapse follow-up).
 
 ---
 
@@ -94,7 +95,7 @@ in others it doesn't (*non-relapse*).
    KEGG analyses; without it the older MSigDB KEGG collection is used. Both files stay in `data/reference/`.
 5. Run `source("run_all.R")`. The full run can take an hour or more, and the results appear in `output/`.
    For one of the dedicated analyses only, run its script instead (`run_qc_overview.R`, `run_visit3.R`,
-   `run_relapse_v1.R`; see the table at the top). They take a few minutes.
+   `run_relapse_v1.R`, `run_relapse_followup.R`; see the table at the top). They take a few minutes.
 6. **To resume** from a later step, e.g. after changing a setting for step 12: `start_at <- 12; source("run_all.R")`.
    Step numbers are the script numbers; for step 02b use `start_at <- "02b"`.
    Earlier results are reused, and all later steps run again (including the summary, step 18). Start
@@ -107,7 +108,7 @@ missing (the run stops), `[--]` = optional or recommended file not found (the ru
 
 To check that R and the packages work, run `source("tests/test_pipeline.R")`. It uses invented data
 only, takes about 15 minutes, and must end with "All pipeline checks passed". The dedicated analyses have their own
-quick tests: `tests/test_visit3.R` and `tests/test_relapse_v1.R` (a few minutes each). Its results go to
+quick tests: `tests/test_visit3.R`, `tests/test_relapse_v1.R` and `tests/test_relapse_followup.R` (a few minutes each). Its results go to
 `output_sim/` and are **invented**: never use them as study results. The test switches its settings
 off again when it finishes; the first lines of every run say which settings file and output folder are used.
 
@@ -447,10 +448,11 @@ used when dISF is compared with serum) and `RELAD_AD_vs_HC` (RELAD/RELAD2). Rela
 | `tools/download_hpa.R` | Optional: downloads the public Human Protein Atlas table for steps 02b and 17 |
 | `run_visit3.R`, `visit3/` | Separate visit 3 analysis (see section 8) |
 | `run_relapse_v1.R`, `relapse_v1/` | Separate V1 relapse screen (see section 9) |
+| `run_relapse_followup.R`, `relapse_followup/` | Separate relapse follow-up: eight questions on relapse vs non-relapse (see section 10) |
 | `tools/download_kegg.R` | Optional: downloads the current KEGG human pathways (free for academic use) for the KEGG analysis of step 02b |
 | `data/` | Your input files (not uploaded to GitHub) – see `data/README.md` |
 | `output/` | All results (not uploaded to GitHub) |
-| `tests/` | Tests with invented data: `test_pipeline.R` (all steps), `test_visit3.R`, `test_relapse_v1.R` |
+| `tests/` | Tests with invented data: `test_pipeline.R` (all steps), `test_visit3.R`, `test_relapse_v1.R`, `test_relapse_followup.R` |
 | `docs/STEPS.md` | What each step does, in plain words |
 | `docs/CHANGES.md` | What changed, and what to rerun after an update |
 | `docs/TECHNICAL.md` | Statistical methods and design decisions |
@@ -524,7 +526,26 @@ MicroAD has 4 relapsers (relapse at V3, V4, V5, V6) and 6 non-relapsers, so this
   `V1_relapse_volcano.pdf`, `V1_relapse_targets_course.pdf` (each target per patient over V1–V6, relapse marked),
   `V1_relapse_chance_check.pdf`, `V1_relapse_prediction_test.pdf`, `V1_relapse_GSEA.xlsx` / `.pdf`.
 
-## 10. Something went wrong?
+## 10. Separate analysis: relapse follow-up (`run_relapse_followup.R`)
+Eight follow-up questions on relapse vs non-relapse (the same patients as section 9: MicroAD, 4 relapsers, 6 non-relapsers).
+`source("run_relapse_followup.R")` runs only the import / QC and this analysis → `output/relapse_followup/`. Start with
+**`Relapse_followup_executive_summary.pdf`**: page 1 answers all eight questions in short, then one section per question.
+Settings: `config.yml` → `relapse_followup` (the selected markers, the gene sets checked, the p-value for the volcano labels).
+
+| # | Question | Files |
+|---|---|---|
+| 1 | Was relapse vs non-relapse calculated correctly – and is the lower immune signalling in relapsers (TCR, death receptor, NF-κB / kinase gene sets) real? Labels vs skin course, direction of log2FC / NES, the proteins behind these gene sets (each tested on its own), overall sample level, AD lesional vs healthy skin as positive control | `1_check_relapse_vs_nonrelapse.xlsx`, `1_immune_leading_edge_proteins.pdf`, `1_sample_level_check.pdf` |
+| 2 | How the dISF lesion site comparison at V1 (4 later relapse vs 6 non-relapse) was calculated, in plain words, with a worked example | executive summary, section 2 |
+| 3 | Leukocyte content: CD45 (PTPRC) and other leukocyte proteins, each on its own | `3_4_leukocytes_T_cells.xlsx`, `3_leukocyte_markers.pdf`, `3_CD45_all_samples.pdf` |
+| 4 | T cells: LCK, CD3 and the other selected T-cell and activation markers, each on its own; each T-cell marker relative to CD45 (T-cell share of leukocytes). Summary scores only as a secondary table | `3_4_leukocytes_T_cells.xlsx`, `4_T_cell_markers.pdf`, `4_T_cell_markers_per_CD45.pdf`, `4_T_cell_activation_markers.pdf` |
+| 5 | IL4, CCL27, CCL5, CCL8 at each visit: heatmap of the group means (y = protein, x = visit, relapse and non-relapse side by side) and per patient (clustered) | `5_cytokines_over_visits.xlsx`, `5_cytokines_heatmap_group_means.pdf`, `5_cytokines_heatmap_per_patient.pdf` |
+| 6 | Volcano dISF lesion site V1, every protein with p < 0.05 labelled, with the plotted data – and whether the GSEA uses it (yes: all tested proteins ranked by the `t` of the same fit) | `6_volcano_dISF_lesion_V1.pdf`, `6_volcano_dISF_lesion_V1_data.xlsx` |
+| 7 | Volcano serum V1, likewise | `7_volcano_serum_V1.pdf`, `7_volcano_serum_V1_data.xlsx` |
+| 8 | Druggable targets that could lengthen the relapse-free time: higher in relapsers at V1 and higher in lesional **and** non-lesional AD skin than in healthy skin; drug-target flags (Human Protein Atlas) and known drugs (`relapse_followup/ad_drugs.csv`) | `8_druggable_targets.xlsx`, `8_druggable_targets.pdf` |
+
+Olink measures proteins in the fluid, not cells: CD45, LCK and CD3 are proxies of cell content, not cell counts.
+
+## 11. Something went wrong?
 
 | Message | Fix |
 |---|---|

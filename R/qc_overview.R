@@ -134,11 +134,14 @@ close_device <- function(fi) {
   invisible(grDevices::dev.off())
 }
 
-#' Use font family `fam` for all text of a ggplot (theme and text layers).
+#' Use font family `fam` for all text of a ggplot (theme and text layers). Text layers are copied first: layers are
+#' environments, so changing them in place would also change `p` (printing it later on another device then fails).
 set_family <- function(p, fam) {
   if (is.null(p) || !nzchar(fam)) return(p)
   p <- p + theme(text = element_text(family = fam))
-  for (i in seq_along(p$layers)) if (inherits(p$layers[[i]]$geom, "GeomText")) p$layers[[i]]$aes_params$family <- fam
+  p$layers <- lapply(p$layers, \(l) {
+    if (!inherits(l$geom, "GeomText")) return(l)
+    l2 <- rlang::env_clone(l); class(l2) <- class(l); l2$aes_params$family <- fam; l2 })
   p
 }
 

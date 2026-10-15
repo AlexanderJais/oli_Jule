@@ -31,8 +31,13 @@ th2 <- c("CCL17", "CCL22", "CCL18", "IL13", "IL4", "POSTN", "CCL26", "IL5", "TSL
          "S100A9", "IL19", "IL22", "IL36G", "TNFRSF9")   # TNFRSF9 = CD137 (focus protein)
 focus_sim <- c("TNFSF9", "KITLG", "CPA4", "FCER1A", "TPSAB1", "TPSD1", "KIT",   # other focus proteins (step 12)
                "IL33", "CSF2", "IL6", "IL18", "CXCL8", "IL1RL1")                  # TNFRSF9 correlation targets (step 16)
-ht <- bind_rows(ht |> filter(Gene %in% th2), ht |> filter(Gene %in% focus_sim),
-                ht |> filter(!Gene %in% c(th2, focus_sim)) |> slice_sample(prop = 1))
+# leukocyte / T-cell proteins and chemokines of the relapse follow-up (run_relapse_followup.R), placed from index 121 on
+t_low_sim <- c("CD3E", "CD3D", "CD3G", "CD2", "CD5", "CD6", "CD28", "LAT", "CD69", "IL2RA", "CTLA4", "GZMB")   # lower in relapsers' dISF
+immune_sim <- c(t_low_sim, "PTPRC", "CD48", "ITGB2", "LCP1", "CORO1A", "CCL27", "CCL5", "CCL8")
+rest <- ht |> filter(!Gene %in% c(th2, focus_sim, immune_sim)) |> slice_sample(prop = 1)
+n_head <- 120 - sum(ht$Gene %in% c(th2, focus_sim))
+ht <- bind_rows(ht |> filter(Gene %in% th2), ht |> filter(Gene %in% focus_sim), rest |> slice_head(n = n_head),
+                ht |> filter(Gene %in% immune_sim) |> arrange(match(Gene, immune_sim)), rest |> slice(-seq_len(n_head)))
 assays <- ht |> slice_head(n = n_assays) |>
   transmute(OlinkID, UniProt, Assay = Gene, Block = as.character(Block), idx = row_number())
 
@@ -48,6 +53,7 @@ role <- case_when(
   eff(96, 100)  ~ "ISF_lesion_restricted", # below LOD in ISF except in lesional skin
   eff(111, 115) ~ "Serum_undetected",    # above LOD in dISF, below LOD in serum (step 02b dISF-only list)
   eff(116, 120) ~ "ISF_relapse_baseline", # higher in dISF of relapsers at every visit, already at V1 (run_relapse_v1.R)
+  assays$Assay %in% t_low_sim ~ "ISF_T_cell_relapse_low", # lower in dISF of relapsers at every visit (run_relapse_followup.R)
   eff(n_assays - 19, n_assays) ~ "ISF_undetected",
   TRUE ~ "null"
 )
@@ -111,7 +117,9 @@ for (i in seq_len(nrow(samples))) {
   }
   if (!is.na(s$visit) && s$cohort == "MicroAD") x <- x + z_sv[sv_key[i], ] * (assays$role == "ISF_serum_coupled")
   if (isf) x <- x + w_cd137[i] * (is_cd137 | is_il33)
-  if (isf && identical(s$relapse, "relapse")) x <- x + 1.5 * (assays$role == "ISF_relapse_baseline")
+  if (isf && identical(s$relapse, "relapse")) x <- x + 1.5 * (assays$role == "ISF_relapse_baseline") - 1.2 * (assays$role == "ISF_T_cell_relapse_low")
+  # 2 of the baseline markers are also raised in all AD skin, lesional and non-lesional (druggable-target check of the follow-up)
+  if (isf && s$group == "AD") x <- x + 1.0 * (assays$role == "ISF_relapse_baseline" & assays$idx >= 119)
   # 3 of them also higher in the serum of MicroAD relapsers (markers in dISF and serum)
   if (!isf && s$cohort == "MicroAD" && identical(s$relapse, "relapse")) x <- x + 1.5 * (assays$role == "ISF_relapse_baseline" & assays$idx <= 118)
   if (!isf) {

@@ -1,0 +1,37 @@
+gene,drug,action,status
+IL4R,dupilumab,antibody against IL-4Ralpha (blocks IL-4 and IL-13 signalling),approved for AD
+IL4,dupilumab,blocks its receptor IL-4Ralpha,approved for AD
+IL13,tralokinumab; lebrikizumab,antibody against IL-13,approved for AD
+IL13RA1,eblasakimab,antibody against IL-13Ralpha1,clinical trials in AD
+IL31RA,nemolizumab,antibody against IL-31RA,approved for AD and prurigo nodularis
+IL31,nemolizumab,blocks its receptor IL-31RA,approved for AD and prurigo nodularis
+OSMR,vixarelimab,antibody against OSMRbeta,clinical trials (prurigo nodularis)
+TNFRSF4,rocatinlimab,antibody against OX40,phase 3 in AD
+TNFSF4,amlitelimab,antibody against OX40L,phase 3 in AD
+TSLP,tezepelumab,antibody against TSLP,approved for asthma; AD trials without clear benefit
+IL22,fezakinumab,antibody against IL-22,phase 2 in AD
+IL33,itepekimab; tozorakimab; etokimab,antibody against IL-33,clinical trials (asthma / COPD); AD phase 2 without benefit (etokimab)
+IL1RL1,astegolimab,antibody against ST2 (IL-33 receptor),clinical trials (asthma / COPD)
+IL5,mepolizumab,antibody against IL-5,approved for asthma; AD trial without clear benefit
+IL5RA,benralizumab,antibody against IL-5Ralpha,approved for asthma
+IL17A,secukinumab; ixekizumab; bimekizumab,antibody against IL-17A,approved for psoriasis
+IL17F,bimekizumab,antibody against IL-17A and IL-17F,approved for psoriasis
+IL12B,ustekinumab,antibody against IL-12/IL-23 p40,approved for psoriasis; AD trials without clear benefit
+IL1A,bermekimab,antibody against IL-1alpha,clinical trials (AD / hidradenitis)
+IL1B,canakinumab,antibody against IL-1beta,approved (autoinflammatory diseases)
+IL1R1,anakinra,IL-1 receptor antagonist,approved (rheumatoid arthritis / autoinflammatory diseases)
+IL1RL2,spesolimab,antibody against the IL-36 receptor,approved for generalised pustular psoriasis
+IL6R,tocilizumab; sarilumab,antibody against IL-6R,approved (rheumatoid arthritis)
+IL6,siltuximab,antibody against IL-6,approved (Castleman disease)
+TNF,adalimumab; infliximab; etanercept,TNF blockers,approved (psoriasis / rheumatoid arthritis); not used in AD
+IFNG,emapalumab,antibody against IFN-gamma,approved (HLH)
+IL18,tadekinig alfa,IL-18 binding protein,clinical trials
+KIT,barzolvolimab,antibody against KIT (mast cells),phase 3 in chronic urticaria
+FCER1A,omalizumab; ligelizumab,antibodies against IgE (keep it from FcepsilonRI),approved for chronic urticaria and asthma (omalizumab)
+CD40LG,frexalimab; dazodalibep,CD40L blockers,clinical trials (MS / Sjogren)
+CD40,iscalimab,antibody against CD40,clinical trials
+IL2RA,basiliximab,antibody against IL-2Ralpha (CD25),approved (transplantation)
+JAK1,abrocitinib; upadacitinib; baricitinib,JAK inhibitors,approved for AD
+JAK2,baricitinib; ruxolitinib (cream),JAK inhibitors,approved for AD
+PDE4D,roflumilast (cream); crisaborole (ointment),PDE4 inhibitors,approved for AD (topical)
+PDE4B,roflumilast (cream); crisaborole (ointment),PDE4 inhibitors,approved for AD (topical)
