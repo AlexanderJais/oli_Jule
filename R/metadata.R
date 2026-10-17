@@ -11,13 +11,33 @@ excel_date <- function(x) {
   out
 }
 
+#' The manifest table: sheet "manifest", or else the first sheet that has the manifest columns (e.g. "Sheet1" of a
+#' manifest saved as a single table). Columns without a header are ignored (with a note where they hold values).
 read_manifest_sheet <- function(path) {
-  readxl::read_excel(path, sheet = "manifest", col_types = "text", na = c("", "EMPTY", "NA")) |>
-    mutate(across(everything(), str_trim))
+  sheets <- readxl::excel_sheets(path)
+  sh <- if ("manifest" %in% sheets) "manifest" else {
+    ok <- keep(sheets, \(x) all(c("SampleID", "SubjectID", "SampleType") %in% names(suppressMessages(readxl::read_excel(path, sheet = x, n_max = 0)))))
+    if (!length(ok)) stop("No sheet with the manifest columns (SampleID, SubjectID, SampleType ...) in ", path, call. = FALSE)
+    message("Manifest: no sheet named 'manifest' - using sheet '", ok[1], "'")
+    ok[1]
+  }
+  m <- suppressMessages(readxl::read_excel(path, sheet = sh, col_types = "text", na = c("", "EMPTY", "NA"), .name_repair = "unique"))
+  unnamed <- grepl("^\\.\\.\\.\\d+$", names(m))
+  if (any(unnamed)) {
+    rows <- which(rowSums(!is.na(m[, unnamed, drop = FALSE])) > 0)
+    if (length(rows)) message(sprintf("Manifest: %d columns without a header are ignored; they hold values in %d row(s) (SampleID %s)",
+                                      sum(unnamed), length(rows), paste(head(m$SampleID[rows], 5), collapse = ", ")))
+    m <- m[, !unnamed]
+  }
+  m |> mutate(across(everything(), str_trim))
 }
 
-#' Sample volumes from the "Sample Info" sheet (header row is found automatically).
+#' Sample volumes from the "Sample Info" sheet (header row is found automatically); none if the sheet is missing.
 read_sample_volumes <- function(path) {
+  if (!"Sample Info" %in% readxl::excel_sheets(path)) {
+    message("Manifest: no 'Sample Info' sheet - sample volumes are not available (no low-volume flags)")
+    return(tibble(SampleID = character(), volume_ul = numeric()))
+  }
   raw <- suppressMessages(readxl::read_excel(path, sheet = "Sample Info", col_names = FALSE, col_types = "text"))
   hdr <- which(raw[[1]] == "SampleID")[1]
   if (is.na(hdr)) return(tibble(SampleID = character(), volume_ul = numeric()))
@@ -27,8 +47,12 @@ read_sample_volumes <- function(path) {
     filter(!is.na(SampleID))
 }
 
-#' Wells of all plates from the "Plate Layout" sheet: plate, well, content.
+#' Wells of all plates from the "Plate Layout" sheet: plate, well, content; empty if the sheet is missing (no well check).
 read_plate_layout <- function(path) {
+  if (!"Plate Layout" %in% readxl::excel_sheets(path)) {
+    message("Manifest: no 'Plate Layout' sheet - the sample positions are not cross-checked against a plate map")
+    return(tibble(plate = character(), well = character(), content = character()))
+  }
   raw <- suppressMessages(readxl::read_excel(path, sheet = "Plate Layout", col_names = FALSE, col_types = "text"))
   out <- list(); plate <- NA_character_
   for (i in seq_len(nrow(raw))) {
@@ -103,6 +127,7 @@ build_metadata <- function(manifest_path, leip_path = NULL) {
       date = excel_date(Date),
       site = if_else(SampleType == "dISF", Skin, NA_character_),
       state = if_else(SampleType == "dISF", harmonise_state(ClinicalStateSkin), NA_character_),
+      clinical_phase = if ("ClinicalPhase" %in% names(m)) ClinicalPhase else NA_character_,   # e.g. ActiveAD, Treatment, Remission1, Relapse
       clinical_state = harmonise_state(ClinicalStateSkin),            # also filled for serum (e.g. RELAD2)
       sex = if ("Sex" %in% names(m)) recode(str_to_lower(Sex), female = "F", male = "M", f = "F", m = "M", w = "F") else NA_character_,
       relad2_no = if ("NoRELAD2" %in% names(m)) NoRELAD2 else NA_character_,
@@ -182,6 +207,16 @@ flag_metadata <- function(meta, low_volume = list(ISF = 20, Serum = 40)) {
   add(meta$SampleID[meta$matrix == "ISF" & meta$site == "L" & meta$visit_num == 1 &
                       meta$state == "ex-lesional" & meta$group == "AD"],
       "L site ex-lesional at baseline (V1)")
+
+  # manifest column ClinicalPhase (if given): its "Relapse" visit must match the relapse visit derived from the skin course
+  if (any(!is.na(micro$clinical_phase))) {
+    ph <- micro |> filter(matrix == "ISF", site == "L", group == "AD") |> group_by(SubjectID) |>
+      summarise(phase_relapse = suppressWarnings(min(visit_num[str_to_lower(clinical_phase) %in% "relapse"], na.rm = TRUE)),
+                derived = first(relapse_visit), .groups = "drop") |>
+      mutate(phase_relapse = if_else(is.finite(phase_relapse), phase_relapse, NA_real_)) |>
+      filter(xor(is.na(phase_relapse), is.na(derived)) | coalesce(phase_relapse != derived, FALSE))
+    add(micro$SampleID[micro$SubjectID %in% ph$SubjectID], "ClinicalPhase 'Relapse' visit differs from the relapse visit of the skin course")
+  }
 
   add(meta$SampleID[meta$group == "AD" & coalesce(meta$relapse == "healthy", FALSE)],
       "Group AD but Relapse = healthy")

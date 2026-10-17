@@ -4,10 +4,10 @@
 # After changing a setting, rerun from the step named in its comment, e.g.
 #   start_at <- 12; source("run_all.R")      (all later steps are rerun as well)
 
-# Input files: see data/README.md (the original Olink / lab file names also work).
+# Input files: see data/README.md (the original Olink / lab file names also work - not for the manifest: exactly this name).
 # After changing a path, rerun from step 01 (only hpa: from step 02b; only severity: from step 11).
 paths:
-  manifest: data/manifest.xlsx                          # Olink sample submission sheet (sheet "manifest" is the master)
+  manifest: data/2026-10-15_manifest.xlsx               # sample manifest of 2026-10-15 (5 relapsers / 5 non-relapsers); sheet "manifest" or its only table
   npx_dir: data/npx                                     # folder with the Olink *.parquet file(s)
   leip_clinical: data/LEIP_clinical_parameters_n35.xlsx # optional; sheet "Key_parameters"
   fixed_lod: data/Explore_HT_Fixed_LOD.csv              # recommended; Olink fixed LOD file (";"-separated, version >= 6.0.0)
@@ -66,6 +66,16 @@ relapse_followup:
   t_cell_activation: ["CD69", "IL2RA", "IL2", "IFNG", "TNFRSF9", "TNFRSF4", "ICOS", "CD40LG", "CTLA4", "PDCD1", "LAG3", "HAVCR2", "GZMB", "CRTAM", "CD70"]
   cytokines: ["IL4", "CCL27", "CCL5", "CCL8"]                           # question 5: heatmaps over the visits
   volcano_label_p: 0.05       # questions 6, 7: every protein below this p is labelled
+
+# Relapse and lesional signatures per visit (in run_all.R; shortcut: source("run_visits_v1_v4.R")): relapse vs non-relapse at the
+# lesion site and lesion site vs non-lesional skin at each visit (limma + GSEA), protein levels over the visits; figures as PNG for PowerPoint.
+visits_v1_v4:
+  visits: [1, 2, 3, 4]
+  include_relapse_visit: false  # relapse vs non-relapse: false = a relapser's sample at the relapse visit (lesional again) is left out
+  volcano_labels: 20            # proteins labelled per volcano (lowest p); all proteins are in the Excel files
+  gsea_top: 20                  # gene sets shown per GSEA plot
+  track_proteins: ["AKR1B10"]   # lesion site vs non-lesional over the visits (plot + table)
+  signature_sets: ["HALLMARK_MTORC1_SIGNALING"]   # gene sets followed over the visits (lesion site vs non-lesional), MSigDB names
 
 # Statistics (steps 03-18; after changing fdr or min_group_n, rerun from step 04)
 stats:

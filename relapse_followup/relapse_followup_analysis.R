@@ -458,7 +458,7 @@ q5_lines <- c(
   if (nrow(sig_visits)) paste0("Visits with a difference (exact p < 0.05): ", paste(sprintf("%s %s %s: %s in relapsers (%+.2f, exact p = %s)", sig_visits$Assay, sig_visits$matrix, sig_visits$visit,
                                                                                  if_else(sig_visits$log2FC > 0, "higher", "lower"), sig_visits$log2FC, fmt_p(sig_visits$p_exact)), collapse = "; "), ".")
   else "No visit shows a difference between relapsers and non-relapsers with exact p < 0.05.",
-  sprintf("Clustering of the patients (dISF lesion site, all four proteins over the visits, 2 clusters): %s.", clus_txt),
+  sprintf("Clustering of the patients (dISF lesion site, the %d proteins over the visits, 2 clusters): %s.", nrow(cy), clus_txt),
   { lowlod <- cm |> filter(pct_above_LOD < 50) |> distinct(matrix, Assay)
     if (nrow(lowlod)) sprintf("Mostly below LOD (*) in: %s - read these with caution.", paste(unique(sprintf("%s (%s)", lowlod$Assay, lowlod$matrix)), collapse = ", ")) })
 q5_short <- paste(if (nrow(sig_visits)) sprintf("%d protein-visit combinations differ (exact p < 0.05): %s.", nrow(sig_visits),
@@ -466,7 +466,7 @@ q5_short <- paste(if (nrow(sig_visits)) sprintf("%d protein-visit combinations d
                                                                   if_else(sig_visits$log2FC > 0, "up", "down")), 6), collapse = ", "))
                   else "No visit differs with exact p < 0.05.", sprintf("Patient clustering: %s.", clus_txt))
 writexl::write_xlsx(list(README = tibble(item = c("question", "answer", "group_means", "per_visit_tests", "per_patient"),
-                                         note = c("IL4, CCL27, CCL5, CCL8 in relapsers vs non-relapsers over the visits (dISF lesion site and serum)", q5_short,
+                                         note = c(sprintf("%s in relapsers vs non-relapsers over the visits (dISF lesion site and serum)", paste(cy$Assay, collapse = ", ")), q5_short,
                                                   "mean NPX per group and visit; centred = mean minus the protein's mean over all cells (the heatmap colour); pct_above_LOD; at_relapse = patients at their relapse visit",
                                                   "relapse vs non-relapse at each visit: n, means, log2FC, Welch t-test p, exact relabelling p, AUC",
                                                   "NPX per patient and visit (the per-patient heatmap); at_relapse = relapse visit")),
@@ -572,7 +572,7 @@ writexl::write_xlsx(list(README = tibble(item = c("question", "answer", "criteri
                                                   q8_short, q8_lines[1],
                                                   "1 = all criteria and druggable; 2 = all criteria, no drug flag; 3 = higher in relapse and in one of the two AD skin types, druggable",
                                                   "p_exact_up = exact relabelling p, one-sided (difference of the group means, higher in relapse); AUC; relapse at V1 non-lesional and V2 cleared lesion site; AD lesional / non-lesional vs healthy (all AD patients: log2FC, p, FDR, means) and the same with non-relapsers only; HPA drug-target classes; known drugs",
-                                                  "4 vs 6 patients: candidates to test, not proven targets. Known drugs are a short curated list (check status before use).")),
+                                                  sprintf("%d vs %d patients: candidates to test, not proven targets. Known drugs are a short curated list (check status before use).", n_rel, n_non))),
                          targets = tg |> sig3()),
                     out_path(cfg, out, "8_druggable_targets.xlsx"))
 p8 <- {
@@ -666,7 +666,7 @@ section("Methods", page_text("Methods", c(
   "Exact relabelling: the test repeated for all ways to choose the relapse group; exact p = share of labellings with a difference at least as large.",
   "Sections 3, 4: each selected marker (config relapse_followup) tested on its own: Welch t-test, exact relabelling p (difference of the group means over all ways to choose the relapse group; the same definition in all sections), AUC, leave-one-patient-out sign stability, and the limma p of the volcano. Marker / CD45 = NPX difference (log2 ratio).",
   "Section 1: GSEA (fgsea) on the limma t as in the V1 relapse screen; gene sets matching the immune signalling terms (config relapse_followup$check_gene_sets) re-tested after subtracting each sample's median NPX and in AD lesional vs healthy skin; their leading-edge proteins tested one by one.",
-  "Section 5: group means per visit; per-patient heatmap clustered by average linkage on the centred NPX of all four proteins over the visits.",
+  sprintf("Section 5: group means per visit; per-patient heatmap clustered by average linkage on the centred NPX of the %d proteins (%s) over the visits.", nrow(cy), paste(cy$Assay, collapse = ", ")),
   sprintf("Sections 6, 7: volcano of the limma result; every protein with p < %.2g labelled.", p_lab),
   "Section 8: Human Protein Atlas drug-target classes (if downloaded) and a short curated list of drugs relevant to AD / type 2 inflammation.")))
 invisible(grDevices::dev.off())

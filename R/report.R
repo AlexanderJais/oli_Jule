@@ -104,9 +104,10 @@ write_output_guide <- function(cfg) {
     "tnfrsf9_correlation", "16",  "Proteins correlating with TNFRSF9 (CD137) in dISF",                       "TNFRSF9_correlation.xlsx",
     "signatures",          "17",  "Same or different biology in serum and dISF? (MicroAD)",                  "signatures.xlsx",
     "export",              "19",  "All Olink data as CSV (for Excel, Prism ...); RELAD2 separately",         "ISF_NPX_wide.csv, Serum_NPX_wide.csv",
-    "visit3",              "-",   "Separate (run_visit3.R): visit 3, dISF and serum DEGs, GSEA, dISF vs serum", "V3_DEGs_dISF.xlsx, V3_dISF_vs_serum.xlsx",
-    "relapse_V1",          "-",   "Separate (run_relapse_v1.R): dISF markers at V1 predicting relapse",     "V1_relapse_targets.xlsx",
-    "relapse_followup",    "-",   "Separate (run_relapse_followup.R): relapse checks, CD45 / T cells, targets", "Relapse_followup_executive_summary.pdf",
+    "visit3",              "-",   "Visit 3 (run_visit3.R): DEGs dISF / serum, GSEA, dISF vs serum", "V3_DEGs_dISF.xlsx, V3_dISF_vs_serum.xlsx",
+    "relapse_V1",          "-",   "V1 relapse screen: dISF markers at V1 predicting relapse",     "V1_relapse_targets.xlsx",
+    "relapse_followup",    "-",   "Relapse follow-up: checks, CD45 / T cells, drug targets", "Relapse_followup_executive_summary.pdf",
+    "visits_V1_V4",        "-",   "Per visit V1-V4: relapse, lesional, AKR1B10, mTORC1", "Visits_V1-V4_summary.pdf",
     "data",                "02",  "Internal files used by the scripts - no need to open",                    "-")
   g <- g |> filter(folder == "(top level)" | dir.exists(file.path(cfg$paths$output, folder)))
   f <- out_path(cfg, "00_FOLDER_GUIDE.pdf")
@@ -114,7 +115,7 @@ write_output_guide <- function(cfg) {
   grid.newpage()
   page_header("What is in the output folder?",
               sprintf("Start with Executive_summary.pdf. Step = script number (scripts/NN_*.R). Generated %s.", format(Sys.Date())))
-  x <- c(0.04, 0.215, 0.255, 0.62); y <- 0.855; h <- 0.0375
+  x <- c(0.04, 0.215, 0.255, 0.62); y <- 0.855; h <- min(0.0375, 0.795 / nrow(g))   # all rows fit above the footer
   hd <- c("folder", "step", "what is in it", "open first")
   for (j in 1:4) grid.text(hd[j], x[j], y, just = "left", gp = gpar(fontsize = 10, fontface = "bold"))
   grid.lines(c(0.04, 0.96), c(y - 0.015, y - 0.015), gp = gpar(col = "grey60"))

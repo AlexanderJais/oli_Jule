@@ -1,5 +1,5 @@
 # Helpers for the V1 relapse screen (run_relapse_v1.R): which dISF proteins are already higher at baseline in patients
-# who later relapse? Built for very small groups (e.g. 4 vs 6): exact relabelling check, leave-one-out, AUC.
+# who later relapse? Built for very small groups (e.g. 5 vs 5): exact relabelling check, leave-one-out, AUC.
 
 #' Proteins x patients matrix of one sample set (one sample per patient).
 patient_matrix <- function(d, samples, tested) {

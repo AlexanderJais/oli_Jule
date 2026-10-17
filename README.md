@@ -10,8 +10,11 @@ This page tells you how to run the analysis and **where to find which result**. 
 - [`docs/CHANGES.md`](docs/CHANGES.md) – what changed in each version and which steps to rerun.
 
 > **Which script do I run? Only `source("run_all.R")`.** It runs everything: all steps, the QC overview, visit 3,
-> the V1 relapse screen and the relapse follow-up (these three right after the import, so their folders appear in the
-> first minutes), and at the end the executive summary.
+> the V1 relapse screen, the relapse follow-up and the per-visit analysis V1–V4 (these right after the import, so their
+> folders appear in the first minutes), and at the end the executive summary.
+>
+> **Sample manifest:** `data/2026-10-15_manifest.xlsx` (set in `config.yml`). Every analysis takes the samples from it
+> (step 01); if the file is missing, the run stops – an older manifest is never used instead.
 >
 > **Lost in the output folder?** Open **`output/00_FOLDER_GUIDE.pdf`**: one page, one line per folder.
 >
@@ -28,8 +31,9 @@ analysis quickly (import / QC plus that analysis, a few minutes) – you never n
 | Visit 3: lesional vs healthy / non-lesional skin, AD vs healthy serum – and what does dISF show that serum does not? | `source("run_visit3.R")` | `output/visit3/V3_dISF_vs_serum.pdf`, `V3_DEGs_dISF.xlsx`, `V3_DEGs_serum.xlsx` |
 | Which markers at V1 predict a later relapse – in dISF, in serum, and in both? | `source("run_relapse_v1.R")` | **`output/relapse_V1/V1_relapse_executive_summary.pdf`** |
 | Relapse vs non-relapse, follow-up: is it calculated right, CD45 / T cells, IL4 · CCL27 · CCL5 · CCL8 over the visits, volcano plots with every p < 0.05 labelled, druggable targets? | `source("run_relapse_followup.R")` | **`output/relapse_followup/Relapse_followup_executive_summary.pdf`** |
+| Relapse vs non-relapse and lesion site vs non-lesional at each visit V1–V4 (DEG + GSEA, volcano plots for PowerPoint), AKR1B10 and the mTORC1 gene set over the visits? | `source("run_visits_v1_v4.R")` | **`output/visits_V1_V4/Visits_V1-V4_summary.pdf`**, `1_relapse_volcano_V1.png` |
 
-Details: [section 4](#qc_overview--how-many-proteins-are-measurable-step-02b) (QC overview), [section 8](#8-separate-analysis-visit-3-run_visit3r) (visit 3), [section 9](#9-separate-analysis-v1-relapse-screen-run_relapse_v1r) (relapse), [section 10](#10-separate-analysis-relapse-follow-up-run_relapse_followupr) (relapse follow-up).
+Details: [section 4](#qc_overview--how-many-proteins-are-measurable-step-02b) (QC overview), [section 8](#8-separate-analysis-visit-3-run_visit3r) (visit 3), [section 9](#9-separate-analysis-v1-relapse-screen-run_relapse_v1r) (relapse), [section 10](#10-separate-analysis-relapse-follow-up-run_relapse_followupr) (relapse follow-up), [section 11](#11-separate-analysis-relapse-and-lesional-signatures-per-visit-v1v4-run_visits_v1_v4r) (per visit V1–V4).
 
 ---
 
@@ -78,9 +82,9 @@ in others it doesn't (*non-relapse*).
 | **Partial correlation** | The correlation left after removing differences due to skin state / group, visit and plate, so two proteins that are merely both higher in lesional skin don't count as linked. |
 | **Within-patient correlation** | Do two values go up and down together from visit to visit in the same patient? Differences between patients don't count. Also called repeated-measures correlation (rmcorr). |
 | **AUC** | How well a value separates two groups: 0.5 = no better than chance; the further from 0.5 (towards 1 or towards 0), the better. In `key_questions/`, above 0.5 = higher in the patients who later relapse, below 0.5 = lower. |
-| **Relapser** | An AD patient whose lesion site, after clearing, becomes lesional again (MicroAD: 4 patients, relapse at V3, V4, V5 or V6; they leave the study at relapse). |
+| **Relapser** | An AD patient whose lesion site, after clearing, becomes lesional again (MicroAD, manifest of 2026-10-15: 5 patients, relapse at V3, V4, V5, V6 and V6; they leave the study at relapse; 5 non-relapsers). |
 | **Leave one out** | Each patient is predicted by a rule (marker, cut-off) set on all other patients only – an honest test of prediction in small groups. |
-| **Exact relabelling / chance check** | The analysis is repeated for every possible way to choose the relapse group (210 for 4 of 10 patients). It shows how many "hits" random labels give, and an exact p-value (smallest possible 1/210). |
+| **Exact relabelling / chance check** | The analysis is repeated for every possible way to choose the relapse group (252 for 5 of 10 patients). It shows how many "hits" random labels give, and an exact p-value (smallest possible 1/252). |
 | **GSEA / over-representation** | Gene set analyses: GSEA asks whether a gene set (pathway) sits at the top or bottom of all proteins ranked by their change; over-representation asks whether a list (e.g. the dISF-only proteins) contains more members of a set than expected. Gene sets: MSigDB Hallmark, Reactome, GO biological processes, and KEGG. |
 
 ---
@@ -99,22 +103,25 @@ in others it doesn't (*non-relapse*).
    `source("tools/download_kegg.R")` downloads the current KEGG human pathways (free for academic use) for the
    KEGG analyses; without it the older MSigDB KEGG collection is used. Both files stay in `data/reference/`.
 5. Run `source("run_all.R")`. This is the only script you need: it runs every step and every dedicated analysis
-   (QC overview, visit 3, V1 relapse screen, relapse follow-up). The full run can take an hour or more, and the results
+   (QC overview, visit 3, V1 relapse screen, relapse follow-up, per visit V1–V4). The full run can take an hour or more, and the results
    appear in `output/`. Optional shortcut to rerun just one dedicated analysis: its own script (`run_qc_overview.R`,
-   `run_visit3.R`, `run_relapse_v1.R`, `run_relapse_followup.R`; see the table at the top) – a few minutes each.
+   `run_visit3.R`, `run_relapse_v1.R`, `run_relapse_followup.R`, `run_visits_v1_v4.R`; see the table at the top) – a few minutes each.
 6. **To resume** from a later step, e.g. after changing a setting for step 12: `start_at <- 12; source("run_all.R")`.
    Step numbers are the script numbers; for step 02b use `start_at <- "02b"`.
    Earlier results are reused, and all later steps run again (including the summary, step 18). Start
    from the **earliest** step you changed (step numbers are in [section 7](#7-what-is-in-the-repository)).
    After a successful run `start_at` is removed automatically, so the next `source("run_all.R")` is a full run.
    (If a run stops with an error, `start_at` stays set: fix the problem and run again.)
+   Resuming only works with results made from the **same manifest**: every script run is logged with the manifest it
+   used (`output/metadata/steps_run.csv`), and a resume stops if earlier results come from another manifest. After a
+   new manifest, run everything once with `source("run_all.R")`.
 
 The first lines of the run list the input files: `[ok]` = found, `[MISSING]` = required file
 missing (the run stops), `[--]` = optional or recommended file not found (the run continues).
 
 To check that R and the packages work, run `source("tests/test_pipeline.R")`. It uses invented data
 only, takes about 15 minutes, and must end with "All pipeline checks passed". The dedicated analyses have their own
-quick tests: `tests/test_visit3.R`, `tests/test_relapse_v1.R` and `tests/test_relapse_followup.R` (a few minutes each). Its results go to
+quick tests: `tests/test_visit3.R`, `tests/test_relapse_v1.R`, `tests/test_relapse_followup.R` and `tests/test_visits_v1_v4.R` (a few minutes each). Its results go to
 `output_sim/` and are **invented**: never use them as study results. The test switches its settings
 off again when it finishes; the first lines of every run say which settings file and output folder are used.
 
@@ -226,6 +233,8 @@ RELAD/RELAD2 serum, as separate tests.)
 |---|---|
 | `sample_metadata.csv` | One row per sample: patient, visit, skin site, skin state, group, relapse, plate, volume … |
 | `data_flags.csv` | Inconsistencies found in the manifest, e.g. contradicting relapse labels or low sample volume. They are **flagged, not corrected**. |
+| `manifest_used.txt` | Which manifest the results come from (file name, checksum, date of step 01). Later steps stop if the manifest has changed since. |
+| `steps_run.csv` | Every script run, with the manifest it used and when. A resume (`start_at`) stops if earlier results come from another manifest. |
 
 ### `qc_overview/` – how many proteins are measurable? (step 02b)
 Only this figure: `source("run_qc_overview.R")` (runs steps 01, 02 and 02b, nothing else).
@@ -455,10 +464,11 @@ used when dISF is compared with serum) and `RELAD_AD_vs_HC` (RELAD/RELAD2). Rela
 | `run_visit3.R`, `visit3/` | Separate visit 3 analysis (see section 8) |
 | `run_relapse_v1.R`, `relapse_v1/` | Separate V1 relapse screen (see section 9) |
 | `run_relapse_followup.R`, `relapse_followup/` | Separate relapse follow-up: eight questions on relapse vs non-relapse (see section 10) |
+| `run_visits_v1_v4.R`, `visits_v1_v4/` | Separate per-visit analysis V1–V4: relapse vs non-relapse, lesion site vs non-lesional, AKR1B10, mTORC1 (see section 11) |
 | `tools/download_kegg.R` | Optional: downloads the current KEGG human pathways (free for academic use) for the KEGG analysis of step 02b |
 | `data/` | Your input files (not uploaded to GitHub) – see `data/README.md` |
 | `output/` | All results (not uploaded to GitHub) |
-| `tests/` | Tests with invented data: `test_pipeline.R` (all steps), `test_visit3.R`, `test_relapse_v1.R`, `test_relapse_followup.R` |
+| `tests/` | Tests with invented data: `test_pipeline.R` (all steps), `test_visit3.R`, `test_relapse_v1.R`, `test_relapse_followup.R`, `test_visits_v1_v4.R` |
 | `docs/STEPS.md` | What each step does, in plain words |
 | `docs/CHANGES.md` | What changed, and what to rerun after an update |
 | `docs/TECHNICAL.md` | Statistical methods and design decisions |
@@ -489,7 +499,7 @@ used when dISF is compared with serum) and `RELAD_AD_vs_HC` (RELAD/RELAD2). Rela
 ---
 
 ## 8. Separate analysis: visit 3 (`run_visit3.R`)
-Not part of `run_all.R`; runs only the import / QC and this analysis: `source("run_visit3.R")`. MicroAD, visit 3
+Part of `run_all.R`; the shortcut `source("run_visit3.R")` runs only the import / QC and this analysis. MicroAD, visit 3
 (`config.yml` → `visit3`). Healthy volunteers are sampled once, so their samples are the healthy reference.
 
 | Matrix | Comparisons (log2FC) |
@@ -511,13 +521,13 @@ Which markers at V1 (baseline, before the topical steroids at V2) predict a late
 both? The same screen runs on the dISF lesion site and on the serum of the same patients; markers found in both
 matrices make the strongest case. `source("run_relapse_v1.R")` runs only the import / QC and this screen → `output/relapse_V1/`, and then rebuilds the main
 `Executive_summary.pdf` with the predictor plots (if `run_all.R` has been run once before).
-MicroAD has 4 relapsers (relapse at V3, V4, V5, V6) and 6 non-relapsers, so this is a screen to pick candidates:
+MicroAD has 5 relapsers (relapse at V3, V4, V5, V6, V6) and 5 non-relapsers (manifest of 2026-10-15), so this is a screen to pick candidates:
 - `V1_relapse_targets.xlsx`: README – the answer in one sentence; `can_V1_predict` – can V1 dISF predict relapse
   at all: patients predicted correctly when the marker is picked and its cut-off set without the predicted patient
-  (leave one out), against all 210 random labellings, and how many proteins separate perfectly by chance;
+  (leave one out), against all 252 random labellings, and how many proteins separate perfectly by chance;
   `targets_up` – the ranked candidate list (per marker: patients predicted correctly leave-one-out, sensitivity,
   specificity, the V1 cut-off in NPX, correlation with how soon the relapse comes) (V1 lesion site p < 0.05 and exact
-  relabelling p < 0.05 over all 210 ways to choose 4 of the 10 patients; ranked by AUC, still higher at V2 after
+  relabelling p < 0.05 over all 252 ways to choose 5 of the 10 patients; ranked by AUC, still higher at V2 after
   treatment, stable when any one patient is left out), with flags: also higher in V1 serum, approved / potential drug
   target, secreted / membrane (Human Protein Atlas); `targets_down`; `chance_check` – how many such proteins random
   labels give; full results for V1 lesion site, V1 non-lesional skin, V1 lesion minus non-lesional, V2 cleared
@@ -537,7 +547,7 @@ MicroAD has 4 relapsers (relapse at V3, V4, V5, V6) and 6 non-relapsers, so this
   `V1_relapse_chance_check.pdf`, `V1_relapse_prediction_test.pdf`, `V1_relapse_GSEA.xlsx` / `.pdf`.
 
 ## 10. Separate analysis: relapse follow-up (`run_relapse_followup.R`)
-Eight follow-up questions on relapse vs non-relapse (the same patients as section 9: MicroAD, 4 relapsers, 6 non-relapsers).
+Eight follow-up questions on relapse vs non-relapse (the same patients as section 9: MicroAD, 5 relapsers, 5 non-relapsers).
 `source("run_relapse_followup.R")` runs only the import / QC and this analysis → `output/relapse_followup/`. Start with
 **`Relapse_followup_executive_summary.pdf`**: page 1 answers all eight questions in short, then one section per question.
 Settings: `config.yml` → `relapse_followup` (the selected markers, the gene sets checked, the p-value for the volcano labels).
@@ -545,7 +555,7 @@ Settings: `config.yml` → `relapse_followup` (the selected markers, the gene se
 | # | Question | Files |
 |---|---|---|
 | 1 | Was relapse vs non-relapse calculated correctly – and is the lower immune signalling in relapsers (TCR, death receptor, NF-κB / kinase gene sets) real? Labels vs skin course, direction of log2FC / NES, the proteins behind these gene sets (each tested on its own), overall sample level, AD lesional vs healthy skin as positive control | `1_check_relapse_vs_nonrelapse.xlsx`, `1_immune_leading_edge_proteins.pdf`, `1_sample_level_check.pdf` |
-| 2 | How the dISF lesion site comparison at V1 (4 later relapse vs 6 non-relapse) was calculated, in plain words, with a worked example | executive summary, section 2 |
+| 2 | How the dISF lesion site comparison at V1 (5 later relapse vs 5 non-relapse) was calculated, in plain words, with a worked example | executive summary, section 2 |
 | 3 | Leukocyte content: CD45 (PTPRC) and other leukocyte proteins, each on its own | `3_4_leukocytes_T_cells.xlsx`, `3_leukocyte_markers.pdf`, `3_CD45_all_samples.pdf` |
 | 4 | T cells: LCK, CD3 and the other selected T-cell and activation markers, each on its own; each T-cell marker relative to CD45 (T-cell share of leukocytes) | `3_4_leukocytes_T_cells.xlsx`, `4_T_cell_markers.pdf`, `4_T_cell_markers_per_CD45.pdf`, `4_T_cell_activation_markers.pdf` |
 | 5 | IL4, CCL27, CCL5, CCL8 at each visit: heatmap of the group means (y = protein, x = visit, relapse and non-relapse side by side) and per patient (clustered) | `5_cytokines_over_visits.xlsx`, `5_cytokines_heatmap_group_means.pdf`, `5_cytokines_heatmap_per_patient.pdf` |
@@ -555,7 +565,27 @@ Settings: `config.yml` → `relapse_followup` (the selected markers, the gene se
 
 Olink measures proteins in the fluid, not cells: CD45, LCK and CD3 are proxies of cell content, not cell counts.
 
-## 11. Something went wrong?
+## 11. Separate analysis: relapse and lesional signatures per visit, V1–V4 (`run_visits_v1_v4.R`)
+dISF of the MicroAD AD patients, at each visit V1–V4 (`config.yml` → `visits_v1_v4`). Part of `run_all.R`; the shortcut
+`source("run_visits_v1_v4.R")` runs only the import / QC and this analysis → `output/visits_V1_V4/`. Start with
+**`Visits_V1-V4_summary.pdf`**. The figures are **PNG files for PowerPoint** (16:9, 300 dpi, large fonts – insert them as
+they are) and the same as PDF.
+
+| # | Question | Files |
+|---|---|---|
+| 1 | Relapse vs non-relapse at the lesion site, at each visit (DEG, limma; exact relabelling check per visit): the relapse signature at V1, and which proteins differ at V2, V3, V4 – and at ≥ 2 visits | `1_relapse_vs_nonrelapse_DEG_V1-V4.xlsx` (one sheet per visit, `signature_over_visits`), `1_relapse_volcano_V1.png` … `V4`, `1b_relapse_signature_over_visits.png` |
+| 2 | GSEA of the same comparisons, and the gene sets over the visits | `2_relapse_vs_nonrelapse_GSEA_V1-V4.xlsx`, `2_relapse_GSEA_V1.png` …, `2b_relapse_GSEA_over_visits.png` |
+| 3 | Lesion site vs non-lesional skin of the same patients, at each visit (paired DEG) | `3_lesional_vs_nonlesional_DEG_V1-V4.xlsx`, `3_lesional_volcano_V1.png` … `V4` |
+| 4 | AKR1B10 at the lesion site and in non-lesional skin over the visits (mean ± SE, paired test per visit, grey band = healthy skin) | `4_AKR1B10_lesional_vs_nonlesional_over_visits.png`; sheets `AKR1B10`, `AKR1B10_per_patient` of file 3 |
+| 5 | The mTORC1 gene set (Hallmark mTORC1 signalling), lesion site vs non-lesional at each visit: GSEA (NES, p, FDR) and each of its proteins | `5_lesional_vs_nonlesional_GSEA_V1-V4.xlsx` (`signature`, `signature_proteins`), `5_mTORC1_lesional_vs_nonlesional_by_visit.png`, `5b_mTORC1_proteins_by_visit.png` |
+
+Relapsers' samples at their relapse visit (lesional again) are left out of the relapse comparison (`include_relapse_visit: false`),
+so from V2 on all compared lesion sites are in remission: with the manifest of 2026-10-15 the groups are 5 vs 5 at V1 and V2,
+4 vs 5 at V3 and 3 vs 5 at V4 (a visit is tested only with ≥ 3 patients per group). The volcano plots label the 20 proteins
+with the lowest p (`volcano_labels`); every protein is in the Excel files. The proteins and gene sets tracked in 4 and 5
+are set in `track_proteins` and `signature_sets`.
+
+## 12. Something went wrong?
 
 | Message | Fix |
 |---|---|
@@ -563,6 +593,8 @@ Olink measures proteins in the fluid, not cells: CD45, LCK and CD3 are proxies o
 | `[MISSING] manifest` or `[MISSING] NPX parquet files` | Check the file names and places in `data/README.md` (the `.parquet` files go into `data/npx/`) |
 | `[--] Olink fixed LOD file` at the start, or `WARNING: no Olink fixed LOD file` in step 02 | The Olink fixed LOD file was not found, so the LOD comes from the negative controls (less precise). Put it in `data/` as `Explore_HT_Fixed_LOD.csv`, or keep Olink's own name (e.g. `Explore HT_Fixed LOD.csv`): it must contain "Fixed LOD" or "Fixed_LOD", end in `.csv`, and be the only such file in the folder. |
 | A step fails | Read the last lines of the message, fix the problem, and restart from that step with `start_at <- N; source("run_all.R")` |
+| `[MISSING] manifest` although a manifest is in `data/` | The manifest must have exactly the name in `config.yml` (`data/2026-10-15_manifest.xlsx`); another file (e.g. an older `manifest.xlsx`) is never used instead. Rename the file or set `paths$manifest`. |
+| `The results in output/ were made from the manifest …` or `Cannot resume: these results were made from another sample manifest` | The manifest changed since the earlier results were made. Run everything again: `rm(start_at); source("run_all.R")`. |
 | The run skips steps you wanted, or writes to `output_sim/` | `start_at` or the test settings are still set from an interrupted run: restart R (RStudio: Session → Restart R) and run again. The first lines of the run show the settings file and output folder. |
 | `there is no package called '…'` | A new version needs a new package: run `source("install_packages.R")`, restart R, run again |
 | Package error | Run `source("install_packages.R")` again. It only installs missing packages; to update an old one, use `install.packages("name")` or `BiocManager::install("name")`. |

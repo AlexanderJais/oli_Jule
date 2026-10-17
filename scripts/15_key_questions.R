@@ -185,7 +185,7 @@ q4_sets <- function(ent) {
 q4_auc <- map(c(names(kp_oid), if (!is.null(score)) "Mast cell score"), q4_sets) |> bind_rows() |>
   mutate(matrix = if_else(str_detect(predictor, "^dISF"), "dISF", "serum"),
          direction = if_else(AUC > 0.5, "higher", "lower"),
-         # with < 10 patients per group a single separation can occur by chance (4 vs 6: p = 0.01 for a
+         # with < 10 patients per group a single separation can occur by chance (5 vs 5: p = 0.008 for a
          # perfect split) and the bootstrap CI is unreliable -> only "possible", never a firm call
          verdict = case_when(is.na(AUC) ~ "not estimable",
                              p < 0.05 & pmin(n_relapse, n_non) >= 10 & (ci_low > 0.5 | ci_high < 0.5) ~

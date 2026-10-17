@@ -17,6 +17,7 @@ meta <- meta |>
             by = "SampleID")
 
 saveRDS(meta, out_path(cfg, "metadata", "sample_metadata.rds"))
+write_manifest_record(cfg)            # later steps check that they use this manifest
 save_csv(meta, cfg, "metadata", "sample_metadata.csv")
 save_csv(flags |> left_join(meta |> select(SampleID, SubjectID, cohort, matrix, visit), by = "SampleID") |>
            relocate(issue, .after = last_col()),

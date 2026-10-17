@@ -4,6 +4,7 @@
 
 source("R/utils.R")
 cfg <- load_config()
+check_manifest_record(cfg)           # the model results must come from the manifest config.yml names
 clear_outputs(cfg, "enrichment")
 
 # steps 04/05 only; per-visit results of step 13 (ISF_by_visit_*) would otherwise be picked up on a re-run

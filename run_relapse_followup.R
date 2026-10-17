@@ -13,5 +13,6 @@ rscript <- file.path(R.home("bin"), "Rscript")
 for (s in c("scripts/01_metadata.R", "scripts/02_import_qc.R", "relapse_followup/relapse_followup_analysis.R")) {
   message("\n==== ", s, " ====")
   if (system2(rscript, s) != 0) stop(s, " failed")
+  log_step(cfg_run, s)
 }
 message("\nRelapse follow-up finished: ", file.path(cfg_run$paths$output, "relapse_followup"), "/  (start with Relapse_followup_executive_summary.pdf)")

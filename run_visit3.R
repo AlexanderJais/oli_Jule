@@ -12,5 +12,6 @@ rscript <- file.path(R.home("bin"), "Rscript")
 for (s in c("scripts/01_metadata.R", "scripts/02_import_qc.R", "visit3/visit3_analysis.R")) {
   message("\n==== ", s, " ====")
   if (system2(rscript, s) != 0) stop(s, " failed")
+  log_step(cfg_run, s)
 }
 message("\nVisit 3 analysis finished: ", file.path(cfg_run$paths$output, "visit3"), "/")

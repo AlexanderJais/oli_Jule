@@ -1,6 +1,6 @@
 # V1 relapse screen (run with run_relapse_v1.R): which dISF (and serum) proteins are already higher at baseline (V1, before the
 # topical steroids at V2) in the AD patients who later relapse? MicroAD, AD patients with a relapse / non-relapse label
-# (dropouts excluded). Groups are tiny (4 vs 6), so the list is a ranked screen with an exact relabelling check.
+# (dropouts excluded). Groups are tiny (5 vs 5 with the 2026-10-15 manifest), so the list is a ranked screen with an exact relabelling check.
 #   V1 lesion site (primary), V1 non-lesional skin, V1 lesion minus non-lesional (same patient),
 #   V2 cleared lesion site (still higher after treatment?), V1 serum (also visible in blood?)
 # In:  output of steps 01-02 (data/npx_clean.rds); Human Protein Atlas (drug targets, location); MSigDB / KEGG gene sets
@@ -195,7 +195,7 @@ readme <- tibble(item = c("question", "answer", "answer serum", "answer dISF and
            "loo_correct / loo_sensitivity / loo_specificity: each patient classified with a cut-off set on the other patients (midpoint of the group means); cutoff_NPX: that cut-off on all patients (V1 lesion site, NPX); rho_time_to_relapse: Spearman with the relapse visit (non-relapse = after the last visit), < 0 = higher value, earlier relapse",
            "persists_V2: still higher in the cleared lesion site at V2; also_serum: also higher in V1 serum; approved / potential drug target, secreted, membrane: Human Protein Atlas",
            "sheet chance_check: how many proteins random labels would give; if the observed number is not above that, the list is mostly chance",
-           "4 vs 6 patients: a screen to pick candidates, not a confirmation; the smallest possible exact p is 1/210"))
+           sprintf("%d vs %d patients: a screen to pick candidates, not a confirmation; the smallest possible exact p is 1/%d", sum(is_rel), sum(!is_rel), rc$n_labellings)))
 sig3 <- \(x) x |> mutate(across(where(is.double), \(v) signif(v, 3)))
 writexl::write_xlsx(list(README = readme, can_V1_predict = predict_tbl, chance_check = chance,
                          targets_up = cand_up |> select(any_of(tcols)) |> sig3(),

@@ -21,9 +21,10 @@ load_config <- function(path = Sys.getenv("OLINK_CONFIG", "config.yml")) {
 }
 
 # If a configured file is missing, look for it in the same folder under its usual name,
-# so the original file names from Olink / the lab can be used without renaming.
+# so the original file names from Olink / the lab can be used without renaming. Not for the manifest: it defines all
+# groups, so it is never replaced by another file (e.g. an older manifest) - check_inputs() stops instead.
+manifest_pattern <- "(manifest|Sample[ _-]?Submission[ _-]?Sheet).*\\.xlsx$"
 data_file_patterns <- list(
-  manifest      = "(manifest|Sample[ _-]?Submission[ _-]?Sheet).*\\.xlsx$",
   leip_clinical = "LEIP.*clinical.*\\.xlsx$",
   fixed_lod     = "Fixed[ _-]?LOD.*\\.csv$",        # e.g. "Explore HT_Fixed LOD.csv", "Explore_HT_Fixed_LOD.csv"
   severity      = "(severity|SCORAD|EASI).*\\.(xlsx|csv)$"
@@ -37,6 +38,7 @@ resolve_data_paths <- function(paths) {
     hits <- if (dir.exists(dir)) list.files(dir, pattern = data_file_patterns[[key]], ignore.case = TRUE, full.names = TRUE) else character()
     hits <- hits[!startsWith(basename(hits), "~$")]          # skip Excel lock files
     if (length(hits) == 1) {
+      message(sprintf("NOTE: %s not found - using %s instead (paths$%s in config.yml)", p, hits, key))
       paths[[key]] <- hits
     } else if (length(hits) > 1) {
       stop(sprintf("Several candidate files for '%s' in %s: %s\nKeep one, or set paths$%s in config.yml.",
@@ -63,6 +65,12 @@ check_inputs <- function(cfg) {
                     status$input[i], status$path[i],
                     if (i == 2 && length(npx)) paste0("  (", paste(npx, collapse = ", "), ")") else ""))
   missing <- status$input[!status$found & status$required == "yes"]
+  if ("manifest" %in% missing) {
+    other <- list.files(dirname(p$manifest), pattern = manifest_pattern, ignore.case = TRUE)
+    message(sprintf("\nThe manifest must be at %s (paths$manifest in config.yml) - another file is never used instead.%s", p$manifest,
+                    if (length(other)) sprintf(" Other manifest files in %s/: %s. Rename the right one, or set paths$manifest.",
+                                               dirname(p$manifest), paste(other, collapse = ", ")) else ""))
+  }
   if (length(missing)) {
     dd <- dirname(p$manifest)
     message("\nFiles currently in ", dd, "/: ",
@@ -147,11 +155,49 @@ save_plot <- function(p, cfg, ..., width = 8, height = 6) {
   invisible(f)
 }
 
-#' Read an intermediate result written by an earlier script; fail with a clear message.
+#' Read an intermediate result written by an earlier script; fail with a clear message. Also checks that the results were
+#' made from the manifest config.yml names now (check_manifest_record).
 read_step <- function(cfg, ..., step) {
+  check_manifest_record(cfg)
   p <- file.path(cfg$paths$output, ...)
   if (!file.exists(p)) stop(sprintf("%s not found - run %s first.", p, step))
   readRDS(p)
+}
+
+#' Checksum of the manifest config.yml names (NA if the file is not there).
+manifest_md5 <- function(cfg) unname(tools::md5sum(cfg$paths$manifest %||% ""))
+
+#' Step 01 records which manifest the sample metadata come from (path and checksum).
+write_manifest_record <- function(cfg) {
+  writeLines(c(cfg$paths$manifest, manifest_md5(cfg), format(Sys.time(), "%Y-%m-%d %H:%M")),
+             out_path(cfg, "metadata", "manifest_used.txt"))
+}
+
+#' Stop if the results in the output folder were made from another manifest (or the manifest file changed since step 01):
+#' all later steps must use the sample information of the manifest config.yml names.
+check_manifest_record <- function(cfg) {
+  f <- file.path(cfg$paths$output, "metadata", "manifest_used.txt")
+  if (!file.exists(f) || !file.exists(cfg$paths$manifest %||% "")) return(invisible(TRUE))   # older results / manifest elsewhere
+  rec <- readLines(f, warn = FALSE)
+  if (!identical(rec[2], manifest_md5(cfg)))
+    stop(sprintf(paste0("The results in %s/ were made from the manifest %s (step 01 on %s), but config.yml now names %s%s. ",
+                        "Run everything again from step 01: source(\"run_all.R\") (without start_at), or the shortcut script of the analysis."),
+                 cfg$paths$output, rec[1], rec[3] %||% "?", cfg$paths$manifest,
+                 if (identical(normalizePath(rec[1], mustWork = FALSE), normalizePath(cfg$paths$manifest, mustWork = FALSE))) " (the file has changed since)" else ""),
+         call. = FALSE)
+  invisible(TRUE)
+}
+
+#' Log of the scripts run by run_all.R and the run_*.R shortcuts, with the manifest each used (output/metadata/steps_run.csv):
+#' a resumed run (start_at) or a shortcut never combines results made from different manifests.
+steps_log <- function(cfg) {
+  f <- file.path(cfg$paths$output, "metadata", "steps_run.csv")
+  if (file.exists(f)) read.csv(f, colClasses = "character") else data.frame(step = character(), manifest_md5 = character(), time = character())
+}
+log_step <- function(cfg, step) {
+  log <- steps_log(cfg)
+  write.csv(rbind(log[log$step != step, ], data.frame(step = step, manifest_md5 = manifest_md5(cfg), time = format(Sys.time(), "%Y-%m-%d %H:%M"))),
+            out_path(cfg, "metadata", "steps_run.csv"), row.names = FALSE)
 }
 
 #' Optional severity scores (paths$severity): one row per SubjectID and visit, numeric score columns.

@@ -19,9 +19,10 @@ the [README](../README.md#2-words-you-will-meet). The statistical details are in
 | G. Dedicated: visit 3 | in `run_all.R` (shortcut: `run_visit3.R`) – dISF and serum at visit 3, GSEA, dISF vs serum |
 | H. Dedicated: V1 relapse screen | in `run_all.R` (shortcut: `run_relapse_v1.R`) – dISF markers at V1 that predict relapse |
 | I. Dedicated: relapse follow-up | in `run_all.R` (shortcut: `run_relapse_followup.R`) – eight follow-up questions on relapse vs non-relapse |
+| J. Dedicated: per visit V1–V4 | in `run_all.R` (shortcut: `run_visits_v1_v4.R`) – relapse vs non-relapse and lesion site vs non-lesional at each visit, AKR1B10, mTORC1 |
 
 The steps are grouped by topic, so below they are not in number order; `run_all.R` always runs
-them 01 → 19, with the dedicated analyses G–I right after step 02b (they only need the imported data). **`run_all.R` is the only script you need to run.**
+them 01 → 19, with the dedicated analyses G–J right after step 02b (they only need the imported data). **`run_all.R` is the only script you need to run.**
 
 ---
 
@@ -31,7 +32,8 @@ them 01 → 19, with the dedicated analyses G–I right after step 02b (they onl
 **Question:** Which sample is what?
 
 **What it does**
-- Reads the sample manifest.
+- Reads the sample manifest (`data/2026-10-15_manifest.xlsx`): the sheet `manifest`, or else the one sheet with the manifest columns (e.g. `Sheet1`). Columns without a header are ignored (the message says which rows hold values there).
+- Records which manifest it used (`manifest_used.txt`, with a checksum): every later step stops if the manifest has changed since, so all results come from the same manifest.
 - Gives each sample its patient, visit, matrix (dISF or serum), cohort and group: AD, healthy, CPUO or LEIP biobank.
 - For dISF, records the skin site (tracked lesion site **L** or non-lesional site **NL**) and the skin state (lesional, ex-lesional, non-lesional).
 - Unifies spelling variants, e.g. "remisison" → remission, "GS"/"H" → healthy.
@@ -42,10 +44,10 @@ them 01 → 19, with the dedicated analyses G–I right after step 02b (they onl
 - Adds sex and the sample volume, plus the LEIP clinical data (age, BMI, CRP …).
 
 **Checks**
-- It **stops** if a manifest column is missing, if a sample ID or a plate position appears twice, if a sample sits in a different well than in the plate layout, if SampleType is not dISF or Serum, or if a patient has two dISF samples from the same site at one visit.
-- It **flags but does not change** contradictions, such as a relapse label that doesn't fit TimeToRelapse, dates that differ within one visit or are out of order, or a low volume (dISF < 20 µL, serum < 40 µL).
+- It **stops** if a manifest column is missing, if a sample ID or a plate position appears twice, if a sample sits in a different well than in the plate layout (only if the manifest has a `Plate Layout` sheet), if SampleType is not dISF or Serum, or if a patient has two dISF samples from the same site at one visit.
+- It **flags but does not change** contradictions, such as a relapse label that doesn't fit TimeToRelapse, a `ClinicalPhase` "Relapse" visit that differs from the relapse visit of the skin course, dates that differ within one visit or are out of order, or a low volume (dISF < 20 µL, serum < 40 µL).
 
-**Output:** `sample_metadata.csv` (one row per sample), `data_flags.csv` (what looks inconsistent).
+**Output:** `sample_metadata.csv` (one row per sample), `data_flags.csv` (what looks inconsistent), `manifest_used.txt`; `steps_run.csv` logs every script run with the manifest it used (a resume with `start_at` stops if earlier results come from another manifest).
 
 ### Step 02 – Import and quality control (`02_import_qc.R` → `qc/`)
 **Question:** Are the Olink measurements usable, and which proteins can we measure at all?
@@ -305,7 +307,7 @@ Healthy skin (one visit) is the reference at every visit. **"Regulated at all vi
 
 **Output:** `answers.csv`, `key_questions.xlsx`, `evidence/*.png`.
 
-**Keep in mind:** the verdicts are generated automatically from p < 0.05 and must be read with the evidence. Relapse results rest on 4 vs 6 patients in MicroAD. The wording of Q2–Q5 and the choice of one primary test per question are currently under review.
+**Keep in mind:** the verdicts are generated automatically from p < 0.05 and must be read with the evidence. Relapse results rest on 5 vs 5 patients in MicroAD (manifest of 2026-10-15). The wording of Q2–Q5 and the choice of one primary test per question are currently under review.
 
 ### Step 16 – Which proteins correlate with TNFRSF9 in dISF? (`16_tnfrsf9_correlation.R` → `tnfrsf9_correlation/`)
 **Question:** Which measured proteins correlate with TNFRSF9 (4-1BB / CD137) in dISF? In particular, do IL33 (IL-33), IL4 (IL-4), CSF2, IL6, IL18, CXCL8, IL1RL1, KIT, KITLG, TPSAB1, TPSB2 and FCER1A? The list is in `config.yml`.
@@ -366,7 +368,7 @@ Healthy skin (one visit) is the reference at every visit. **"Regulated at all vi
 - a relapse volcano plot.
 
 **Keep in mind:**
-- Relapse analyses rest on 4 vs 6 patients.
+- Relapse analyses rest on 5 vs 5 patients.
 - The tissue origin needs the Human Protein Atlas table: download it once with `source("tools/download_hpa.R")`, then rerun from step 02b with `start_at <- "02b"; source("run_all.R")` (this also adds the protein classes of step 02b). Without the table the origin columns stay empty.
 
 ---
@@ -413,17 +415,17 @@ Values below LOD are exported as measured, which is Olink's recommendation; the 
 ## H. Separate: V1 relapse screen (`run_relapse_v1.R` → `relapse_V1/`)
 **Question:** Which markers at V1, before the topical steroids, predict a later relapse ("actionable targets") – in dISF, in serum, and in both?
 
-**What it does** (MicroAD AD patients with a relapse / non-relapse label, dropouts excluded; 4 vs 6):
+**What it does** (MicroAD AD patients with a relapse / non-relapse label, dropouts excluded; 5 vs 5 with the manifest of 2026-10-15):
 1. limma, relapse vs non-relapse: V1 lesion site (primary), V1 non-lesional skin, V1 lesion minus non-lesional (same patient), V2 cleared lesion site (before any relapse), V1 serum.
-2. **Exact relabelling check:** the V1 lesion analysis is repeated for all 210 ways to choose 4 of the 10 patients as "relapse". This gives an exact p per protein (smallest possible 1/210) and how many hits random labels produce.
+2. **Exact relabelling check:** the V1 lesion analysis is repeated for all 252 ways to choose 5 of the 10 patients as "relapse". This gives an exact p per protein (smallest possible 1/252) and how many hits random labels produce.
 3. **Target (higher):** V1 lesion site p < 0.05 and exact p < 0.05, above LOD in ≥ 50 % of the relapsers. Ranked by AUC, then still higher at V2, then stable in every leave-one-patient-out refit, then fold change. Flags: also higher in V1 serum; approved / potential drug target, secreted, membrane (Human Protein Atlas).
-4. **Prediction:** per marker, each patient is classified with a cut-off set on the other patients (leave one out: patients correct, sensitivity, specificity, the V1 cut-off in NPX) and its correlation with how soon the relapse comes. **Can V1 predict at all:** the whole search (pick the top 1 or top 5 proteins on the other patients, classify the left-out one) is repeated for all 210 labellings; it predicts better than chance only if few random labellings do as well. Also: how many proteins separate perfectly by chance. Ranking starts with patients predicted correctly.
+4. **Prediction:** per marker, each patient is classified with a cut-off set on the other patients (leave one out: patients correct, sensitivity, specificity, the V1 cut-off in NPX) and its correlation with how soon the relapse comes. **Can V1 predict at all:** the whole search (pick the top 1 or top 5 proteins on the other patients, classify the left-out one) is repeated for all 252 labellings; it predicts better than chance only if few random labellings do as well. Also: how many proteins separate perfectly by chance. Ranking starts with patients predicted correctly.
 5. **Serum and both matrices:** the same screen (relabelling, prediction, chance check) on the V1 serum of the same patients. Markers in both dISF and serum (all criteria in each), or in one and supported (p < 0.05, same direction) in the other. How many proteins random labels make "higher in both" is checked with the same random labels for both matrices.
 6. GSEA (dISF V1, V1 lesion minus non-lesional, V2, and serum V1), with the gene sets changed in the same direction in dISF and serum; volcano plots, each target per patient over the visits; the shared markers in dISF and serum over the visits.
 
 **Output:** `V1_relapse_executive_summary.pdf` (answer, predictors, gene sets, methods), `V1_relapse_targets.xlsx` (README with the answer, `can_V1_predict`, `targets_up`, `targets_down`, `chance_check`, full results), `V1_relapse_prediction_test.pdf`, `V1_relapse_volcano.pdf`, `V1_relapse_targets_course.pdf`, `V1_relapse_predictors_higher_over_visits.pdf` / `V1_relapse_predictors_lower_over_visits.pdf` (mean ± SE over the visits, lesion site and non-lesional, relapse and non-relapse, healthy band; data in `V1_relapse_predictors_over_visits.xlsx`), `V1_relapse_chance_check.pdf`, `V1_relapse_GSEA.xlsx` / `.pdf`.
 
-**Keep in mind:** with 4 vs 6 patients this picks candidates, it does not confirm them; `chance_check` says how many of the hits random labels would give. Candidates also measurable in serum can be checked in RELAD / RELAD2.
+**Keep in mind:** with 5 vs 5 patients this picks candidates, it does not confirm them; `chance_check` says how many of the hits random labels would give. Candidates also measurable in serum can be checked in RELAD / RELAD2.
 
 ---
 
@@ -441,5 +443,20 @@ Values below LOD are exported as measured, which is Olink's recommendation; the 
 
 **Output:** `Relapse_followup_executive_summary.pdf` (all eight answers on page 1, then one section per question), `1_check_relapse_vs_nonrelapse.xlsx`, `3_4_leukocytes_T_cells.xlsx`, `5_cytokines_over_visits.xlsx`, `6_volcano_dISF_lesion_V1_data.xlsx`, `7_volcano_serum_V1_data.xlsx`, `8_druggable_targets.xlsx`, and the figures `1_*`, `3_*`, `4_*`, `5_*`, `6_*`, `7_*`, `8_*` (.pdf / .png). The markers are chosen in `config.yml` → `relapse_followup`.
 
-**Keep in mind:** 4 vs 6 patients; Olink measures proteins in the fluid, so CD45, LCK and CD3 are proxies of cell content. The known-drug list is short and curated: check the status of a drug before using it.
+**Keep in mind:** 5 vs 5 patients; Olink measures proteins in the fluid, so CD45, LCK and CD3 are proxies of cell content. The known-drug list is short and curated: check the status of a drug before using it.
 
+---
+
+## J. Separate: relapse and lesional signatures per visit, V1–V4 (`run_visits_v1_v4.R` → `visits_V1_V4/`)
+**Question:** Which dISF proteins and gene sets differ between relapsers and non-relapsers at the lesion site – at V1 (the relapse signature) and at V2, V3 and V4? Which differ between the lesion site and non-lesional skin at each visit, and how do AKR1B10 and the mTORC1 gene set behave over the visits?
+
+**What it does** (MicroAD AD patients, dISF; `config.yml` → `visits_v1_v4`):
+1. **Relapse vs non-relapse at the lesion site, at each visit:** limma per protein (log2FC = relapse − non-relapse) and the exact relabelling check of each visit (how many proteins with p < 0.05 random labels give; exact p per protein). Relapsers' samples at their relapse visit (lesional again) are left out (`include_relapse_visit: false`), so from V2 on all compared lesion sites are in remission. A visit is tested only with ≥ 3 patients per group. Proteins with p < 0.05 in the same direction at ≥ 2 visits form the relapse signature over the visits.
+2. **GSEA** of each comparison (MSigDB Hallmark, Reactome, GO:BP and KEGG, on the limma t), and the gene sets over the visits.
+3. **Lesion site vs non-lesional skin** of the same patients, at each visit (paired limma; all AD patients with both samples).
+4. **AKR1B10** (`track_proteins`): mean ± SE at the lesion site and in non-lesional skin at each visit, healthy skin as a grey band, the paired test of each visit.
+5. **mTORC1** (`signature_sets`, Hallmark mTORC1 signalling): GSEA lesion site vs non-lesional at each visit (NES, p, FDR), and each of its measured proteins at each visit.
+
+**Output:** `Visits_V1-V4_summary.pdf` (start here); `1_relapse_vs_nonrelapse_DEG_V1-V4.xlsx` (one sheet per visit, `signature_over_visits`, `summary`, `samples`), `2_relapse_vs_nonrelapse_GSEA_V1-V4.xlsx`, `3_lesional_vs_nonlesional_DEG_V1-V4.xlsx` (one sheet per visit, `AKR1B10`, `AKR1B10_per_patient`), `5_lesional_vs_nonlesional_GSEA_V1-V4.xlsx` (`signature`, `signature_proteins`, one sheet per visit). Figures as PNG (16:9, 300 dpi, large fonts – for PowerPoint) and PDF: `1_relapse_volcano_V1` … (one per tested visit), `1b_relapse_signature_over_visits`, `2_relapse_GSEA_V1` …, `2b_relapse_GSEA_over_visits`, `3_lesional_volcano_V1` … `V4`, `4_AKR1B10_lesional_vs_nonlesional_over_visits`, `5_mTORC1_lesional_vs_nonlesional_by_visit`, `5b_mTORC1_proteins_by_visit`.
+
+**Keep in mind:** with the manifest of 2026-10-15 the relapse groups are 5 vs 5 at V1 and V2, 4 vs 5 at V3 and 3 vs 5 at V4 – a screen; the random-label medians show what chance alone gives. The volcano plots label the 20 proteins with the lowest p; every protein is in the Excel files.
