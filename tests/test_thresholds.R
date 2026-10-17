@@ -19,8 +19,11 @@ funnel <- rd("relapse_funnel"); rem <- rd("removed_by_filter")
 cfg_sim <- yaml::read_yaml("data_sim/config_sim.yml")
 mono <- \(x) all(diff(x) <= 0)
 stopifnot(
-  "verdict incomplete" = all(c("Detection (LOD) filter", "False discovery rate", "Minimum group size", "Olink sample QC: FAIL") %in% verdict$threshold) &&
-    !any(is.na(verdict$verdict)),
+  "verdict incomplete" = all(c("Detection (LOD) filter", "False discovery rate", "Minimum group size", "Olink sample QC: FAIL", "Samples not in the manifest",
+                               "Missing values in the main models") %in% verdict$threshold) && !any(is.na(verdict$verdict)) &&
+    all(verdict$status %in% c("may limit these data", "by design", "not limiting")),
+  "inconsistencies not listed" = nrow(rd("inconsistencies")) >= 10,
+  "removed samples without the share of failed values" = "pct_values_FAIL" %in% names(rd("removed_samples")),
   "inventory missing the config thresholds" = all(c("qc$min_detect_frac", "stats$fdr", "stats$min_group_n", "stats$visit_min_subjects") %in% inv$config_key),
   "current detection threshold not marked" = sum(det$current) == 2 && all(det$detection_threshold[det$current] == cfg_sim$qc$min_detect_frac),
   "assays kept must fall with a stricter filter" = all(det |> group_by(matrix) |> summarise(ok = mono(kept_in_one_group) && mono(kept_of_all_samples)) |> pull(ok)),

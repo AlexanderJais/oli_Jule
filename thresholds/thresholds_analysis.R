@@ -58,6 +58,23 @@ outliers_by_sd <- if (is.null(sq)) tibble() else map(sds, \(k) sq |> group_by(ma
             .groups = "drop")) |> bind_rows() |> mutate(matrix = mx_name[matrix], current = outlier_sd == k_cur)
 removed_samples <- if (is.null(sq)) tibble() else sq |> filter(SampleQC == "FAIL") |> select(SampleID, matrix) |>
   left_join(meta |> select(SampleID, SubjectID, cohort, group, visit, site), by = "SampleID") |> mutate(matrix = mx_name[matrix])
+# a sample is FAIL if any of its values (block) fails, and then the whole sample is removed: how much of it failed?
+all_path <- file.path(cfg$paths$output, "data", "npx_all_samples.rds")
+if (nrow(removed_samples) && file.exists(all_path)) {
+  all_s <- readRDS(all_path) |> filter(SampleID %in% removed_samples$SampleID)
+  has_block <- "Block" %in% names(all_s)
+  removed_samples <- removed_samples |> left_join(all_s |> group_by(SampleID) |>
+    summarise(values = n(), values_FAIL = sum(SampleQC %in% "FAIL"),
+              blocks = if (has_block) n_distinct(Block) else NA_integer_, blocks_FAIL = if (has_block) n_distinct(Block[SampleQC %in% "FAIL"]) else NA_integer_,
+              .groups = "drop") |> mutate(pct_values_FAIL = round(100 * values_FAIL / values, 1)), by = "SampleID")
+}
+# samples in the NPX files but not in the manifest are left out of every analysis
+mm_path <- file.path(cfg$paths$output, "qc", "sample_id_mismatches.csv")
+id_mismatch <- if (file.exists(mm_path)) read_csv(mm_path, show_col_types = FALSE, col_types = cols(.default = "c")) else tibble(SampleID = character(), problem = character())
+# the main models (steps 04-17) do not test a protein with > 20% missing values in the model's samples
+wide_path <- file.path(cfg$paths$output, "data", "npx_wide.rds")
+na_tbl <- if (file.exists(wide_path)) imap(readRDS(wide_path), \(m, mx) tibble(matrix = mx_name[[mx]], proteins = nrow(m),
+  proteins_over_20pct_missing = sum(rowMeans(is.na(m)) > 0.2), proteins_with_any_missing = sum(rowSums(is.na(m)) > 0))) |> bind_rows() else tibble()
 
 # =============================================================================================================================
 # 2  Proteins: the detection (LOD) filter at other values
@@ -200,13 +217,15 @@ funnel <- if (!"relapse_V1" %in% names(runs_ok)) tibble() else {
 # 6  Inventory of the thresholds in the code, and the verdict per threshold
 # =============================================================================================================================
 inventory <- threshold_inventory(cfg)
-verdict <- threshold_verdicts(cfg, samples_qc, det_tbl, det, removed_tbl, cmp_tbl, grp_tbl, set_sizes, funnel, cur, fdr, f0, poi_by_group, poi_missing, det_groups)
+verdict <- threshold_verdicts(cfg, samples_qc, det_tbl, det, removed_tbl, cmp_tbl, grp_tbl, set_sizes, funnel, cur, fdr, f0, poi_by_group, poi_missing, det_groups,
+                              removed_samples, id_mismatch, na_tbl)
+inconsistencies <- threshold_inconsistencies()
 
 # =============================================================================================================================
 # Excel file
 # =============================================================================================================================
 writexl::write_xlsx(list(
-  README = tibble(item = c("question", "verdict", "samples", "detection", "comparisons", "removed_by_filter", "gene_sets", "group_sizes", "relapse_funnel", "inventory", "data"),
+  README = tibble(item = c("question", "verdict", "samples", "detection", "comparisons", "removed_by_filter", "gene_sets", "group_sizes", "relapse_funnel", "inventory", "inconsistencies", "data"),
     note = c("Which thresholds remove data or decide results, and are they too strict for these data?",
              "one row per threshold: current value, what it does, its effect on these data, verdict",
              sprintf("Olink SampleQC FAIL samples are removed; WARN samples and outliers (median or IQR of NPX beyond mean +/- %g SD) are only flagged; low volume (< %s uL) is only flagged. Sheet outliers_by_sd: outliers at other SD values", k_cur, paste(sprintf("%s %g", names(lv), lv), collapse = ", ")),
@@ -218,9 +237,10 @@ writexl::write_xlsx(list(
              sprintf("patients per visit: AD with dISF (step 13 analyses a visit with >= %d), relapse vs non-relapse at the lesion site (tested with >= %d per group; relapsers at their relapse visit left out), smallest possible exact p", vmin, min_n),
              sprintf("V1 lesion site, relapse vs non-relapse: proteins left after each criterion of the V1 relapse screen (p < 0.05, exact one-sided p < 0.05, above LOD in >= %.0f%% of the group), and with looser criteria", 100 * cur),
              "every threshold in the code: value, config key or hard-coded, where, what it does, type",
+             "places where the same kind of threshold is defined differently in different steps (from a review of the code); none is changed by this check",
              manifest_txt)),
-  verdict = verdict, inventory = inventory,
-  samples = samples_qc, outliers_by_sd = outliers_by_sd, removed_samples = removed_samples,
+  verdict = verdict, inventory = inventory, inconsistencies = inconsistencies,
+  samples = samples_qc, outliers_by_sd = outliers_by_sd, removed_samples = removed_samples, sample_id_mismatches = id_mismatch, missing_values = na_tbl,
   detection = det_tbl, detection_groups = det_groups,
   proteins_of_interest = poi_by_group |> select(list, gene, Assay, OlinkID, matrix, det_group, pct_above_LOD, kept_by_step02 = keep) |> sig3(),
   comparisons = cmp_tbl, removed_by_filter = removed_tbl, removed_p_below_0.05 = removed_hits |> sig3(),
@@ -287,5 +307,7 @@ section("Group sizes", page_table("Patients per visit and group", grp_tbl |> tra
 for (f in figs) section(f$title, page_plot(f$p + labs(title = f$title, subtitle = f$note)))
 section("Inventory", page_table("Every threshold in the code", inventory |> transmute(area, threshold = str_trunc(threshold, 40), value = str_trunc(value, 18),
   where = str_trunc(where, 34), type), rows_per_page = 30))
+section("Inconsistencies", page_text("Thresholds defined differently in different steps", sprintf("%s: %s", inconsistencies$topic, inconsistencies$finding),
+                                     subtitle = "From a review of the code. Nothing is changed by this check; each point can be harmonised on request.", size = 9.5, width = 150))
 invisible(grDevices::dev.off())
 msg("Thresholds: %s", file.path(cfg$paths$output, out))

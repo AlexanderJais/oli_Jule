@@ -25,16 +25,24 @@ relapse_funnel <- function(r, min_f) {
 
 #' One row per threshold: the setting, its effect on these data and a verdict (is it too strict?).
 threshold_verdicts <- function(cfg, samples_qc, det_tbl, det, removed_tbl, cmp_tbl, grp_tbl, set_sizes, funnel, cur, fdr, f0, poi_by_group, poi_missing,
-                               det_groups) {
+                               det_groups, removed_samples, id_mismatch, na_tbl) {
   num <- \(x) if (length(x) && !is.na(x[1])) x[1] else 0
   sq_of <- \(m, col) num(samples_qc[[col]][samples_qc$matrix == m])
   rows <- list()
   add <- function(threshold, setting, effect, verdict) rows[[length(rows) + 1]] <<- tibble(threshold, setting, effect, verdict)
   # samples
-  add("Olink sample QC: FAIL", "FAIL samples removed (always)",
-      sprintf("%d of %d dISF and %d of %d serum samples removed", sq_of("dISF", "removed_FAIL"), sq_of("dISF", "samples"), sq_of("serum", "removed_FAIL"), sq_of("serum", "samples")),
-      if (max(sq_of("dISF", "removed_FAIL") / max(sq_of("dISF", "samples"), 1), sq_of("serum", "removed_FAIL") / max(sq_of("serum", "samples"), 1)) > 0.1)
+  part_fail <- if ("pct_values_FAIL" %in% names(removed_samples) && nrow(removed_samples)) median(removed_samples$pct_values_FAIL, na.rm = TRUE) else NA_real_
+  add("Olink sample QC: FAIL", "a sample with a FAIL in any block is removed as a whole (always)",
+      sprintf("%d of %d dISF and %d of %d serum samples removed%s", sq_of("dISF", "removed_FAIL"), sq_of("dISF", "samples"), sq_of("serum", "removed_FAIL"), sq_of("serum", "samples"),
+              if (is.na(part_fail)) "" else sprintf("; median %.0f%% of their values failed (sheet removed_samples)", part_fail)),
+      if (!is.na(part_fail) && part_fail < 50)
+        "stricter than needed: most values of the removed samples passed QC - removing only the failed blocks would keep the rest (not changed here)"
+      else if (max(sq_of("dISF", "removed_FAIL") / max(sq_of("dISF", "samples"), 1), sq_of("serum", "removed_FAIL") / max(sq_of("serum", "samples"), 1)) > 0.1)
         "many samples removed - check qc/sample_qc.csv" else "standard Olink QC - not limiting")
+  n_npx_only <- sum(id_mismatch$problem %in% "in NPX data, not in manifest"); n_man_only <- sum(id_mismatch$problem %in% "in manifest, not in NPX data")
+  add("Samples not in the manifest", "NPX samples without a row in the manifest are left out (step 02)",
+      sprintf("%d samples of the NPX files are not in the manifest; %d manifest samples have no NPX data", n_npx_only, n_man_only),
+      if (n_npx_only) "check qc/sample_id_mismatches.csv: these samples are in no analysis - add them to the manifest if they belong to the study" else "none - not limiting")
   add("Olink sample QC: WARN", sprintf("qc$drop_sample_qc_warn = %s", tolower(isTRUE(cfg$qc$drop_sample_qc_warn))),
       sprintf("%d dISF and %d serum WARN samples %s", sq_of("dISF", "WARN_kept"), sq_of("serum", "WARN_kept"), if (isTRUE(cfg$qc$drop_sample_qc_warn)) "removed" else "kept (flagged)"),
       if (isTRUE(cfg$qc$drop_sample_qc_warn)) "removes samples - set false to keep them" else "not limiting (kept)")
@@ -73,6 +81,10 @@ threshold_verdicts <- function(cfg, samples_qc, det_tbl, det, removed_tbl, cmp_t
   add("Assays without LOD", "kept by step 02 (cannot be judged); not tested by the dedicated analyses",
       paste(sprintf("%s %d", c(ISF = "dISF", Serum = "serum")[no_lod$matrix], no_lod$n), collapse = ", "),
       if (sum(no_lod$n)) "check qc/lod.csv: these assays are missing from the dedicated analyses" else "none - not limiting")
+  add("Missing values in the main models", "a protein with > 20% missing values in a model's samples is not tested; the rest are imputed (hard-coded)",
+      if (nrow(na_tbl)) paste(sprintf("%s: %d of %d kept proteins have > 20%% missing values over all samples", na_tbl$matrix, na_tbl$proteins_over_20pct_missing, na_tbl$proteins), collapse = "; ")
+      else "npx_wide.rds not found",
+      if (nrow(na_tbl) && sum(na_tbl$proteins_over_20pct_missing)) "removes these proteins from the main models (steps 04-17)" else "not limiting (hardly any missing values)")
   # significance
   fcol <- sprintf("FDR_below_%g", fdr)
   cc <- if (fcol %in% names(cmp_tbl)) cmp_tbl |> filter(current, !is.na(.data[[fcol]])) else tibble()
@@ -115,7 +127,7 @@ threshold_verdicts <- function(cfg, samples_qc, det_tbl, det, removed_tbl, cmp_t
       "by design never reached with these groups: relapse verdicts stay 'possible' at most")
   bind_rows(rows) |>
     mutate(status = case_when(str_detect(verdict, "^by design") ~ "by design",
-                              str_detect(verdict, "^(possibly too strict|too strict|limits|cannot be reached|many samples removed|removes|check)") ~ "may limit these data",
+                              str_detect(verdict, "^(possibly too strict|too strict|stricter than needed|limits|cannot be reached|many samples removed|removes|check)") ~ "may limit these data",
                               TRUE ~ "not limiting"), .after = threshold)
 }
 
@@ -222,7 +234,11 @@ threshold_inventory <- function(cfg) {
   inv <- tribble(
     ~area, ~threshold, ~config_key, ~fixed_value, ~where, ~effect, ~type,
     # samples
-    "samples", "Olink SampleQC FAIL", "", "FAIL", "scripts/02_import_qc.R", "samples with SampleQC FAIL are removed from all analyses", "removes data",
+    "samples", "Olink SampleQC FAIL", "", "FAIL in any block", "R/qc.R sample_qc(), scripts/02_import_qc.R", "a sample is FAIL if any of its rows (blocks) fails; the whole sample is then removed from all analyses", "removes data",
+    "samples", "samples missing from the manifest", "", "not in the manifest", "scripts/02_import_qc.R", "NPX samples without a manifest row are dropped (listed in qc/sample_id_mismatches.csv)", "removes data",
+    "samples", "relapse label spelling", "", "relapse / non-relapse / no relapse / dropout ...", "R/metadata.R harmonise_relapse()", "any other spelling of Relapse becomes missing: the patient leaves every relapse comparison", "removes data",
+    "samples", "one serum sample per person (AD vs healthy)", "", "V1", "R/design.R", "MicroAD serum AD vs healthy and the cross-sectional serum models use V1 only", "removes data",
+    "samples", "before-relapse samples", "", "visit < relapse visit (steps 14, 17)", "steps 14, 17; visits_v1_v4/; steps 04, 05, 11", "steps 14 and 17 use visits before the relapse; visits_v1_v4 drops relapsers from their relapse visit on; the relapse models of steps 04, 05, 11 have no such filter", "removes data",
     "samples", "Olink SampleQC WARN", "qc$drop_sample_qc_warn", "", "scripts/02_import_qc.R", "true = WARN samples removed; false = kept and flagged", "removes data / flag",
     "samples", "sample outlier rule", "qc$outlier_sd", "", "R/qc.R sample_qc()", "median or IQR of NPX beyond mean +/- k SD of the matrix (non-FAIL samples): flagged", "flag only",
     "samples", "remove outliers", "qc$drop_outliers", "", "scripts/02_import_qc.R", "true = flagged outliers removed", "removes data / flag",
@@ -232,6 +248,8 @@ threshold_inventory <- function(cfg) {
     # proteins
     "proteins", "LOD source", "qc$lod_method", "", "R/qc.R add_lod()", "auto = Olink fixed LOD file, else LOD from the negative controls; decides below_lod for every value", "decides LOD",
     "proteins", "AssayQC WARN values", "qc$drop_assay_qc_warn", "", "scripts/02_import_qc.R", "true = values with AssayQC WARN set to missing; false = kept", "removes data / flag",
+    "proteins", "AssayQC FAIL values", "", "never removed", "scripts/02_import_qc.R", "values with AssayQC FAIL are kept (only listed in qc/assay_qc_flags.csv)", "flag only",
+    "proteins", "missing values in the main models", "", "> 20% missing", "R/models.R, R/correlate.R", "a protein with more than 20% missing values in a model's samples is not tested; the remaining missing values are replaced by the protein median", "removes data",
     "proteins", "assays without any value", "", "0 values in a matrix", "scripts/02_import_qc.R", "assay/matrix combinations without any NPX value (Olink EXCLUDED) are removed", "removes data",
     "proteins", "detection filter (main pipeline)", "qc$min_detect_frac", "", "R/qc.R assay_detection(), step 02 keep", "assay kept in a matrix if above LOD in >= this share of the samples of at least one detection group; assays without LOD kept", "removes data",
     "proteins", "detection filter (per comparison)", "qc$min_detect_frac", "", "R/visit3.R de_limma()", "dedicated analyses: protein tested if above LOD in >= this share of the samples of one of the two compared groups; assays without LOD are not tested", "removes data",
@@ -248,15 +266,41 @@ threshold_inventory <- function(cfg) {
     "significance", "firm verdict in the key questions", "", ">= 10 patients per group, p < 0.05, CI excluding 0.5", "scripts/15_key_questions.R", "a relapse prediction is called firm only with these; otherwise at most 'possible'", "decides verdict",
     "significance", "dISF vs serum enrichment", "stats$min_rel_log2", "", "scripts/10_matrix_comparison.R", "minimum relative dISF/serum difference (log2) to call a protein enriched in dISF", "decides significance",
     # group sizes
-    "group sizes", "minimum group size", "stats$min_group_n", "", "R/models.R fit_contrasts(), R/correlate.R, visits_v1_v4/", "a contrast is skipped if a group has fewer samples", "removes tests",
+    "group sizes", "minimum group size", "stats$min_group_n", "", "R/models.R fit_contrasts(), R/correlate.R, visits_v1_v4/", "a contrast is skipped if a group has fewer samples (main models count samples, visits_v1_v4 counts patients; some modules use a fixed 3, step 17 a fixed 2)", "removes tests",
     "group sizes", "visits in the visit course", "stats$visit_min_subjects", "", "R/design.R visit_specs(), step 13", "a visit is analysed only with at least this many AD patients with dISF", "removes tests",
     "group sizes", "minimum pairs for a correlation", "tnfrsf9_correlation$min_n", "", "scripts/16_tnfrsf9_correlation.R", "correlations need at least this many sample pairs", "removes tests",
     "group sizes", "visit 3 groups", "", ">= 3 samples per group", "visit3/visit3_analysis.R", "the visit 3 analysis stops if a group has fewer than 3 samples", "removes tests",
+    "group sizes", "minimum samples per model", "", "4 (models, xL-NL pairs), 6 (step 17), 8 (step 16)", "R/models.R, R/correlate.R, R/design.R, steps 04, 10, 16, 17", "a model or test with fewer samples is skipped", "removes tests",
+    "group sizes", "minimum pairs for other correlations", "", "3, 5, 8 or 10 by step", "steps 06, 08, 10, 12, 15, 16, 17", "correlations need 5 pairs (steps 06, 15, 17), 8 (steps 10, 16), 10 (steps 08, 12) or 3 (step 08)", "removes tests",
+    "group sizes", "visits in steps 14 and 17", "", "no minimum", "scripts/14_serum_vs_disf.R, scripts/17_disf_serum_signatures.R", "every visit with AD samples is analysed (stats$visit_min_subjects applies to step 13 only)", "removes tests",
     # gene sets
-    "gene sets", "gene set size (GSEA)", "enrichment$min_size", "", "steps 07, 09; dedicated GSEA", "gene sets with fewer measured proteins are not tested (step 07 also tests 5-9, marked small_set)", "removes tests",
+    "gene sets", "gene set size (GSEA)", "enrichment$min_size", "", "steps 09, 02b; dedicated GSEA", "gene sets with fewer measured proteins are not tested", "removes tests",
+    "gene sets", "gene set size (step 07)", "", "5 (min of enrichment$min_size and 5)", "scripts/07_enrichment.R", "step 07 tests gene sets from 5 measured proteins; sets of 5-9 are marked small_set but stay in the FDR", "removes tests",
+    "gene sets", "gene set size (relapse follow-up re-test)", "", "3", "relapse_followup/relapse_followup_analysis.R", "the immune gene sets re-tested after removing the sample level need 3 measured proteins", "removes tests",
     "gene sets", "largest gene set", "enrichment$max_size", "", "steps 07, 09, 17; dedicated GSEA", "gene sets with more measured proteins are not tested", "removes tests",
     "gene sets", "gene set size (signatures)", "signatures$min_size", "", "scripts/17_disf_serum_signatures.R", "smallest gene set in the over-representation analysis of step 17", "removes tests",
     "gene sets", "gene set size within a protein class", "qc_overview$pathway_min_size_class", "", "scripts/02b_qc_overview.R", "smallest gene set for the dISF-only pathways within a protein class", "removes tests")
   inv |> mutate(value = if_else(config_key == "", fixed_value, map_chr(config_key, \(k) if (k == "") "" else val(k))), config_key = if_else(config_key == "", "hard-coded", config_key)) |>
     select(area, threshold, value, config_key, where, effect, type)
 }
+
+#' Places where the same kind of threshold is defined differently in different steps (from a review of the code).
+threshold_inconsistencies <- function() tribble(
+  ~topic, ~finding,
+  "assays without LOD", "kept by the step 02 filter, but never tested in the dedicated analyses (visit 3, relapse screens, per visit), dropped from the dISF-only lists (02b) and the step 09 / 10 sets, and counted as above LOD in step 16 and the relapse follow-up",
+  "what 'detected' means", "step 02: >= qc$min_detect_frac in any detection group (serum pools all cohorts); 02b: of all MicroAD samples; step 09: of all dISF samples; step 10: of all MicroAD samples per matrix; dedicated analyses: in one of the two compared groups; relapse targets: in the relapse group - so steps 14 and 17 can call different proteins 'not measurable in serum'",
+  "sample QC", "one failing block makes the whole sample FAIL, and the whole sample (all assays) is removed",
+  "assay QC", "values with AssayQC FAIL are never removed; with qc$drop_assay_qc_warn = true, WARN values become missing but still count in the detection fractions",
+  "missing values", "the main models drop proteins with > 20% missing values and impute the rest; the dedicated analyses do neither",
+  "minimum group size", "the main models count samples per group (a relapse group of 1-2 patients with >= 3 samples passes), visits_v1_v4 counts patients; visit 3, the relapse screens and the relapse follow-up use a fixed 3 and step 17 a fixed 2 instead of stats$min_group_n; the relapse screens test V1 non-lesional, V2 and serum V1 without a minimum",
+  "firm verdicts", "'>= 10 patients per group for a firm verdict' exists only in key question Q4; the relapse screens state answers with 5 vs 5 patients (backed by the exact relabelling check)",
+  "minimum pairs for correlations", "3, 5, 8, 10 or none depending on the step; tnfrsf9_correlation$min_n is used only in step 16 (not for its partial correlation, which needs 8)",
+  "minimum patients per visit", "stats$visit_min_subjects applies only to step 13; steps 14 and 17 analyse every visit",
+  "before-relapse samples", "visits_v1_v4 leaves relapsers out from their relapse visit on (configurable); steps 14 and 17 use visits before the relapse (fixed); the relapse models of steps 04, 05 and 11 have no before-relapse filter; the V2 'cleared' sets of the relapse screens do not check the skin state",
+  "dropouts", "removed from the non-lesional time model but not from the ex-lesional one; step 11 uses the relapse label instead of the dropout column; the AD vs healthy comparisons keep dropouts",
+  "gene set size", "5 in step 07 (sets of 5-9 only marked), 10 in steps 09 / 02b and the dedicated GSEA, 5 in step 17, 3 in the relapse follow-up re-test",
+  "nominal p", "p < 0.05 is fixed in the code everywhere, while the FDR comes from stats$fdr",
+  "fixed texts", "step 18 always says outliers are 'flagged, not removed' (ignores qc$drop_outliers); '50%' and 'FDR < 0.05' are written out in a few texts and ignore the settings",
+  "below-LOD cautions", "the caution cut-offs (50%, 80%, 90% / 10%) are not linked to qc$min_detect_frac",
+  "skin sites", "step 06 counts healthy skin as non-lesional and includes CPUO patients; steps 10 and 16 exclude CPUO",
+  "step 14", "a dISF result at a visit is dropped when the serum model at that visit cannot be estimated")

@@ -597,13 +597,14 @@ its setting, its effect on these data and a verdict.
 
 | What | How it is checked | Files |
 |---|---|---|
-| Sample QC | samples removed (Olink SampleQC FAIL), kept but flagged (WARN, outliers at 2–4 SD, low volume) | sheets `samples`, `outliers_by_sd`, `removed_samples` |
+| Sample QC | samples removed (Olink SampleQC FAIL – a FAIL in one block removes the whole sample: how much of them really failed), kept but flagged (WARN, outliers at 2–4 SD, low volume); samples in the NPX files but not in the manifest (left out of every analysis); proteins dropped from the main models for > 20 % missing values | sheets `samples`, `outliers_by_sd`, `removed_samples`, `sample_id_mismatches`, `missing_values` |
 | Detection (LOD) filter | assays kept per matrix at 0–90 % above LOD (in at least one detection group, as step 02, or of all samples); the proteins of interest of `config.yml` near or below the threshold | `1_assays_kept_by_detection_threshold.png`, `4_proteins_of_interest_above_LOD.png`; sheets `detection`, `detection_groups`, `proteins_of_interest` |
 | Effect on results | five comparisons (relapse V1, lesion site vs non-lesional V1 and V3, AD vs healthy in dISF and serum) re-run at each detection threshold: proteins tested, p < 0.05, FDR < 0.05 / 0.1 / 0.2, chance level for relapse. Key test: do the proteins the filter removes carry more p < 0.05 than the 5 % chance gives? | `2_comparisons_by_detection_threshold.png`, `3_removed_proteins_vs_chance.png`; sheets `comparisons`, `removed_by_filter`, `removed_p_below_0.05` |
 | Gene sets | GSEA at three detection thresholds (gene sets with FDR < 0.05 / 0.1 / 0.25, the mTORC1 set); gene sets eligible at other minimum sizes | sheets `gene_sets`, `signature_gene_set`, `gene_set_sizes` |
 | Group sizes | patients per visit and group against `stats$min_group_n` and `visit_min_subjects`; the smallest exact p the group sizes allow | `5_group_sizes_per_visit.png`; sheet `group_sizes` |
 | Relapse criteria (V1) | proteins left after each criterion of the V1 relapse screen (p, exact p, LOD in the relapsers), and with looser criteria | `6_relapse_criteria_V1.png`; sheet `relapse_funnel` |
 | Inventory | every threshold in the code: value, `config.yml` key or hard-coded, where, what it does | sheet `inventory` |
+| Inconsistencies | the same kind of threshold defined differently in different steps (e.g. what "detected" means, assays without LOD, minimum group sizes, before-relapse samples) – listed, not changed | sheet `inconsistencies`, last page of the PDF |
 
 ## 13. Something went wrong?
 

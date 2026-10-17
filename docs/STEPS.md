@@ -468,12 +468,12 @@ Values below LOD are exported as measured, which is Olink's recommendation; the 
 **Question:** Are the thresholds too strict – could one of them remove the signal?
 
 **What it does** (`config.yml` → `thresholds`: only the values compared; the analyses keep using `qc`, `stats` and `enrichment`):
-1. **Samples:** how many samples Olink's SampleQC FAIL removes, and how many are only flagged (WARN, outliers at 2, 2.5, 3 and 4 SD, low volume).
+1. **Samples:** how many samples Olink's SampleQC FAIL removes (a FAIL in one block removes the whole sample – the check shows how much of each removed sample actually failed), and how many are only flagged (WARN, outliers at 2, 2.5, 3 and 4 SD, low volume); samples in the NPX files but not in the manifest; proteins with > 20 % missing values, which the main models do not test.
 2. **Detection (LOD) filter:** assays kept per matrix when 0, 10, 25, 50, 75 or 90 % of the samples must be above LOD – in at least one detection group (the rule of step 02) or of all samples of the matrix; the size of each detection group; the proteins of interest named in `config.yml` that are near or below the threshold.
 3. **Effect on results:** five comparisons (relapse vs non-relapse at the V1 lesion site; lesion site vs non-lesional at V1 and V3; AD lesion site vs healthy skin; AD vs healthy serum) re-run with limma at each detection threshold: proteins tested, p < 0.05, FDR < 0.05 / 0.1 / 0.2, and for relapse the median under all random labellings. The proteins that the current filter removes are tested too: if they carry about 5 % p < 0.05 (chance), the filter removes noise; clearly more would mean it removes signal. GSEA (relapse V1, lesional V3) at three thresholds, the mTORC1 set, and the gene sets eligible at other minimum sizes.
 4. **Group sizes:** per visit, AD patients with dISF (step 13 needs `visit_min_subjects`), relapse vs non-relapse at the lesion site (tested with `min_group_n` per group), and the smallest exact p these group sizes allow.
 5. **Relapse criteria at V1:** proteins left after each criterion of the V1 relapse screen (p < 0.05, exact p < 0.05, above LOD in the group), and with looser criteria.
-6. **Inventory** of every threshold in the code, and a **verdict** per threshold.
+6. **Inventory** of every threshold in the code, the places where the same kind of threshold is defined differently in different steps (listed, not changed), and a **verdict** per threshold.
 
 **Output:** `Thresholds_summary.pdf` (verdict first), `thresholds.xlsx` (README, `verdict`, `inventory`, one sheet per check), figures as PNG (16:9, 300 dpi, for PowerPoint) and PDF: `1_assays_kept_by_detection_threshold`, `2_comparisons_by_detection_threshold`, `3_removed_proteins_vs_chance`, `4_proteins_of_interest_above_LOD` (only if one is near the threshold), `5_group_sizes_per_visit`, `6_relapse_criteria_V1`.
 
