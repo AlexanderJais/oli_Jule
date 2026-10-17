@@ -41,20 +41,20 @@ qc_overview:
   pathway_classes: ["Transcription factors", "Enzymes (incl. metabolic)", "Intracellular"]   # dISF-only pathways also within these classes
   pathway_min_size_class: 5   # within a class: smallest gene set (measured proteins of that class); overall: enrichment$min_size
 
-# Dedicated visit analysis (source("run_visit3.R"), not part of run_all.R): dISF lesion site vs healthy skin and vs
+# Dedicated visit analysis (in run_all.R; shortcut: source("run_visit3.R")): dISF lesion site vs healthy skin and vs
 # non-lesional skin, serum AD vs healthy, at one visit; volcano plots, GSEA, dISF vs serum.
 visit3:
   visit: V3                   # the visit analysed (healthy volunteers: all their samples, they are sampled once)
   top_labels: 25              # proteins labelled in the volcano plots
 
-# V1 relapse screen (source("run_relapse_v1.R"), not part of run_all.R): dISF proteins already higher at V1 in patients
+# V1 relapse screen (in run_all.R; shortcut: source("run_relapse_v1.R")): dISF proteins already higher at V1 in patients
 # who later relapse, ranked as candidate targets.
 relapse_v1:
   top_labels: 25              # proteins labelled in the volcano plot
   n_course: 12                # targets shown over the visits
   predict_k: [1, 5]           # prediction test: the top 1 and the top 5 proteins, picked without the predicted patient
 
-# Relapse follow-up (source("run_relapse_followup.R"), not part of run_all.R): checks and focused questions on relapse vs
+# Relapse follow-up (in run_all.R; shortcut: source("run_relapse_followup.R")): checks and focused questions on relapse vs
 # non-relapse (the patients of the V1 relapse screen). Proteins as Olink assay names (gene symbols); missing ones are reported.
 relapse_followup:
   check_gene_sets: ["T cell receptor", "\\bTCR\\b", "death receptor", "NF.?kappa.?B|NF.?KB", "\\bTNF", "MAPK|MAP kinase|kinase cascade|I.?kappa.?B kinase"]
@@ -76,6 +76,16 @@ visits_v1_v4:
   gsea_top: 20                  # gene sets shown per GSEA plot
   track_proteins: ["AKR1B10"]   # lesion site vs non-lesional over the visits (plot + table)
   signature_sets: ["HALLMARK_MTORC1_SIGNALING"]   # gene sets followed over the visits (lesion site vs non-lesional), MSigDB names
+
+# Thresholds (in run_all.R; shortcut: source("run_thresholds.R")): how strict is each threshold, and what does it remove?
+# Only compares values - the analyses themselves use the settings above (qc, stats, enrichment).
+thresholds:
+  detect_fracs: [0, 0.1, 0.25, 0.5, 0.75, 0.9]    # detection (LOD) filter values compared (qc$min_detect_frac is always included)
+  gsea_detect_fracs: [0.25, 0.75]                  # GSEA also re-run at these values (slow)
+  gsea_comparisons: ["relapse_V1", "lesional_V3"]  # of relapse_V1, lesional_V1, lesional_V3, AD_vs_healthy_dISF, AD_vs_healthy_serum
+  fdr_levels: [0.05, 0.1, 0.2]                     # proteins counted below these FDR values
+  outlier_sds: [2, 2.5, 3, 4]                      # sample outlier rule at these SD values (qc$outlier_sd is always included)
+  extra_proteins: []                               # further proteins to check (the protein lists in this file are always checked)
 
 # Statistics (steps 03-18; after changing fdr or min_group_n, rerun from step 04)
 stats:

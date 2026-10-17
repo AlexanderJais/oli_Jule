@@ -20,9 +20,10 @@ the [README](../README.md#2-words-you-will-meet). The statistical details are in
 | H. Dedicated: V1 relapse screen | in `run_all.R` (shortcut: `run_relapse_v1.R`) – dISF markers at V1 that predict relapse |
 | I. Dedicated: relapse follow-up | in `run_all.R` (shortcut: `run_relapse_followup.R`) – eight follow-up questions on relapse vs non-relapse |
 | J. Dedicated: per visit V1–V4 | in `run_all.R` (shortcut: `run_visits_v1_v4.R`) – relapse vs non-relapse and lesion site vs non-lesional at each visit, AKR1B10, mTORC1 |
+| K. Dedicated: thresholds | in `run_all.R` (shortcut: `run_thresholds.R`) – how strict each threshold is and what it removes, measured on the data |
 
 The steps are grouped by topic, so below they are not in number order; `run_all.R` always runs
-them 01 → 19, with the dedicated analyses G–J right after step 02b (they only need the imported data). **`run_all.R` is the only script you need to run.**
+them 01 → 19, with the dedicated analyses G–K right after step 02b (they only need the imported data). **`run_all.R` is the only script you need to run.**
 
 ---
 
@@ -460,3 +461,20 @@ Values below LOD are exported as measured, which is Olink's recommendation; the 
 **Output:** `Visits_V1-V4_summary.pdf` (start here); `1_relapse_vs_nonrelapse_DEG_V1-V4.xlsx` (one sheet per visit, `signature_over_visits`, `summary`, `samples`), `2_relapse_vs_nonrelapse_GSEA_V1-V4.xlsx`, `3_lesional_vs_nonlesional_DEG_V1-V4.xlsx` (one sheet per visit, `AKR1B10`, `AKR1B10_per_patient`), `5_lesional_vs_nonlesional_GSEA_V1-V4.xlsx` (`signature`, `signature_proteins`, one sheet per visit). Figures as PNG (16:9, 300 dpi, large fonts – for PowerPoint) and PDF: `1_relapse_volcano_V1` … (one per tested visit), `1b_relapse_signature_over_visits`, `2_relapse_GSEA_V1` …, `2b_relapse_GSEA_over_visits`, `3_lesional_volcano_V1` … `V4`, `4_AKR1B10_lesional_vs_nonlesional_over_visits`, `5_mTORC1_lesional_vs_nonlesional_by_visit`, `5b_mTORC1_proteins_by_visit`.
 
 **Keep in mind:** with the manifest of 2026-10-15 the relapse groups are 5 vs 5 at V1 and V2, 4 vs 5 at V3 and 3 vs 5 at V4 – a screen; the random-label medians show what chance alone gives. The volcano plots label the 20 proteins with the lowest p; every protein is in the Excel files.
+
+---
+
+## K. Separate: thresholds (`run_thresholds.R` → `thresholds/`)
+**Question:** Are the thresholds too strict – could one of them remove the signal?
+
+**What it does** (`config.yml` → `thresholds`: only the values compared; the analyses keep using `qc`, `stats` and `enrichment`):
+1. **Samples:** how many samples Olink's SampleQC FAIL removes, and how many are only flagged (WARN, outliers at 2, 2.5, 3 and 4 SD, low volume).
+2. **Detection (LOD) filter:** assays kept per matrix when 0, 10, 25, 50, 75 or 90 % of the samples must be above LOD – in at least one detection group (the rule of step 02) or of all samples of the matrix; the size of each detection group; the proteins of interest named in `config.yml` that are near or below the threshold.
+3. **Effect on results:** five comparisons (relapse vs non-relapse at the V1 lesion site; lesion site vs non-lesional at V1 and V3; AD lesion site vs healthy skin; AD vs healthy serum) re-run with limma at each detection threshold: proteins tested, p < 0.05, FDR < 0.05 / 0.1 / 0.2, and for relapse the median under all random labellings. The proteins that the current filter removes are tested too: if they carry about 5 % p < 0.05 (chance), the filter removes noise; clearly more would mean it removes signal. GSEA (relapse V1, lesional V3) at three thresholds, the mTORC1 set, and the gene sets eligible at other minimum sizes.
+4. **Group sizes:** per visit, AD patients with dISF (step 13 needs `visit_min_subjects`), relapse vs non-relapse at the lesion site (tested with `min_group_n` per group), and the smallest exact p these group sizes allow.
+5. **Relapse criteria at V1:** proteins left after each criterion of the V1 relapse screen (p < 0.05, exact p < 0.05, above LOD in the group), and with looser criteria.
+6. **Inventory** of every threshold in the code, and a **verdict** per threshold.
+
+**Output:** `Thresholds_summary.pdf` (verdict first), `thresholds.xlsx` (README, `verdict`, `inventory`, one sheet per check), figures as PNG (16:9, 300 dpi, for PowerPoint) and PDF: `1_assays_kept_by_detection_threshold`, `2_comparisons_by_detection_threshold`, `3_removed_proteins_vs_chance`, `4_proteins_of_interest_above_LOD` (only if one is near the threshold), `5_group_sizes_per_visit`, `6_relapse_criteria_V1`.
+
+**Keep in mind:** the check changes no result – to use another value, change it in `config.yml` (`qc`, `stats`, `enrichment`) and rerun. Values below LOD are noisy: proteins gained by a looser filter need a look at their share above LOD before they are trusted.

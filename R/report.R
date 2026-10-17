@@ -108,6 +108,7 @@ write_output_guide <- function(cfg) {
     "relapse_V1",          "-",   "V1 relapse screen: dISF markers at V1 predicting relapse",     "V1_relapse_targets.xlsx",
     "relapse_followup",    "-",   "Relapse follow-up: checks, CD45 / T cells, drug targets", "Relapse_followup_executive_summary.pdf",
     "visits_V1_V4",        "-",   "Per visit V1-V4: relapse, lesional, AKR1B10, mTORC1", "Visits_V1-V4_summary.pdf",
+    "thresholds",          "-",   "Thresholds: how strict, what they remove; verdict",   "Thresholds_summary.pdf",
     "data",                "02",  "Internal files used by the scripts - no need to open",                    "-")
   g <- g |> filter(folder == "(top level)" | dir.exists(file.path(cfg$paths$output, folder)))
   f <- out_path(cfg, "00_FOLDER_GUIDE.pdf")

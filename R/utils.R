@@ -180,9 +180,9 @@ check_manifest_record <- function(cfg) {
   if (!file.exists(f) || !file.exists(cfg$paths$manifest %||% "")) return(invisible(TRUE))   # older results / manifest elsewhere
   rec <- readLines(f, warn = FALSE)
   if (!identical(rec[2], manifest_md5(cfg)))
-    stop(sprintf(paste0("The results in %s/ were made from the manifest %s (step 01 on %s), but config.yml now names %s%s. ",
+    stop(sprintf(paste0("The results in %s/ were made from the manifest %s (step 01 on %s), but %s now names %s%s. ",
                         "Run everything again from step 01: source(\"run_all.R\") (without start_at), or the shortcut script of the analysis."),
-                 cfg$paths$output, rec[1], rec[3] %||% "?", cfg$paths$manifest,
+                 cfg$paths$output, rec[1], rec[3] %||% "?", basename(cfg$config_file %||% "config.yml"), cfg$paths$manifest,
                  if (identical(normalizePath(rec[1], mustWork = FALSE), normalizePath(cfg$paths$manifest, mustWork = FALSE))) " (the file has changed since)" else ""),
          call. = FALSE)
   invisible(TRUE)

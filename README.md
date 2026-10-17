@@ -10,8 +10,8 @@ This page tells you how to run the analysis and **where to find which result**. 
 - [`docs/CHANGES.md`](docs/CHANGES.md) – what changed in each version and which steps to rerun.
 
 > **Which script do I run? Only `source("run_all.R")`.** It runs everything: all steps, the QC overview, visit 3,
-> the V1 relapse screen, the relapse follow-up and the per-visit analysis V1–V4 (these right after the import, so their
-> folders appear in the first minutes), and at the end the executive summary.
+> the V1 relapse screen, the relapse follow-up, the per-visit analysis V1–V4 and the threshold check (these right after the
+> import, so their folders appear in the first minutes), and at the end the executive summary.
 >
 > **Sample manifest:** `data/2026-10-15_manifest.xlsx` (set in `config.yml`). Every analysis takes the samples from it
 > (step 01); if the file is missing, the run stops – an older manifest is never used instead.
@@ -32,8 +32,9 @@ analysis quickly (import / QC plus that analysis, a few minutes) – you never n
 | Which markers at V1 predict a later relapse – in dISF, in serum, and in both? | `source("run_relapse_v1.R")` | **`output/relapse_V1/V1_relapse_executive_summary.pdf`** |
 | Relapse vs non-relapse, follow-up: is it calculated right, CD45 / T cells, IL4 · CCL27 · CCL5 · CCL8 over the visits, volcano plots with every p < 0.05 labelled, druggable targets? | `source("run_relapse_followup.R")` | **`output/relapse_followup/Relapse_followup_executive_summary.pdf`** |
 | Relapse vs non-relapse and lesion site vs non-lesional at each visit V1–V4 (DEG + GSEA, volcano plots for PowerPoint), AKR1B10 and the mTORC1 gene set over the visits? | `source("run_visits_v1_v4.R")` | **`output/visits_V1_V4/Visits_V1-V4_summary.pdf`**, `1_relapse_volcano_V1.png` |
+| Are the thresholds too strict? What do the LOD filter, FDR, minimum group sizes and sample QC remove – measured on the data at other values | `source("run_thresholds.R")` | **`output/thresholds/Thresholds_summary.pdf`**, `thresholds.xlsx` |
 
-Details: [section 4](#qc_overview--how-many-proteins-are-measurable-step-02b) (QC overview), [section 8](#8-separate-analysis-visit-3-run_visit3r) (visit 3), [section 9](#9-separate-analysis-v1-relapse-screen-run_relapse_v1r) (relapse), [section 10](#10-separate-analysis-relapse-follow-up-run_relapse_followupr) (relapse follow-up), [section 11](#11-separate-analysis-relapse-and-lesional-signatures-per-visit-v1v4-run_visits_v1_v4r) (per visit V1–V4).
+Details: [section 4](#qc_overview--how-many-proteins-are-measurable-step-02b) (QC overview), [section 8](#8-separate-analysis-visit-3-run_visit3r) (visit 3), [section 9](#9-separate-analysis-v1-relapse-screen-run_relapse_v1r) (relapse), [section 10](#10-separate-analysis-relapse-follow-up-run_relapse_followupr) (relapse follow-up), [section 11](#11-separate-analysis-relapse-and-lesional-signatures-per-visit-v1v4-run_visits_v1_v4r) (per visit V1–V4), [section 12](#12-separate-analysis-thresholds-run_thresholdsr) (thresholds).
 
 ---
 
@@ -103,9 +104,10 @@ in others it doesn't (*non-relapse*).
    `source("tools/download_kegg.R")` downloads the current KEGG human pathways (free for academic use) for the
    KEGG analyses; without it the older MSigDB KEGG collection is used. Both files stay in `data/reference/`.
 5. Run `source("run_all.R")`. This is the only script you need: it runs every step and every dedicated analysis
-   (QC overview, visit 3, V1 relapse screen, relapse follow-up, per visit V1–V4). The full run can take an hour or more, and the results
-   appear in `output/`. Optional shortcut to rerun just one dedicated analysis: its own script (`run_qc_overview.R`,
-   `run_visit3.R`, `run_relapse_v1.R`, `run_relapse_followup.R`, `run_visits_v1_v4.R`; see the table at the top) – a few minutes each.
+   (QC overview, visit 3, V1 relapse screen, relapse follow-up, per visit V1–V4, thresholds). The full run can take an hour or more,
+   and the results appear in `output/`. Optional shortcut to rerun just one dedicated analysis: its own script (`run_qc_overview.R`,
+   `run_visit3.R`, `run_relapse_v1.R`, `run_relapse_followup.R`, `run_visits_v1_v4.R`, `run_thresholds.R`; see the table at the top) –
+   a few minutes each.
 6. **To resume** from a later step, e.g. after changing a setting for step 12: `start_at <- 12; source("run_all.R")`.
    Step numbers are the script numbers; for step 02b use `start_at <- "02b"`.
    Earlier results are reused, and all later steps run again (including the summary, step 18). Start
@@ -121,7 +123,7 @@ missing (the run stops), `[--]` = optional or recommended file not found (the ru
 
 To check that R and the packages work, run `source("tests/test_pipeline.R")`. It uses invented data
 only, takes about 15 minutes, and must end with "All pipeline checks passed". The dedicated analyses have their own
-quick tests: `tests/test_visit3.R`, `tests/test_relapse_v1.R`, `tests/test_relapse_followup.R` and `tests/test_visits_v1_v4.R` (a few minutes each). Its results go to
+quick tests: `tests/test_visit3.R`, `tests/test_relapse_v1.R`, `tests/test_relapse_followup.R`, `tests/test_visits_v1_v4.R` and `tests/test_thresholds.R` (a few minutes each). Its results go to
 `output_sim/` and are **invented**: never use them as study results. The test switches its settings
 off again when it finishes; the first lines of every run say which settings file and output folder are used.
 
@@ -465,10 +467,11 @@ used when dISF is compared with serum) and `RELAD_AD_vs_HC` (RELAD/RELAD2). Rela
 | `run_relapse_v1.R`, `relapse_v1/` | Separate V1 relapse screen (see section 9) |
 | `run_relapse_followup.R`, `relapse_followup/` | Separate relapse follow-up: eight questions on relapse vs non-relapse (see section 10) |
 | `run_visits_v1_v4.R`, `visits_v1_v4/` | Separate per-visit analysis V1–V4: relapse vs non-relapse, lesion site vs non-lesional, AKR1B10, mTORC1 (see section 11) |
+| `run_thresholds.R`, `thresholds/` | Separate threshold check: how strict each threshold is and what it removes (see section 12) |
 | `tools/download_kegg.R` | Optional: downloads the current KEGG human pathways (free for academic use) for the KEGG analysis of step 02b |
 | `data/` | Your input files (not uploaded to GitHub) – see `data/README.md` |
 | `output/` | All results (not uploaded to GitHub) |
-| `tests/` | Tests with invented data: `test_pipeline.R` (all steps), `test_visit3.R`, `test_relapse_v1.R`, `test_relapse_followup.R`, `test_visits_v1_v4.R` |
+| `tests/` | Tests with invented data: `test_pipeline.R` (all steps), `test_visit3.R`, `test_relapse_v1.R`, `test_relapse_followup.R`, `test_visits_v1_v4.R`, `test_thresholds.R` |
 | `docs/STEPS.md` | What each step does, in plain words |
 | `docs/CHANGES.md` | What changed, and what to rerun after an update |
 | `docs/TECHNICAL.md` | Statistical methods and design decisions |
@@ -585,7 +588,24 @@ so from V2 on all compared lesion sites are in remission: with the manifest of 2
 with the lowest p (`volcano_labels`); every protein is in the Excel files. The proteins and gene sets tracked in 4 and 5
 are set in `track_proteins` and `signature_sets`.
 
-## 12. Something went wrong?
+## 12. Separate analysis: thresholds (`run_thresholds.R`)
+Are the thresholds too strict – could one of them remove the signal? Each threshold that removes samples or proteins or decides
+a result is measured on the data, at the current value and at other values (`config.yml` → `thresholds`, which only sets the values
+compared; the analyses use `qc`, `stats` and `enrichment`). Part of `run_all.R`; the shortcut `source("run_thresholds.R")` runs only
+the import / QC and this check → `output/thresholds/`. Start with **`Thresholds_summary.pdf`**: page 1 has one line per threshold –
+its setting, its effect on these data and a verdict.
+
+| What | How it is checked | Files |
+|---|---|---|
+| Sample QC | samples removed (Olink SampleQC FAIL), kept but flagged (WARN, outliers at 2–4 SD, low volume) | sheets `samples`, `outliers_by_sd`, `removed_samples` |
+| Detection (LOD) filter | assays kept per matrix at 0–90 % above LOD (in at least one detection group, as step 02, or of all samples); the proteins of interest of `config.yml` near or below the threshold | `1_assays_kept_by_detection_threshold.png`, `4_proteins_of_interest_above_LOD.png`; sheets `detection`, `detection_groups`, `proteins_of_interest` |
+| Effect on results | five comparisons (relapse V1, lesion site vs non-lesional V1 and V3, AD vs healthy in dISF and serum) re-run at each detection threshold: proteins tested, p < 0.05, FDR < 0.05 / 0.1 / 0.2, chance level for relapse. Key test: do the proteins the filter removes carry more p < 0.05 than the 5 % chance gives? | `2_comparisons_by_detection_threshold.png`, `3_removed_proteins_vs_chance.png`; sheets `comparisons`, `removed_by_filter`, `removed_p_below_0.05` |
+| Gene sets | GSEA at three detection thresholds (gene sets with FDR < 0.05 / 0.1 / 0.25, the mTORC1 set); gene sets eligible at other minimum sizes | sheets `gene_sets`, `signature_gene_set`, `gene_set_sizes` |
+| Group sizes | patients per visit and group against `stats$min_group_n` and `visit_min_subjects`; the smallest exact p the group sizes allow | `5_group_sizes_per_visit.png`; sheet `group_sizes` |
+| Relapse criteria (V1) | proteins left after each criterion of the V1 relapse screen (p, exact p, LOD in the relapsers), and with looser criteria | `6_relapse_criteria_V1.png`; sheet `relapse_funnel` |
+| Inventory | every threshold in the code: value, `config.yml` key or hard-coded, where, what it does | sheet `inventory` |
+
+## 13. Something went wrong?
 
 | Message | Fix |
 |---|---|
