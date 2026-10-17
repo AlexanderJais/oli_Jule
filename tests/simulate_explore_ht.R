@@ -34,10 +34,12 @@ focus_sim <- c("TNFSF9", "KITLG", "CPA4", "FCER1A", "TPSAB1", "TPSD1", "KIT",   
 # leukocyte / T-cell proteins and chemokines of the relapse follow-up (run_relapse_followup.R), placed from index 121 on
 t_low_sim <- c("CD3E", "CD3D", "CD3G", "CD2", "CD5", "CD6", "CD28", "LAT", "CD69", "IL2RA", "CTLA4", "GZMB")   # lower in relapsers' dISF
 immune_sim <- c(t_low_sim, "PTPRC", "CD48", "ITGB2", "LCP1", "CORO1A", "CCL27", "CCL5", "CCL8")
-# AKR1B10 and 12 genes of the Hallmark mTORC1 set: higher at the lesion site than in non-lesional skin (visits_v1_v4)
+rest <- ht |> filter(!Gene %in% c(th2, focus_sim, immune_sim)) |> slice_sample(prop = 1)
+# AKR1B10 and 12 genes of the Hallmark mTORC1 set: higher at the lesion site than in non-lesional skin (visits_v1_v4). Taken out of
+# the random order without drawing new random numbers, so all other simulated values stay the same
 mtorc1 <- unique(msigdbr::msigdbr(species = "Homo sapiens", collection = "H") |> filter(gs_name == "HALLMARK_MTORC1_SIGNALING") |> pull(gene_symbol))
 lesion_site_sim <- c("AKR1B10", head(setdiff(intersect(mtorc1, ht$Gene), c(th2, focus_sim, immune_sim, "AKR1B10")), 12))
-rest <- ht |> filter(!Gene %in% c(th2, focus_sim, immune_sim, lesion_site_sim)) |> slice_sample(prop = 1)
+rest <- rest |> filter(!Gene %in% lesion_site_sim)
 n_head <- 120 - sum(ht$Gene %in% c(th2, focus_sim))
 ht <- bind_rows(ht |> filter(Gene %in% th2), ht |> filter(Gene %in% focus_sim), rest |> slice_head(n = n_head),
                 ht |> filter(Gene %in% immune_sim) |> arrange(match(Gene, immune_sim)),

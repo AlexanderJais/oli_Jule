@@ -32,7 +32,7 @@ stopifnot(
   "relapse chance level missing" = all(!is.na(cmp$chance_median_p_below_0.05[cmp$short == "relapse V1"])),
   "simulated relapse markers lost by the V1 criteria" = funnel$proteins[funnel$direction == "higher in relapsers" & grepl("above LOD", funnel$criterion) & funnel$kind == "screen"] >= 4,
   "group sizes wrong (simulation: 4 relapsers, 6 non-relapsers at V1)" = grp$relapse[grp$visit == "V1"] == 4 && grp$non_relapse[grp$visit == "V1"] == 6 &&
-    abs(grp$smallest_exact_p[grp$visit == "V1"] - 1 / choose(10, 4)) < 1e-9,
+    abs(grp$smallest_exact_p[grp$visit == "V1"] * choose(10, 4) - 1) < 0.01,          # the sheet rounds to 3 digits
   "V4 relapse comparison should be below the minimum group size (2 relapsers)" = !grp$relapse_comparison_tested[grp$visit == "V4"],
   "files missing" = all(file.exists(file.path(out, c("Thresholds_summary.pdf", "1_assays_kept_by_detection_threshold.png", "2_comparisons_by_detection_threshold.png",
                                                      "3_removed_proteins_vs_chance.png", "5_group_sizes_per_visit.png", "6_relapse_criteria_V1.png"))))
